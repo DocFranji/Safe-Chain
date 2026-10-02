@@ -18,6 +18,24 @@ export function porcentaje(bps: number): string {
   return `${Number.isInteger(valor) ? valor : valor.toFixed(1)} %`
 }
 
+/** El estado del contrato, en palabras de la gente. */
+export function etiquetaEstado(tag: string): string {
+  switch (tag) {
+    case 'Abierta':
+      return 'Abierta'
+    case 'Activa':
+      return 'En curso'
+    case 'PorLiquidar':
+      return 'Por repartir'
+    case 'Finalizada':
+      return 'Terminada'
+    case 'Cancelada':
+      return 'Cancelada'
+    default:
+      return tag
+  }
+}
+
 /** 83 -> "1 min 23 s" */
 export function duracion(segundos: number): string {
   const s = Math.max(0, Math.round(segundos))

@@ -39,9 +39,34 @@ const MENSAJES: Record<number, string> = {
   13: 'El contrato todavía no se ha configurado.',
 }
 
+// A veces el SDK entrega el NOMBRE del error del contrato en vez del código.
+const CODIGO_POR_NOMBRE: Record<string, number> = {
+  YaInicializado: 1,
+  NoEncontrada: 2,
+  EstadoInvalido: 3,
+  ParametroInvalido: 4,
+  YaEsMiembro: 5,
+  TandaLlena: 6,
+  NoEsMiembro: 7,
+  YaPago: 8,
+  RondaNoVencida: 9,
+  MiembroMoroso: 10,
+  NoVerificado: 11,
+  NoAutorizado: 12,
+  NoInicializado: 13,
+}
+
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */
 export function traducirError(e: unknown): string {
   const texto = e instanceof Error ? e.message : String(e)
+
+  const porNombre = CODIGO_POR_NOMBRE[texto.trim()]
+  if (porNombre) return MENSAJES[porNombre]
+
+  // Stellar archiva los datos que nadie toca por un tiempo; hay que restaurarlos antes de leerlos.
+  if (/restore some contract state|ExpiredState/i.test(texto)) {
+    return 'Los datos de esta tanda expiraron por inactividad en la red y hay que restaurarlos antes de poder verla.'
+  }
 
   // Errores del token TUSD: se revisan primero porque también usan "Error(Contract, #N)".
   if (/trustline/i.test(texto)) return 'Esta cuenta todavía no acepta TUSD. Agrega el activo TUSD en Freighter.'
@@ -52,7 +77,7 @@ export function traducirError(e: unknown): string {
 
   if (/declin|reject|cancel/i.test(texto)) return 'Cancelaste la firma en Freighter. No se hizo ningún cambio.'
   if (/account not found|Account not found/i.test(texto)) return 'Esta cuenta no existe en testnet. Fondéala con Friendbot desde Freighter.'
-  if (/fetch|network|Failed to fetch|timeout/i.test(texto)) return 'No pudimos conectarnos con la red de Stellar. Revisa tu internet e intenta de nuevo.'
+  if (/failed to fetch|networkerror|network error|timeout|timed out/i.test(texto)) return 'No pudimos conectarnos con la red de Stellar. Revisa tu internet e intenta de nuevo.'
   return `No se pudo completar la operación: ${texto.slice(0, 180)}`
 }
 
@@ -63,7 +88,7 @@ export function traducirError(e: unknown): string {
 type Simulada = { simulation?: rpc.Api.SimulateTransactionResponse }
 
 /** Si la simulación ya falló (por ejemplo, "ya pagaste"), lanza el error antes de pedir firma. */
-function revisarSimulacion(tx: Simulada): void {
+export function revisarSimulacion(tx: Simulada): void {
   const sim = tx.simulation
   if (sim && rpc.Api.isSimulationError(sim)) throw new Error(sim.error)
 }
@@ -78,8 +103,12 @@ export async function leer<T>(
   return r.unwrap()
 }
 
-/** Para acciones: pide la firma en Freighter, envía a la red y espera la confirmación. */
-export async function enviar(tx: Simulada & contract.AssembledTransaction<unknown>): Promise<void> {
+/**
+ * Para acciones: pide la firma en Freighter, envía a la red y espera la confirmación.
+ * Devuelve lo que respondió el contrato (por ejemplo, el número de la tanda recién creada).
+ */
+export async function enviar<T>(tx: Simulada & contract.AssembledTransaction<T>): Promise<T> {
   revisarSimulacion(tx)
-  await tx.signAndSend()
+  const enviada = await tx.signAndSend()
+  return enviada.result
 }

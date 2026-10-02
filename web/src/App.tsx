@@ -1,73 +1,55 @@
-import { useState } from 'react'
 import './App.css'
-import { useBilletera } from './hooks/useBilletera'
-import { useAhora, useTanda, useTotalTandas } from './hooks/useTanda'
-import { Rueda } from './components/Rueda'
-import { PanelRonda } from './components/PanelRonda'
-import { ListaMiembros } from './components/ListaMiembros'
+import { useBilletera, type Billetera } from './hooks/useBilletera'
+import { useRuta } from './hooks/useRuta'
+import { useCuenta } from './hooks/useCuenta'
+import { Lobby } from './pages/Lobby'
+import { CrearTanda } from './pages/CrearTanda'
+import { PaginaTanda } from './pages/PaginaTanda'
+import { Mensaje } from './components/Mensaje'
+import { BarraCuenta } from './components/BarraCuenta'
 import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
+import { RUTA_CREAR, RUTA_LOBBY } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
 
 export default function App() {
   const billetera = useBilletera()
-  const { total, error: errorTotal } = useTotalTandas()
-  const [elegida, setElegida] = useState<number | null>(null)
-
-  // Por defecto se muestra la tanda más reciente.
-  const id = elegida ?? (total !== null && total > 0 ? total : null)
-  const { datos, error, cargando, recargar } = useTanda(id)
-  const ahora = useAhora()
+  const ruta = useRuta()
+  const cuenta = useCuenta(billetera.direccion, billetera.redCorrecta)
 
   return (
     <div className="app">
       <header className="barra">
-        <p className="marca">Tanda</p>
+        <a className="marca" href={RUTA_LOBBY}>
+          Tanda
+        </a>
+        <nav className="menu" aria-label="Principal">
+          <a href={RUTA_LOBBY} aria-current={ruta.tipo === 'lobby' ? 'page' : undefined}>
+            Tandas
+          </a>
+          <a href={RUTA_CREAR} aria-current={ruta.tipo === 'crear' ? 'page' : undefined}>
+            Crear
+          </a>
+        </nav>
         <BotonBilletera billetera={billetera} />
       </header>
+
+      <BarraCuenta billetera={billetera} cuenta={cuenta} />
 
       <main>
         {!TANDA_ID ? (
           <Mensaje titulo="Falta configurar el contrato">
             Crea el archivo <code>web/.env</code> con <code>VITE_TANDA_ID</code> y reinicia <code>npm run dev</code>.
           </Mensaje>
-        ) : errorTotal && total === null ? (
-          <Mensaje titulo="No pudimos leer el contrato">{errorTotal}</Mensaje>
-        ) : total === 0 ? (
-          <Mensaje titulo="Todavía no hay tandas">
-            Crea la primera desde la terminal con <code>bash scripts/demo.sh</code>. Pronto también desde aquí.
-          </Mensaje>
+        ) : ruta.tipo === 'lobby' ? (
+          <Lobby billetera={billetera} />
+        ) : ruta.tipo === 'crear' ? (
+          <CrearTanda billetera={billetera} saldo={cuenta.saldo} />
+        ) : ruta.tipo === 'tanda' ? (
+          <PaginaTanda key={ruta.id} id={ruta.id} billetera={billetera} saldo={cuenta.saldo} />
         ) : (
-          <>
-            <nav className="selector" aria-label="Elegir tanda">
-              <h1>Tanda {id ?? ''}</h1>
-              {total !== null && total > 1 && id !== null && (
-                <div className="selector-botones">
-                  <button className="boton chico" disabled={id <= 1} onClick={() => setElegida(id - 1)}>
-                    Anterior
-                  </button>
-                  <span>
-                    {id} de {total}
-                  </span>
-                  <button className="boton chico" disabled={id >= total} onClick={() => setElegida(id + 1)}>
-                    Siguiente
-                  </button>
-                </div>
-              )}
-            </nav>
-
-            {error && !datos && <Mensaje titulo="No pudimos leer esta tanda">{error}</Mensaje>}
-            {cargando && !datos && !error && <p className="cargando">Leyendo la tanda desde la red de Stellar…</p>}
-
-            {datos && id !== null && (
-              <>
-                <div className="escenario">
-                  <Rueda datos={datos} ahora={ahora} yo={billetera.direccion} />
-                  <PanelRonda id={id} datos={datos} billetera={billetera} ahora={ahora} alCambiar={recargar} />
-                </div>
-                <ListaMiembros datos={datos} yo={billetera.direccion} />
-              </>
-            )}
-          </>
+          <Mensaje titulo="Esa página no existe">
+            <a href={RUTA_LOBBY}>Volver a las tandas</a>
+          </Mensaje>
         )}
       </main>
 
@@ -83,7 +65,7 @@ export default function App() {
   )
 }
 
-function BotonBilletera({ billetera }: { billetera: ReturnType<typeof useBilletera> }) {
+function BotonBilletera({ billetera }: { billetera: Billetera }) {
   if (billetera.direccion) {
     const conocido = NOMBRES[billetera.direccion]
     return (
@@ -108,14 +90,5 @@ function BotonBilletera({ billetera }: { billetera: ReturnType<typeof useBillete
     <button className="boton chico" onClick={billetera.conectar}>
       Conectar billetera
     </button>
-  )
-}
-
-function Mensaje({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <section className="mensaje">
-      <h2>{titulo}</h2>
-      <p>{children}</p>
-    </section>
   )
 }

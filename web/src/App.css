@@ -18,6 +18,40 @@
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.menu {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+  margin-left: 12px;
+}
+
+.menu a {
+  padding: 6px 12px;
+  border-radius: 99px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--tinta-2);
+}
+.menu a:hover {
+  background: var(--superficie);
+}
+.menu a[aria-current='page'] {
+  background: var(--tinta);
+  color: var(--superficie);
+}
+
+@media (max-width: 600px) {
+  .barra {
+    flex-wrap: wrap;
+  }
+  .menu {
+    order: 3;
+    width: 100%;
+    margin: 0;
+  }
 }
 
 .selector {
@@ -525,4 +559,401 @@ td .dir {
   .rueda-tiempo {
     transition: none;
   }
+}
+
+/* ---------- Navegación entre páginas ---------- */
+.migas {
+  margin-top: 20px;
+  font-size: 15px;
+  color: var(--tinta-2);
+}
+
+.columna {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sr-solo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Etiquetas de estado ---------- */
+.etiqueta {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  border: 1.5px solid var(--linea);
+  background: var(--papel);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.etiqueta.grande {
+  padding: 4px 14px;
+  font-size: 15px;
+}
+.etiqueta.abierta,
+.etiqueta.por-repartir {
+  background: var(--turno-suave);
+  border-color: var(--turno);
+}
+.etiqueta.en-curso {
+  background: var(--pago-suave);
+  border-color: var(--pago);
+  color: #1c5a3e;
+}
+.etiqueta.cancelada {
+  background: var(--alerta-suave);
+  border-color: var(--alerta);
+  color: #7c2a1d;
+}
+
+/* ---------- Lobby ---------- */
+.lobby-intro {
+  max-width: 62ch;
+  margin-bottom: 20px;
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.filtro {
+  min-height: 38px;
+  padding: 6px 16px;
+  border: 1.5px solid var(--linea);
+  border-radius: 99px;
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.filtro:hover {
+  border-color: var(--tinta);
+}
+.filtro.activo {
+  background: var(--tinta);
+  border-color: var(--tinta);
+  color: var(--superficie);
+}
+
+.tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 20px;
+  border: 1px solid var(--linea);
+  border-radius: 18px;
+  background: var(--superficie);
+  text-decoration: none;
+}
+.tarjeta:hover {
+  border-color: var(--tinta);
+}
+
+.tarjeta-cabeza {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tarjeta-cabeza h2 {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.tarjeta-bolsa {
+  font-size: 17px;
+  color: var(--tinta-2);
+}
+.tarjeta-bolsa strong {
+  color: var(--tinta);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lugares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+.lugar {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px dashed var(--tinta-2);
+}
+.lugar.lleno {
+  border: 2px solid var(--tinta);
+  background: var(--turno);
+}
+
+.tarjeta-datos {
+  font-size: 15px;
+  color: var(--tinta-2);
+}
+.tarjeta-detalle {
+  font-size: 15px;
+  font-weight: 600;
+}
+.tarjeta-pie {
+  margin-top: auto;
+  padding-top: 4px;
+}
+.tarjeta-pie .marca-yo {
+  margin: 0 6px 0 0;
+}
+
+.vacio {
+  max-width: 520px;
+  margin: 56px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.vacio h2 {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.sin-resultados {
+  margin: 32px 0;
+}
+
+.ver-mas {
+  margin: 24px auto 0;
+  display: flex;
+}
+
+/* ---------- Crear tanda ---------- */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 24px;
+}
+.presets-titulo {
+  font-size: 15px;
+  color: var(--tinta-2);
+}
+
+.crear-columnas {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+@media (max-width: 780px) {
+  .crear-columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.campo > label {
+  font-weight: 600;
+}
+.campo > label strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.campo input:not([type='range']):not([type='checkbox']),
+.campo select {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 2px solid var(--tinta);
+  border-radius: 12px;
+  background: var(--papel);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.campo input[aria-invalid='true'] {
+  border-color: var(--alerta);
+  background: var(--alerta-suave);
+}
+.campo input[type='range'] {
+  width: 100%;
+  accent-color: var(--tinta);
+}
+
+.con-sufijo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+.fila-campo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+}
+
+.ayuda {
+  font-size: 14px;
+  color: var(--tinta-2);
+}
+.ayuda.error {
+  color: var(--alerta);
+  font-weight: 600;
+}
+
+.casilla {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.casilla input {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  accent-color: var(--tinta);
+  flex: none;
+}
+.casilla .ayuda {
+  font-weight: 400;
+}
+
+.vista-previa h3 {
+  margin: 22px 0 6px;
+  font-size: 17px;
+  font-weight: 800;
+}
+.vista-previa .explica,
+.vista-previa .aviso {
+  margin-top: 14px;
+}
+
+.aviso.nota {
+  background: var(--turno-suave);
+  color: var(--tinta);
+}
+
+/* ---------- Invitar ---------- */
+.invitar h2,
+.rendimiento h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.link-fila {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+.link-fila input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1.5px solid var(--linea);
+  border-radius: 10px;
+  background: var(--papel);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 14px;
+}
+
+.invitar .whatsapp {
+  display: inline-flex;
+}
+
+/* ---------- Cancelar ---------- */
+.cancelar {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--linea);
+}
+.fila-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.boton.peligro {
+  border-color: var(--alerta);
+  color: var(--alerta);
+}
+.boton.peligro:hover:not(:disabled) {
+  background: var(--alerta-suave);
+}
+
+/* ---------- Resultados ---------- */
+.resultados .resumen-final {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-bottom: 18px;
+}
+.resultados .explica {
+  margin-top: 14px;
+}
+
+/* ---------- Barra de cuenta (saldo, activar, aceptar TUSD) ---------- */
+.barra-cuenta {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  background: var(--superficie);
+}
+.barra-cuenta-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+.barra-cuenta-fila .explica {
+  max-width: 60ch;
+}
+.barra-cuenta .aviso {
+  margin-top: 10px;
+}
+.saldo {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.rendimiento .explica {
+  margin-top: 12px;
+}
+.rendimiento .datos {
+  margin-top: 4px;
+}
+.vista-previa td {
+  white-space: nowrap;
 }
