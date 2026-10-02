@@ -12,6 +12,7 @@ import {
   xdr,
 } from '@stellar/stellar-sdk'
 import { clienteLectura } from './contrato'
+import { ordenar, type EventoTanda } from './historia'
 import { NETWORK_PASSPHRASE, RPC_URL, TANDA_ID, TOKEN_ID } from '../config'
 
 /** Cuenta "vacía" que sirve para simular llamadas de solo lectura sin ninguna billetera. */
@@ -108,8 +109,55 @@ export async function valorBoveda(shares: bigint): Promise<bigint> {
 }
 
 // ---------------------------------------------------------------------------
-// Resultados finales (eventos del contrato)
+// Eventos del contrato (historia de la tanda y resultados finales)
 // ---------------------------------------------------------------------------
+
+// La red solo guarda los eventos un tiempo. Recordamos desde qué ledger empieza esa ventana
+// para no preguntarlo en cada lectura; si deja de ser válido, se vuelve a consultar.
+let inicioDeEventos: number | null = null
+async function ledgerInicial(renovar = false): Promise<number> {
+  if (renovar || inicioDeEventos === null) inicioDeEventos = (await servidor().getHealth()).oldestLedger
+  return inicioDeEventos
+}
+
+/**
+ * Todos los eventos de UNA tanda, del más viejo al más nuevo. El contrato publica cada evento con
+ * dos "topics": su nombre y el número de la tanda; el comodín "*" acepta cualquier nombre.
+ * La red conserva los eventos solo unos días: una tanda muy vieja puede devolver una lista vacía.
+ */
+export async function leerEventos(id: number): Promise<EventoTanda[]> {
+  const cliente = clienteLectura()
+  const s = servidor()
+  const filtro = {
+    type: 'contract' as const,
+    contractIds: [TANDA_ID],
+    topics: [['*', nativeToScVal(id, { type: 'u32' }).toXDR('base64')]],
+  }
+  const pedir = (startLedger: number) => s.getEvents({ startLedger, filters: [filtro], limit: 200 })
+
+  let respuesta: Awaited<ReturnType<typeof pedir>>
+  try {
+    respuesta = await pedir(await ledgerInicial())
+  } catch {
+    respuesta = await pedir(await ledgerInicial(true))
+  }
+
+  const salida: EventoTanda[] = []
+  for (const ev of respuesta.events) {
+    if (!ev.inSuccessfulContractCall) continue
+    // Un evento que no se pueda interpretar no debe tumbar toda la historia: se omite y se sigue.
+    let evento
+    try {
+      evento = cliente.parseEvent(ev.topic, ev.value)
+    } catch (e) {
+      console.warn('Evento ilegible, se omite', ev.id, e)
+      continue
+    }
+    if (!evento) continue
+    salida.push({ id: ev.id, ledger: ev.ledger, cerradoEn: ev.ledgerClosedAt, evento })
+  }
+  return ordenar(salida)
+}
 
 export type PagoFinal = { miembro: string; monto: bigint }
 
@@ -122,36 +170,16 @@ export type ResultadosTanda = {
 
 /**
  * El contrato no guarda cuánto recibió cada persona al final: solo lo anuncia con eventos
- * (`liquidado` y `finalizada`). La red los conserva un tiempo limitado, así que si ya
- * pasó mucho devolvemos null y la pantalla lo explica.
+ * (`liquidado` y `finalizada`). Si la red ya no los conserva, devolvemos null y la pantalla lo explica.
  */
-export async function leerResultados(id: number): Promise<ResultadosTanda | null> {
-  const cliente = clienteLectura()
-  const s = servidor()
-  const salud = await s.getHealth()
-  const respuesta = await s.getEvents({
-    startLedger: salud.oldestLedger,
-    filters: [
-      {
-        type: 'contract',
-        contractIds: [TANDA_ID],
-        topics: [cliente.evLiquidadoEventFilter({ id }), cliente.evFinalizadaEventFilter({ id })],
-      },
-    ],
-    limit: 200,
-  })
-
+export function resultadosDesdeEventos(eventos: EventoTanda[]): ResultadosTanda | null {
   const pagos: PagoFinal[] = []
-  let final: ResultadosTanda | null = null
-  for (const ev of respuesta.events) {
-    if (!ev.inSuccessfulContractCall) continue
-    const e = cliente.parseEvent(ev.topic, ev.value)
-    if (!e) continue
+  let final: Pick<ResultadosTanda, 'rendimiento' | 'fondoPremios' | 'retenido'> | null = null
+  for (const { evento: e } of eventos) {
     if (e.name === 'EvLiquidado' && e.data.miembro !== undefined && e.data.monto !== undefined) {
       pagos.push({ miembro: e.data.miembro, monto: e.data.monto })
     } else if (e.name === 'EvFinalizada') {
       final = {
-        pagos: [],
         rendimiento: e.data.rendimiento ?? null,
         fondoPremios: e.data.fondo_premios ?? null,
         retenido: e.data.retenido ?? null,
@@ -160,4 +188,8 @@ export async function leerResultados(id: number): Promise<ResultadosTanda | null
   }
   if (pagos.length === 0 && final === null) return null
   return { pagos, rendimiento: final?.rendimiento ?? null, fondoPremios: final?.fondoPremios ?? null, retenido: final?.retenido ?? null }
+}
+
+export async function leerResultados(id: number): Promise<ResultadosTanda | null> {
+  return resultadosDesdeEventos(await leerEventos(id))
 }

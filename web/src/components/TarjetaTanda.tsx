@@ -1,19 +1,11 @@
 // Una tanda en el lobby: lo justo para decidir si entrar (bolsa, cupos, cuota, garantía).
 import type { ResumenTanda } from '../lib/lectura'
 import { bolsa, colateralDeTurno } from '../lib/colateral'
-import { duracion, etiquetaEstado, monto } from '../lib/formato'
+import { claseEstado, duracion, etiquetaEstado, monto } from '../lib/formato'
 import { rutaTanda } from '../lib/rutas'
 import { SIMBOLO } from '../config'
 
 type Props = { resumen: ResumenTanda; yo: string | null }
-
-const CLASE_ESTADO: Record<string, string> = {
-  Abierta: 'abierta',
-  Activa: 'en-curso',
-  PorLiquidar: 'por-repartir',
-  Finalizada: 'terminada',
-  Cancelada: 'cancelada',
-}
 
 export function TarjetaTanda({ resumen, yo }: Props) {
   const { id, tanda, miembros } = resumen
@@ -45,7 +37,7 @@ export function TarjetaTanda({ resumen, yo }: Props) {
       <a className="tarjeta" href={rutaTanda(id)}>
         <div className="tarjeta-cabeza">
           <h2>Tanda {id}</h2>
-          <span className={`etiqueta ${CLASE_ESTADO[estado] ?? ''}`}>{etiquetaEstado(estado)}</span>
+          <span className={`etiqueta ${claseEstado(estado)}`}>{etiquetaEstado(estado)}</span>
         </div>
 
         <p className="tarjeta-bolsa">

@@ -27,6 +27,8 @@ Otros comandos:
 | Lobby | `#/` | Todas las tandas, con filtros (abiertas, en curso, terminadas, mías) |
 | Crear tanda | `#/crear` | Formulario con ejemplos y vista previa de la garantía de cada turno, la bolsa, la duración y el riesgo del grupo |
 | Una tanda | `#/tanda/N` | Rueda de turnos, acciones (unirse, pagar, cerrar ronda, repartir, cancelar), invitación por link o WhatsApp, rendimiento en vivo y resultados finales |
+| Demo en vivo | `#/demo` o `#/demo/N` | Vista **para proyectar**, sin billetera: reloj grande, una tarjeta por persona con su garantía y una línea de tiempo narrada con los momentos clave resaltados. Con `#/demo/N` se queda fija en la tanda N |
+| Estado | `#/estado` | Chequeo previo a la demo: RPC, contrato, bóveda y su saldo, token y faucet, con qué hacer si algo falla |
 
 Además, una barra bajo el encabezado guía a una cuenta nueva: activarla con Friendbot, aceptar TUSD (trustline) y pedir TUSD de prueba al faucet. Muestra el saldo y evita pedir una firma que va a fallar por falta de fondos.
 
@@ -40,6 +42,7 @@ Las direcciones de los contratos están en `src/config.ts`. Si vuelven a despleg
 | `VITE_TOKEN_ID` | Contrato del token TUSD |
 | `VITE_RPC_URL`, `VITE_HORIZON_URL` | Servidores de Stellar (por defecto, los públicos de testnet) |
 | `VITE_FAUCET_URL` | Dónde está el faucet. Por defecto `/api/faucet`. Vacío = sin botón de faucet |
+| `VITE_NOMBRES` | JSON `{"G...":"Ana", ...}` para mostrar nombres en lugar de direcciones. Lo escribe `scripts/desplegar_testnet.sh` |
 | `VITE_BOVEDA_SIMULADA` | Pónganla en `false` cuando cambien la bóveda simulada por Blend |
 
 La dirección de la bóveda **no** hace falta: la web la lee del almacenamiento del contrato de la tanda.
@@ -74,6 +77,7 @@ packages/tanda  Cliente TypeScript del contrato (lo genera `stellar contract bin
 Detalles útiles:
 
 - **`lib/colateral.ts` replica las reglas de `contracts/tanda/src/lib.rs`** para la vista previa. Si cambian el contrato, cambien también ese archivo; `colateral.test.ts` usa los mismos números que las pruebas de Rust.
+- **Línea de tiempo y resultados:** salen de los eventos del contrato. Se lee un solo flujo por tanda (`lib/rpc.ts: leerEventos`) y `lib/historia.ts` los convierte en frases.
 - **Resultados finales:** el contrato no guarda cuánto recibió cada persona, solo lo anuncia con eventos (`liquidado`, `finalizada`). La web los lee del RPC, que los conserva unos días. Pasado ese tiempo la pantalla lo explica.
 - **Rutas con `#`:** funcionan en cualquier hosting estático. El link de invitación es `https://tu-sitio/#/tanda/3`.
 - **Si regeneran el cliente** (`stellar contract bindings typescript ...`), el lint ignora `packages/` a propósito.

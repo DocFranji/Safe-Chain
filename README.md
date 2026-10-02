@@ -14,7 +14,7 @@ Tandas con contrato inteligente. El contrato maneja la rotación, cobra un colat
 | `contracts/tanda/src/test.rs` | Las 16 pruebas, incluido el escenario exacto de la demo |
 | `contracts/boveda_simulada/src/lib.rs` | Bóveda con rendimiento simulado (misma interfaz que tendría un adaptador a Blend) |
 | `scripts/desplegar_testnet.sh` | Crea cuentas, el token TUSD y despliega los dos contratos en testnet |
-| `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~8 min) |
+| `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~5 min). Ver [`DEMO.md`](DEMO.md) |
 
 ## 1. Instalar (una vez por computadora)
 
@@ -66,6 +66,8 @@ bash scripts/demo.sh
 ```
 
 Es el mismo guion del video. Ana cobra primero y desaparece, Beto paga tarde, y al final se ven los saldos.
+
+Para presentarla al jurado (pantalla proyectada, qué decir y plan B), vean [`DEMO.md`](DEMO.md). Variables útiles: `WEB=https://tu-sitio PAUSAR=1 bash scripts/demo.sh`.
 
 ## 5. La interfaz web
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkInvitacion, parsearRuta, rutaTanda } from './rutas'
+import { linkInvitacion, parsearRuta, rutaDemo, rutaTanda } from './rutas'
 
 describe('parsearRuta', () => {
   it('reconoce las páginas de la app', () => {
@@ -9,6 +9,16 @@ describe('parsearRuta', () => {
     expect(parsearRuta('#/crear')).toEqual({ tipo: 'crear' })
     expect(parsearRuta('#/crear/')).toEqual({ tipo: 'crear' })
     expect(parsearRuta('#/tanda/3')).toEqual({ tipo: 'tanda', id: 3 })
+    expect(parsearRuta('#/estado')).toEqual({ tipo: 'estado' })
+  })
+
+  it('la demo en vivo elige sola la tanda, o se fija con un número', () => {
+    expect(parsearRuta('#/demo')).toEqual({ tipo: 'demo', id: null })
+    expect(parsearRuta('#/demo/')).toEqual({ tipo: 'demo', id: null })
+    expect(parsearRuta('#/demo/7')).toEqual({ tipo: 'demo', id: 7 })
+    expect(parsearRuta(rutaDemo(7))).toEqual({ tipo: 'demo', id: 7 })
+    expect(parsearRuta('#/demo/0')).toEqual({ tipo: 'desconocida' })
+    expect(parsearRuta('#/demo/x')).toEqual({ tipo: 'desconocida' })
   })
 
   it('rechaza ids que no son un número de tanda válido', () => {

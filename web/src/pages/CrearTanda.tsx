@@ -31,10 +31,10 @@ type Formulario = {
   cobertura: number // %
 }
 
-const INICIAL: Formulario = { cuota: '100', n: 3, periodo: '2', unidad: 'minutos', multa: 10, cobertura: 100 }
+const INICIAL: Formulario = { cuota: '100', n: 3, periodo: '1', unidad: 'minutos', multa: 10, cobertura: 100 }
 
 const PRESETS: { nombre: string; detalle: string; valores: Formulario }[] = [
-  { nombre: 'Demo rápida', detalle: '3 personas · 2 min por ronda', valores: INICIAL },
+  { nombre: 'Demo rápida', detalle: '3 personas · 1 min por ronda', valores: INICIAL },
   {
     nombre: 'Diaria',
     detalle: '5 personas · 1 día por ronda',

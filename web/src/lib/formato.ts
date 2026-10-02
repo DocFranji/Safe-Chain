@@ -36,6 +36,22 @@ export function etiquetaEstado(tag: string): string {
   }
 }
 
+/** Clase CSS de la etiqueta de estado (.etiqueta.abierta, .en-curso, ...). */
+export function claseEstado(tag: string): string {
+  switch (tag) {
+    case 'Abierta':
+      return 'abierta'
+    case 'Activa':
+      return 'en-curso'
+    case 'PorLiquidar':
+      return 'por-repartir'
+    case 'Finalizada':
+      return 'terminada'
+    default:
+      return 'cancelada'
+  }
+}
+
 /** 83 -> "1 min 23 s" */
 export function duracion(segundos: number): string {
   const s = Math.max(0, Math.round(segundos))

@@ -5,10 +5,12 @@ import { useCuenta } from './hooks/useCuenta'
 import { Lobby } from './pages/Lobby'
 import { CrearTanda } from './pages/CrearTanda'
 import { PaginaTanda } from './pages/PaginaTanda'
+import { Demo } from './pages/Demo'
+import { Estado } from './pages/Estado'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
-import { RUTA_CREAR, RUTA_LOBBY } from './lib/rutas'
+import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_LOBBY } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
 
 export default function App() {
@@ -29,11 +31,14 @@ export default function App() {
           <a href={RUTA_CREAR} aria-current={ruta.tipo === 'crear' ? 'page' : undefined}>
             Crear
           </a>
+          <a href={RUTA_DEMO} aria-current={ruta.tipo === 'demo' ? 'page' : undefined}>
+            Demo en vivo
+          </a>
         </nav>
         <BotonBilletera billetera={billetera} />
       </header>
 
-      <BarraCuenta billetera={billetera} cuenta={cuenta} />
+      {ruta.tipo !== 'demo' && <BarraCuenta billetera={billetera} cuenta={cuenta} />}
 
       <main>
         {!TANDA_ID ? (
@@ -41,11 +46,15 @@ export default function App() {
             Crea el archivo <code>web/.env</code> con <code>VITE_TANDA_ID</code> y reinicia <code>npm run dev</code>.
           </Mensaje>
         ) : ruta.tipo === 'lobby' ? (
-          <Lobby billetera={billetera} />
+          <Lobby billetera={billetera} cuenta={cuenta} />
         ) : ruta.tipo === 'crear' ? (
           <CrearTanda billetera={billetera} saldo={cuenta.saldo} />
         ) : ruta.tipo === 'tanda' ? (
           <PaginaTanda key={ruta.id} id={ruta.id} billetera={billetera} saldo={cuenta.saldo} />
+        ) : ruta.tipo === 'demo' ? (
+          <Demo idFijo={ruta.id} />
+        ) : ruta.tipo === 'estado' ? (
+          <Estado billetera={billetera} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>
@@ -55,6 +64,8 @@ export default function App() {
 
       <footer className="pie">
         Funciona en la red de pruebas de Stellar (testnet), con TUSD de prueba.{' '}
+        <a href={RUTA_ESTADO}>Estado del sistema</a>
+        {' · '}
         {TANDA_ID && (
           <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
             Ver el contrato en el explorador

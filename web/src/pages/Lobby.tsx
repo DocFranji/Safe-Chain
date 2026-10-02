@@ -2,8 +2,10 @@
 import { useState } from 'react'
 import { useTandas } from '../hooks/useTandas'
 import type { Billetera } from '../hooks/useBilletera'
+import type { Cuenta } from '../hooks/useCuenta'
 import type { ResumenTanda } from '../lib/lectura'
 import { TarjetaTanda } from '../components/TarjetaTanda'
+import { ComoProbar } from '../components/ComoProbar'
 import { RUTA_CREAR } from '../lib/rutas'
 
 type Filtro = 'todas' | 'abiertas' | 'en-curso' | 'terminadas' | 'mias'
@@ -32,7 +34,7 @@ function coincide(r: ResumenTanda, filtro: Filtro, yo: string | null): boolean {
   }
 }
 
-export function Lobby({ billetera }: { billetera: Billetera }) {
+export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cuenta }) {
   const { total, lista, error, listo, hayMas, verMas } = useTandas()
   const [filtro, setFiltro] = useState<Filtro>('todas')
   const yo = billetera.direccion
@@ -51,6 +53,7 @@ export function Lobby({ billetera }: { billetera: Billetera }) {
         Ahorra en grupo sin confiar en nadie: el contrato guarda el dinero, y si alguien no paga, su garantía cubre su cuota.
         Elige una tanda abierta para unirte o crea la tuya.
       </p>
+      <ComoProbar billetera={billetera} cuenta={cuenta} />
 
       {error && !lista.length && (
         <p className="aviso error" role="alert">

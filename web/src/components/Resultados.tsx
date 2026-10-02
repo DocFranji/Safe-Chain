@@ -1,52 +1,32 @@
 // Cuánto recibió cada persona al terminar la tanda.
 // El contrato solo lo anuncia con eventos, así que los leemos de la red (que los guarda un tiempo limitado).
-import { useEffect, useState } from 'react'
 import type { DatosTanda } from '../hooks/useTanda'
-import { leerResultados, type ResultadosTanda } from '../lib/rpc'
-import { traducirError } from '../lib/contrato'
+import type { EventoTanda } from '../lib/historia'
+import { resultadosDesdeEventos } from '../lib/rpc'
 import { monto } from '../lib/formato'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { EXPLORADOR, SIMBOLO, TANDA_ID } from '../config'
 
-type Props = { id: number; datos: DatosTanda; yo: string | null }
+type Props = {
+  datos: DatosTanda
+  yo: string | null
+  /** Eventos de la tanda (null = todavía leyendo). Los lee quien usa este componente. */
+  eventos: EventoTanda[] | null
+  error: boolean
+}
 
-type Carga =
-  | { tipo: 'leyendo' }
-  | { tipo: 'listo'; resultados: ResultadosTanda | null }
-  | { tipo: 'error'; texto: string }
-
-export function Resultados({ id, datos, yo }: Props) {
-  const [carga, setCarga] = useState<Carga>({ tipo: 'leyendo' })
-
-  useEffect(() => {
-    let activo = true
-    const t = setTimeout(async () => {
-      try {
-        const resultados = await leerResultados(id)
-        if (activo) setCarga({ tipo: 'listo', resultados })
-      } catch (e) {
-        if (activo) setCarga({ tipo: 'error', texto: traducirError(e) })
-      }
-    }, 0)
-    return () => {
-      activo = false
-      clearTimeout(t)
-    }
-  }, [id])
-
+export function Resultados({ datos, yo, eventos, error }: Props) {
+  const r = eventos === null ? null : resultadosDesdeEventos(eventos)
   const recibio = new Map<string, bigint>()
-  if (carga.tipo === 'listo' && carga.resultados) {
-    for (const p of carga.resultados.pagos) recibio.set(p.miembro, p.monto)
-  }
-  const r = carga.tipo === 'listo' ? carga.resultados : null
+  if (r) for (const p of r.pagos) recibio.set(p.miembro, p.monto)
 
   return (
     <section className="miembros resultados" aria-labelledby="resultados-titulo">
       <h2 id="resultados-titulo">Resultados finales</h2>
 
-      {carga.tipo === 'leyendo' && <p className="cargando">Leyendo los resultados desde la red…</p>}
-      {carga.tipo === 'error' && <p className="aviso error">{carga.texto}</p>}
-      {carga.tipo === 'listo' && r === null && (
+      {eventos === null && !error && <p className="cargando">Leyendo los resultados desde la red…</p>}
+      {eventos === null && error && <p className="aviso error">No pudimos leer los resultados ahora mismo. Se reintentará solo.</p>}
+      {eventos !== null && r === null && (
         <p className="explica">
           Ya no encontramos el detalle de los pagos finales: la red de Stellar solo conserva los eventos durante unos días.
           Puedes revisarlos en el{' '}
