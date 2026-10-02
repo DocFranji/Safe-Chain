@@ -1,0 +1,62 @@
+/* Colores y tipografía de toda la app. Cambien aquí para ajustar el estilo. */
+:root {
+  --papel: #eef2ec; /* fondo */
+  --superficie: #f9fbf8; /* paneles */
+  --tinta: #1d2b27; /* texto principal */
+  --tinta-2: #4e5e58; /* texto secundario */
+  --linea: #c9d4cc; /* bordes y divisiones */
+  --turno: #e5ac2e; /* a quien le toca cobrar */
+  --turno-suave: #fbf0d4;
+  --pago: #2f7d59; /* pagó / correcto */
+  --pago-suave: #d9ece2;
+  --alerta: #b4422f; /* vencido / error */
+  --alerta-suave: #f6e0da;
+
+  font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--tinta);
+  background: var(--papel);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--papel);
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--linea);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+code {
+  font-size: 0.9em;
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--turno);
+  outline-offset: 2px;
+}
