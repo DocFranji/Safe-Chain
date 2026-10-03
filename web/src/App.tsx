@@ -10,6 +10,7 @@ import { Estado } from './pages/Estado'
 import { Landing } from './landing/Landing'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
+import { BotonesEntrar } from './components/BotonesEntrar'
 import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
 import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
@@ -86,27 +87,22 @@ export default function App() {
 function BotonBilletera({ billetera }: { billetera: Billetera }) {
   if (billetera.direccion) {
     const conocido = NOMBRES[billetera.direccion]
+    const google = billetera.tipo === 'google' ? billetera.google : null
     return (
       <div className="billetera" title={billetera.direccion}>
         <span className={billetera.redCorrecta ? 'punto ok' : 'punto mal'} aria-hidden="true" />
         <span>
-          {conocido ? `${nombreDe(billetera.direccion)} ` : ''}
+          {google?.correo ? `${google.correo} · ` : conocido ? `${nombreDe(billetera.direccion)} ` : ''}
           <span className="dir">{direccionCorta(billetera.direccion)}</span>
         </span>
         {!billetera.redCorrecta && <span className="red-mal">Cambia a Testnet</span>}
+        {google && (
+          <button type="button" className="boton chico" onClick={() => void google.salir()}>
+            Salir
+          </button>
+        )}
       </div>
     )
   }
-  if (!billetera.instalada) {
-    return (
-      <a className="boton chico" href="https://freighter.app" target="_blank" rel="noreferrer">
-        Instalar Freighter
-      </a>
-    )
-  }
-  return (
-    <button className="boton chico" onClick={billetera.conectar}>
-      Conectar billetera
-    </button>
-  )
+  return <BotonesEntrar billetera={billetera} chico />
 }

@@ -15,7 +15,25 @@ export function ComoProbar({ billetera, cuenta }: { billetera: Billetera; cuenta
   // Ya conectada y con todo listo: la guía no hace falta. Mientras se lee la cuenta, tampoco la mostramos (evita un parpadeo).
   if (redOk && (listaCuenta || (cuenta.estado === null && !cuenta.error))) return null
 
-  const pasos: Paso[] = [
+  const pasoTusd: Paso = {
+    titulo: `Consigue ${SIMBOLO} de prueba`,
+    detalle: `Aparecerá una barra con los pasos: activar tu cuenta, aceptar ${SIMBOLO} y pedir ${SIMBOLO} gratis. Son dos clics.`,
+    hecho: listaCuenta,
+    actual: redOk && !listaCuenta,
+  }
+
+  // Con "entrar con Google" configurado, el camino corto no necesita Freighter.
+  const pasosGoogle: Paso[] = [
+    {
+      titulo: 'Entra con Google',
+      detalle: 'Usa el botón «Entrar con Google» de arriba a la derecha. Te creamos una billetera de pruebas al instante. (Si ya usas Freighter, también puedes conectarla.)',
+      hecho: conectada,
+      actual: !conectada,
+    },
+    pasoTusd,
+  ]
+
+  const pasosFreighter: Paso[] = [
     {
       titulo: 'Instala Freighter',
       detalle: (
@@ -42,20 +60,20 @@ export function ComoProbar({ billetera, cuenta }: { billetera: Billetera; cuenta
       hecho: conectada,
       actual: billetera.comprobada && billetera.instalada && !conectada,
     },
-    {
-      titulo: `Consigue ${SIMBOLO} de prueba`,
-      detalle: `Aparecerá una barra con los pasos: activar tu cuenta, aceptar ${SIMBOLO} y pedir ${SIMBOLO} gratis. Son dos clics.`,
-      hecho: listaCuenta,
-      actual: redOk && !listaCuenta,
-    },
+    pasoTusd,
   ]
+
+  const pasos = billetera.google ? pasosGoogle : pasosFreighter
 
   return (
     <section className="como-probar" aria-labelledby="como-titulo">
       <div className="como-cabeza">
         <div>
-          <h2 id="como-titulo">Pruébalo en 4 pasos</h2>
-          <p className="explica">Necesitas la billetera Freighter. Si solo quieres mirar cómo funciona, abre la demo en vivo: no pide nada.</p>
+          <h2 id="como-titulo">Pruébalo en {pasos.length} pasos</h2>
+          <p className="explica">
+            {billetera.google ? 'Solo necesitas una cuenta de Google.' : 'Necesitas la billetera Freighter.'} Si solo quieres
+            mirar cómo funciona, abre la demo en vivo: no pide nada.
+          </p>
         </div>
         <div className="como-botones">
           <a className="boton principal" href={RUTA_DEMO}>

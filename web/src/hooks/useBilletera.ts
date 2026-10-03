@@ -1,12 +1,14 @@
-// Conexión con Freighter.
+// La billetera con la que la persona usa la app: su cuenta de Google (Privy) o Freighter.
+// Si entró con Google, manda esa. Si no, Freighter, como siempre.
 // Vigila cambios: si en la demo cambian de cuenta (de Ana a Beto) en Freighter,
 // la página se entera sola en un par de segundos.
 import { useCallback, useEffect, useState } from 'react'
 import { WatchWalletChanges, getAddress, getNetwork, isConnected, requestAccess } from '@stellar/freighter-api'
 import { NETWORK_PASSPHRASE } from '../config'
+import { useSesionGoogle, type SesionGoogle } from '../cuentas/sesionGoogle'
 
 export type Billetera = {
-  /** Dirección G... de la cuenta activa en Freighter, o null si no está conectada. */
+  /** Dirección G... con la que se firma (la de Google o la de Freighter), o null si no hay ninguna. */
   direccion: string | null
   /** false si Freighter no está instalado en este navegador (solo es confiable cuando `comprobada` es true). */
   instalada: boolean
@@ -15,10 +17,40 @@ export type Billetera = {
   /** false si Freighter está en otra red (por ejemplo, Mainnet). */
   redCorrecta: boolean
   error: string | null
+  /** Conecta Freighter. */
   conectar: () => Promise<void>
+  /** Con qué entró: 'google', 'freighter' o null si todavía no se conectó. */
+  tipo: 'google' | 'freighter' | null
+  /** Entrar con Google; null si no está configurado (falta VITE_PRIVY_APP_ID). */
+  google: SesionGoogle | null
 }
 
 export function useBilletera(): Billetera {
+  const google = useSesionGoogle()
+  const freighter = useFreighter()
+
+  if (google?.direccion) {
+    return {
+      ...freighter,
+      direccion: google.direccion,
+      // La billetera de Google no tiene red: la misma llave sirve en testnet.
+      redCorrecta: true,
+      error: google.error,
+      tipo: 'google',
+      google,
+    }
+  }
+  return {
+    ...freighter,
+    error: google?.error ?? freighter.error,
+    tipo: freighter.direccion ? 'freighter' : null,
+    google,
+  }
+}
+
+type Freighter = Omit<Billetera, 'tipo' | 'google'>
+
+function useFreighter(): Freighter {
   const [direccion, setDireccion] = useState<string | null>(null)
   const [instalada, setInstalada] = useState(true)
   const [comprobada, setComprobada] = useState(false)

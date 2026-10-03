@@ -24,7 +24,10 @@ export function useCuenta(direccion: string | null, activa: boolean): Cuenta {
   const recargar = useCallback(async () => {
     if (!direccion || !activa) return
     try {
-      const [estado, saldo] = await Promise.all([leerCuenta(direccion), saldoToken(direccion)])
+      const estado = await leerCuenta(direccion)
+      // Una cuenta nueva (sin activar o sin aceptar TUSD) no tiene saldo. Además, pedirle el saldo al token
+      // en ese caso da error (Error(Contract, #13): falta la trustline), y la barra no podía guiar a la persona.
+      const saldo = estado.existe && estado.trustline ? await saldoToken(direccion) : 0n
       setLectura({ direccion, estado, saldo })
       setError(false)
     } catch {
