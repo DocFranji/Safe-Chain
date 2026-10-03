@@ -3,6 +3,9 @@
 //   https://tu-sitio/#/tanda/3
 
 export type Ruta =
+  /** La landing (página de presentación). */
+  | { tipo: 'inicio' }
+  /** La lista de tandas. */
   | { tipo: 'lobby' }
   | { tipo: 'crear' }
   | { tipo: 'tanda'; id: number }
@@ -19,7 +22,8 @@ function idValido(texto: string): number | null {
 
 export function parsearRuta(hash: string): Ruta {
   const limpio = hash.replace(/^#\/?/, '').replace(/\/+$/, '')
-  if (limpio === '') return { tipo: 'lobby' }
+  if (limpio === '') return { tipo: 'inicio' }
+  if (limpio === 'tandas') return { tipo: 'lobby' }
   if (limpio === 'crear') return { tipo: 'crear' }
   if (limpio === 'estado') return { tipo: 'estado' }
   if (limpio === 'demo') return { tipo: 'demo', id: null }
@@ -36,7 +40,8 @@ export function parsearRuta(hash: string): Ruta {
   return { tipo: 'desconocida' }
 }
 
-export const RUTA_LOBBY = '#/'
+export const RUTA_INICIO = '#/'
+export const RUTA_LOBBY = '#/tandas'
 export const RUTA_CREAR = '#/crear'
 export const RUTA_DEMO = '#/demo'
 export const RUTA_ESTADO = '#/estado'

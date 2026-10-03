@@ -24,7 +24,8 @@ Otros comandos:
 
 | Pantalla | Ruta | Qué hay |
 | --- | --- | --- |
-| Lobby | `#/` | Todas las tandas, con filtros (abiertas, en curso, terminadas, mías) |
+| Inicio (landing) | `#/` | Presentación de Rounda: cómo funciona y por qué es segura. Los botones abren la app (`#/tandas`) o la demo. **No tiene registro:** tu billetera Stellar es tu cuenta |
+| Lobby | `#/tandas` | Todas las tandas, con filtros (abiertas, en curso, terminadas, mías) |
 | Crear tanda | `#/crear` | Formulario con ejemplos y vista previa de la garantía de cada turno, la bolsa, la duración y el riesgo del grupo |
 | Una tanda | `#/tanda/N` | Rueda de turnos, acciones (unirse, pagar, cerrar ronda, repartir, cancelar), invitación por link o WhatsApp, rendimiento en vivo y resultados finales |
 | Demo en vivo | `#/demo` o `#/demo/N` | Vista **para proyectar**, sin billetera: reloj grande, una tarjeta por persona con su garantía y una línea de tiempo narrada con los momentos clave resaltados. Con `#/demo/N` se queda fija en la tanda N |
@@ -79,6 +80,7 @@ Detalles útiles:
 - **`lib/colateral.ts` replica las reglas de `contracts/tanda/src/lib.rs`** para la vista previa. Si cambian el contrato, cambien también ese archivo; `colateral.test.ts` usa los mismos números que las pruebas de Rust.
 - **Línea de tiempo y resultados:** salen de los eventos del contrato. Se lee un solo flujo por tanda (`lib/rpc.ts: leerEventos`) y `lib/historia.ts` los convierte en frases.
 - **Resultados finales:** el contrato no guarda cuánto recibió cada persona, solo lo anuncia con eventos (`liquidado`, `finalizada`). La web los lee del RPC, que los conserva unos días. Pasado ese tiempo la pantalla lo explica.
+- **Diseño:** la landing está en `src/landing/` (sus estilos viven bajo `.ln` para no chocar con la app). El resto de la app usa los colores de `src/index.css` (variables `--papel`, `--acento`, etc.): para cambiar la paleta basta con editar ahí. El texto cumple contraste AA y los bordes de campos y botones pasan 3:1.
 - **Rutas con `#`:** funcionan en cualquier hosting estático. El link de invitación es `https://tu-sitio/#/tanda/3`.
 - **Si regeneran el cliente** (`stellar contract bindings typescript ...`), el lint ignora `packages/` a propósito.
 

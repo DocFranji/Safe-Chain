@@ -38,7 +38,7 @@ Los tiempos marcan cuándo termina cada paso y son aproximados: dependen de la r
 
 ## Que el jurado lo pruebe (solo Freighter)
 
-Quien llegue por el enlace de la web verá la guía **"Pruébalo en 4 pasos"**: instalar Freighter, ponerla en Testnet, conectar y conseguir TUSD. Si ya tienen Freighter, son dos clics.
+Quien llegue por el enlace de la web verá primero la landing de Rounda; con **Abrir la app** entra al lobby (`#/tandas`) y ahí está la guía **"Pruébalo en 4 pasos"**: instalar Freighter, ponerla en Testnet, conectar y conseguir TUSD. Si ya tienen Freighter, son dos clics.
 
 Para que puedan **unirse** a una tanda real, deja una abierta con un lugar libre (después de la demo, o en otra terminal):
 

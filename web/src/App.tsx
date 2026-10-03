@@ -7,10 +7,11 @@ import { CrearTanda } from './pages/CrearTanda'
 import { PaginaTanda } from './pages/PaginaTanda'
 import { Demo } from './pages/Demo'
 import { Estado } from './pages/Estado'
+import { Landing } from './landing/Landing'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
-import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_LOBBY } from './lib/rutas'
+import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
 
 export default function App() {
@@ -18,11 +19,17 @@ export default function App() {
   const ruta = useRuta()
   const cuenta = useCuenta(billetera.direccion, billetera.redCorrecta)
 
+  // La landing trae su propio encabezado y pie: no se le pone el de la app.
+  if (ruta.tipo === 'inicio') return <Landing />
+
   return (
     <div className="app">
       <header className="barra">
-        <a className="marca" href={RUTA_LOBBY}>
-          Tanda
+        <a className="marca" href={RUTA_INICIO}>
+          <span className="logo" aria-hidden="true">
+            <span className="logo-orbita" />
+          </span>
+          Rounda
         </a>
         <nav className="menu" aria-label="Principal">
           <a href={RUTA_LOBBY} aria-current={ruta.tipo === 'lobby' ? 'page' : undefined}>

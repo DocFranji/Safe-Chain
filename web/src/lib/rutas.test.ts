@@ -3,13 +3,19 @@ import { linkInvitacion, parsearRuta, rutaDemo, rutaTanda } from './rutas'
 
 describe('parsearRuta', () => {
   it('reconoce las páginas de la app', () => {
-    expect(parsearRuta('')).toEqual({ tipo: 'lobby' })
-    expect(parsearRuta('#/')).toEqual({ tipo: 'lobby' })
-    expect(parsearRuta('#')).toEqual({ tipo: 'lobby' })
+    expect(parsearRuta('')).toEqual({ tipo: 'inicio' })
+    expect(parsearRuta('#/')).toEqual({ tipo: 'inicio' })
+    expect(parsearRuta('#')).toEqual({ tipo: 'inicio' })
+    expect(parsearRuta('#/tandas')).toEqual({ tipo: 'lobby' })
+    expect(parsearRuta('#/tandas/')).toEqual({ tipo: 'lobby' })
     expect(parsearRuta('#/crear')).toEqual({ tipo: 'crear' })
     expect(parsearRuta('#/crear/')).toEqual({ tipo: 'crear' })
     expect(parsearRuta('#/tanda/3')).toEqual({ tipo: 'tanda', id: 3 })
     expect(parsearRuta('#/estado')).toEqual({ tipo: 'estado' })
+  })
+
+  it('un ancla suelta (#como) no es una página: la landing no debe usar anclas con #', () => {
+    expect(parsearRuta('#como')).toEqual({ tipo: 'desconocida' })
   })
 
   it('la demo en vivo elige sola la tanda, o se fija con un número', () => {
