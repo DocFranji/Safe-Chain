@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // packages/tanda es el cliente del contrato, generado por `stellar contract bindings`: no se edita a mano.
+  globalIgnores(['dist', 'packages/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

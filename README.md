@@ -14,7 +14,7 @@ Tandas con contrato inteligente. El contrato maneja la rotación, cobra un colat
 | `contracts/tanda/src/test.rs` | Las 16 pruebas, incluido el escenario exacto de la demo |
 | `contracts/boveda_simulada/src/lib.rs` | Bóveda con rendimiento simulado (misma interfaz que tendría un adaptador a Blend) |
 | `scripts/desplegar_testnet.sh` | Crea cuentas, el token TUSD y despliega los dos contratos en testnet |
-| `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~8 min) |
+| `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~5 min). Ver [`DEMO.md`](DEMO.md) |
 
 ## 1. Instalar (una vez por computadora)
 
@@ -67,13 +67,18 @@ bash scripts/demo.sh
 
 Es el mismo guion del video. Ana cobra primero y desaparece, Beto paga tarde, y al final se ven los saldos.
 
-## 5. Conectar la interfaz web
+Para presentarla al jurado (pantalla proyectada, qué decir y plan B), vean [`DEMO.md`](DEMO.md). Variables útiles: `WEB=https://tu-sitio PAUSAR=1 bash scripts/demo.sh`.
 
-Generen el cliente TypeScript del contrato (revisen `stellar contract bindings typescript --help` por si cambió algún nombre):
+## 5. La interfaz web
+
+La interfaz vive en `web/` (React + Freighter): lobby, crear tanda, invitaciones, rendimiento, resultados y faucet de TUSD. Para correrla y desplegarla, vean [`web/README.md`](web/README.md).
+
+Si cambian la interfaz del contrato, regeneren el cliente TypeScript (revisen `stellar contract bindings typescript --help` por si cambió algún nombre):
 
 ```bash
 source scripts/.contratos
-stellar contract bindings typescript --network testnet --contract-id $TANDA --output-dir web/src/contracts/tanda
+stellar contract bindings typescript --network testnet --contract-id $TANDA --output-dir web/packages/tanda
+(cd web/packages/tanda && npm install && npm run build)
 ```
 
 Funciones que usa la interfaz:

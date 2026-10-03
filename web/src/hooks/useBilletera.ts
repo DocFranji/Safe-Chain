@@ -8,8 +8,10 @@ import { NETWORK_PASSPHRASE } from '../config'
 export type Billetera = {
   /** Dirección G... de la cuenta activa en Freighter, o null si no está conectada. */
   direccion: string | null
-  /** false si Freighter no está instalado en este navegador. */
+  /** false si Freighter no está instalado en este navegador (solo es confiable cuando `comprobada` es true). */
   instalada: boolean
+  /** false hasta que Freighter respondió (o dejó de responder) a la primera consulta: tarda hasta 2 s. */
+  comprobada: boolean
   /** false si Freighter está en otra red (por ejemplo, Mainnet). */
   redCorrecta: boolean
   error: string | null
@@ -19,6 +21,7 @@ export type Billetera = {
 export function useBilletera(): Billetera {
   const [direccion, setDireccion] = useState<string | null>(null)
   const [instalada, setInstalada] = useState(true)
+  const [comprobada, setComprobada] = useState(false)
   const [redCorrecta, setRedCorrecta] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,6 +31,7 @@ export function useBilletera(): Billetera {
     ;(async () => {
       const c = await isConnected()
       if (!activo) return
+      setComprobada(true)
       if (c.error || !c.isConnected) {
         setInstalada(false)
         return
@@ -53,6 +57,7 @@ export function useBilletera(): Billetera {
   const conectar = useCallback(async () => {
     setError(null)
     const c = await isConnected()
+    setComprobada(true)
     if (c.error || !c.isConnected) {
       setInstalada(false)
       setError('No encontramos Freighter. Instálala desde freighter.app y recarga la página.')
@@ -68,5 +73,5 @@ export function useBilletera(): Billetera {
     if (!n.error) setRedCorrecta(n.networkPassphrase === NETWORK_PASSPHRASE)
   }, [])
 
-  return { direccion, instalada, redCorrecta, error, conectar }
+  return { direccion, instalada, comprobada, redCorrecta, error, conectar }
 }

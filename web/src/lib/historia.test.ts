@@ -1,0 +1,107 @@
+import { describe, expect, it } from 'vitest'
+import type { ContractEvent } from 'tanda'
+import { narrar, ordenar, type EventoTanda, type Formato } from './historia'
+
+const U = 10_000_000n
+const NOMBRES: Record<string, string> = { GANA: 'Ana', GBETO: 'Beto', GCARLA: 'Carla' }
+const f: Formato = {
+  nombre: (d) => NOMBRES[d] ?? d,
+  monto: (v) => String(v / U),
+  simbolo: 'TUSD',
+}
+
+let n = 0
+const ev = (evento: ContractEvent): EventoTanda => ({
+  id: String(++n).padStart(6, '0'),
+  ledger: 100 + n,
+  cerradoEn: '2026-10-02T03:00:00Z',
+  evento,
+})
+
+describe('narrar: la historia de la demo', () => {
+  it('cuenta que la garantía de Ana cubrió su cuota (el momento clave)', () => {
+    const [h] = narrar(
+      [ev({ name: 'EvCubierto', data: { id: 1, miembro: 'GANA', ronda: 1, monto: 100n * U } })],
+      f,
+    )
+    expect(h.tipo).toBe('clave')
+    expect(h.titulo).toBe('Ana no pagó: su garantía cubrió 100 TUSD')
+    expect(h.detalle).toContain('Ronda 2')
+    expect(h.detalle).toContain('el grupo no pierde nada')
+  })
+
+  it('distingue pagar a tiempo de pagar tarde', () => {
+    const [a, b] = narrar(
+      [
+        ev({ name: 'EvPago', data: { id: 1, miembro: 'GBETO', ronda: 0, tarde: false } }),
+        ev({ name: 'EvPago', data: { id: 1, miembro: 'GBETO', ronda: 2, tarde: true } }),
+      ],
+      f,
+    )
+    expect(a).toMatchObject({ tipo: 'pago', titulo: 'Beto pagó su cuota', detalle: 'Ronda 1' })
+    expect(b).toMatchObject({ tipo: 'alerta', titulo: 'Beto pagó tarde' })
+    expect(b.detalle).toContain('Ronda 3')
+  })
+
+  it('cierra la ronda: quien cobra recibe la bolsa; si es moroso, queda retenida', () => {
+    const [cobra, retenida] = narrar(
+      [
+        ev({ name: 'EvRonda', data: { id: 1, ronda: 0, beneficiario: 'GANA', monto_pagado: 300n * U } }),
+        ev({ name: 'EvRonda', data: { id: 1, ronda: 2, beneficiario: 'GCARLA', monto_pagado: 0n } }),
+      ],
+      f,
+    )
+    expect(cobra).toMatchObject({ tipo: 'ok', titulo: 'Ana cobró 300 TUSD', detalle: 'Se cerró la ronda 1' })
+    expect(retenida).toMatchObject({ tipo: 'alerta', titulo: 'La bolsa de la ronda 3 quedó retenida' })
+    expect(retenida.detalle).toContain('Carla está en mora')
+  })
+
+  it('liquidación: quien recibe dinero y quien ya gastó toda su garantía', () => {
+    const [recibe, nada] = narrar(
+      [
+        ev({ name: 'EvLiquidado', data: { id: 1, miembro: 'GCARLA', monto: 114n * U } }),
+        ev({ name: 'EvLiquidado', data: { id: 1, miembro: 'GANA', monto: 0n } }),
+      ],
+      f,
+    )
+    expect(recibe).toMatchObject({ tipo: 'ok', titulo: 'Carla recibió 114 TUSD al final' })
+    expect(nada).toMatchObject({ tipo: 'info', titulo: 'Ana no recibió nada al final' })
+  })
+
+  it('mora, creación, unión, inicio, final y cancelación', () => {
+    const h = narrar(
+      [
+        ev({ name: 'EvCreada', data: { id: 1, creador: 'GANA', cuota: 100n * U, n_miembros: 3 } }),
+        ev({ name: 'EvUnido', data: { id: 1, miembro: 'GANA', posicion: 0, colateral: 200n * U } }),
+        ev({ name: 'EvIniciada', data: { id: 1, inicio_ronda: 1n } }),
+        ev({ name: 'EvMoroso', data: { id: 1, miembro: 'GBETO', deuda: 50n * U } }),
+        ev({ name: 'EvFinalizada', data: { id: 1, rendimiento: 8n * U, fondo_premios: 10n * U, retenido: 0n, sin_repartir: 0n } }),
+        ev({ name: 'EvCancelada', data: { id: 2 } }),
+      ],
+      f,
+    )
+    expect(h.map((x) => x.titulo)).toEqual([
+      'Se creó la tanda',
+      'Ana se unió',
+      'Se completó el cupo: arranca la ronda 1',
+      'Beto quedó en mora',
+      'Tanda terminada',
+      'La tanda se canceló',
+    ])
+    expect(h[0].detalle).toBe('3 personas · cuota de 100 TUSD')
+    expect(h[1].detalle).toBe('Turno 1 · dejó 200 TUSD de garantía')
+    expect(h[3].detalle).toContain('debe 50 TUSD')
+    expect(h[4].detalle).toBe('rendimiento 8 TUSD · multas repartidas 10 TUSD')
+  })
+
+  it('ordena cronológicamente aunque lleguen desordenados', () => {
+    const a = ev({ name: 'EvIniciada', data: { id: 1 } })
+    const b = ev({ name: 'EvCancelada', data: { id: 1 } })
+    expect(ordenar([b, a]).map((x) => x.id)).toEqual([a.id, b.id])
+  })
+
+  it('no se rompe si faltan datos', () => {
+    const [h] = narrar([ev({ name: 'EvCubierto', data: { id: 1 } })], f)
+    expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió —')
+  })
+})

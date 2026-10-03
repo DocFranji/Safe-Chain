@@ -10,17 +10,27 @@ import { monto, duracion, porcentaje } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { SIMBOLO } from '../config'
 
-type Props = { id: number; datos: DatosTanda; billetera: Billetera; ahora: number; alCambiar: () => void }
+type Props = {
+  id: number
+  datos: DatosTanda
+  billetera: Billetera
+  /** Saldo de TUSD de quien está conectado (null si todavía no se sabe). */
+  saldo: bigint | null
+  ahora: number
+  alCambiar: () => void
+}
 
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
 
-export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
+export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Props) {
   const [aviso, setAviso] = useState<Aviso>(null)
+  const [confirmandoCancelar, setConfirmandoCancelar] = useState(false)
   const ocupado = aviso?.tipo === 'esperando'
 
   const { tanda, miembros, pagaron, vence, colateralSiguiente } = datos
   const estado = tanda.estado.tag
   const yo = billetera.direccion
+  const esCreador = yo !== null && yo === tanda.creador
   const mio = miembros.find((m) => m.direccion === yo) ?? null
   const yaPague = yo !== null && pagaron.includes(yo)
   const restante = vence - ahora
@@ -28,6 +38,9 @@ export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
   const beneficiario = estado === 'Activa' ? miembros.find((m) => m.posicion === tanda.ronda_actual) : undefined
   const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
   const multa = (tanda.cuota * BigInt(tanda.penalidad_bps)) / 10_000n
+  // Si ya sabemos que no alcanza el saldo, no pedimos firmar algo que va a fallar.
+  const faltaParaUnirse = saldo !== null && colateralSiguiente !== null && saldo < colateralSiguiente ? colateralSiguiente - saldo : 0n
+  const faltaParaPagar = saldo !== null && saldo < tanda.cuota ? tanda.cuota - saldo : 0n
 
   async function ejecutar(
     construir: (c: Client) => Promise<contract.AssembledTransaction<unknown>>,
@@ -43,6 +56,7 @@ export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
     } catch (e) {
       setAviso({ tipo: 'error', texto: traducirError(e) })
     }
+    setConfirmandoCancelar(false)
   }
 
   return (
@@ -94,11 +108,12 @@ export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
               <>
                 <button
                   className="boton principal"
-                  disabled={ocupado}
+                  disabled={ocupado || faltaParaUnirse > 0n}
                   onClick={() => ejecutar((c) => c.unirse({ id, miembro: yo }), 'Listo: ya eres parte de la tanda.')}
                 >
                   Unirme y dejar {monto(colateralSiguiente)} {SIMBOLO} de garantía
                 </button>
+                {faltaParaUnirse > 0n && <FaltaSaldo falta={faltaParaUnirse} />}
                 <p className="explica">
                   Tu turno será el {miembros.length + 1}. La garantía se guarda en una bóveda que genera
                   rendimiento y se te devuelve al final, con intereses.
@@ -110,11 +125,12 @@ export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
               <>
                 <button
                   className="boton principal"
-                  disabled={ocupado}
+                  disabled={ocupado || faltaParaPagar > 0n}
                   onClick={() => ejecutar((c) => c.pagar_cuota({ id, miembro: yo }), 'Listo: pagaste tu cuota de esta ronda.')}
                 >
                   Pagar mi cuota de {monto(tanda.cuota)} {SIMBOLO}
                 </button>
+                {faltaParaPagar > 0n && <FaltaSaldo falta={faltaParaPagar} />}
                 {vencida && (
                   <p className="explica">
                     El plazo ya venció: si pagas ahora cuenta como atraso, y al final se descuenta una multa de{' '}
@@ -168,6 +184,47 @@ export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
             {estado === 'Finalizada' && (
               <p className="explica">Esta tanda terminó. Cada persona ya recibió su garantía y su parte del rendimiento.</p>
             )}
+
+            {estado === 'Cancelada' && (
+              <p className="explica">
+                Esta tanda se canceló antes de empezar. Cada persona que se había unido recuperó su garantía, con el
+                rendimiento que alcanzó a generar.
+              </p>
+            )}
+
+            {estado === 'Abierta' && esCreador && (
+              <div className="cancelar">
+                {confirmandoCancelar ? (
+                  <>
+                    <p className="explica">
+                      ¿Cancelar esta tanda?{' '}
+                      {miembros.length > 0
+                        ? `Se devolverá la garantía, con su rendimiento, a ${miembros.length === 1 ? 'la persona que ya se unió' : `las ${miembros.length} personas que ya se unieron`}.`
+                        : 'Todavía no se ha unido nadie.'}{' '}
+                      No se puede deshacer.
+                    </p>
+                    <div className="fila-botones">
+                      <button
+                        className="boton secundario peligro"
+                        disabled={ocupado}
+                        onClick={() =>
+                          ejecutar((c) => c.cancelar({ id }), 'La tanda se canceló y se devolvieron las garantías.')
+                        }
+                      >
+                        Sí, cancelar la tanda
+                      </button>
+                      <button className="boton chico" disabled={ocupado} onClick={() => setConfirmandoCancelar(false)}>
+                        No, mantenerla
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button className="boton chico peligro" disabled={ocupado} onClick={() => setConfirmandoCancelar(true)}>
+                    Cancelar esta tanda
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -192,6 +249,14 @@ export function PanelRonda({ id, datos, billetera, ahora, alCambiar }: Props) {
         </p>
       </details>
     </section>
+  )
+}
+
+function FaltaSaldo({ falta }: { falta: bigint }) {
+  return (
+    <p className="aviso nota">
+      Te faltan {monto(falta)} {SIMBOLO}. Usa el botón "Pedir {SIMBOLO} de prueba" de arriba para recibir más.
+    </p>
   )
 }
 

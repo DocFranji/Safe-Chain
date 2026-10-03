@@ -1,17 +1,26 @@
 /* Colores y tipografía de toda la app. Cambien aquí para ajustar el estilo. */
 :root {
-  --papel: #eef2ec; /* fondo */
-  --superficie: #f9fbf8; /* paneles */
-  --tinta: #1d2b27; /* texto principal */
-  --tinta-2: #4e5e58; /* texto secundario */
-  --linea: #c9d4cc; /* bordes y divisiones */
-  --turno: #e5ac2e; /* a quien le toca cobrar */
-  --turno-suave: #fbf0d4;
-  --pago: #2f7d59; /* pagó / correcto */
-  --pago-suave: #d9ece2;
-  --alerta: #b4422f; /* vencido / error */
-  --alerta-suave: #f6e0da;
+  /* Paleta de Rounda (la misma de la landing, src/landing/landing.css). Cambien aquí para ajustar toda la app. */
+  --papel: #06100c; /* fondo */
+  --superficie: #0c1a14; /* paneles y tarjetas */
+  --tinta: #eef6f1; /* texto principal */
+  --tinta-2: #a3b8ad; /* texto secundario */
+  --linea: rgba(255, 255, 255, 0.12); /* divisiones suaves */
+  --borde: rgba(255, 255, 255, 0.42); /* bordes que deben verse (campos, botones) */
+  --acento: #3ee08f; /* acción principal */
+  --sobre-acento: #04140c; /* texto sobre el acento */
+  --turno: #f2c14e; /* a quien le toca cobrar */
+  --turno-suave: rgba(242, 193, 78, 0.14);
+  --sobre-turno: #1d1403; /* texto sobre el color de turno */
+  --pago: #3ee08f; /* pagó / correcto */
+  --pago-suave: rgba(62, 224, 143, 0.14);
+  --pago-texto: #8ff0bf;
+  --alerta: #f0826e; /* vencido / error */
+  --alerta-suave: rgba(224, 112, 92, 0.18);
+  --alerta-texto: #ffb4a6;
+  --titulos: 'Archivo', system-ui, sans-serif;
 
+  color-scheme: dark; /* campos, barras de scroll y desplegables en oscuro */
   font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
   font-size: 17px;
   line-height: 1.5;
@@ -36,6 +45,17 @@ h1,
 h2,
 p {
   margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--titulos);
+}
+
+::selection {
+  background: var(--acento);
+  color: var(--sobre-acento);
 }
 
 a {
