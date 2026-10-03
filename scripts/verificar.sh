@@ -8,6 +8,8 @@
 #   bash scripts/verificar.sh web          # solo web y navegador
 #   SIN_E2E=1 bash scripts/verificar.sh    # todo menos las pruebas de navegador
 #   SIN_CLIENTE=1 bash scripts/verificar.sh  # no comprueba que web/packages esté al día (ahorra ~1 minuto)
+#   SIN_WASM=1 bash scripts/verificar.sh   # sin la CLI de Stellar: no compila a WASM ni revisa el cliente
+#                                          # (así corre en GitHub Actions: .github/workflows/verificar.yml)
 #
 # Al final imprime un resumen (OK / FALLA por paso) y termina con código 1 si algo falló.
 # Requiere lo que instala scripts/preparar_entorno.sh (CLI de Stellar, dependencias de web y e2e).
@@ -108,7 +110,7 @@ if [ "$QUE" = "todo" ] || [ "$QUE" = "contratos" ]; then
   paso "cargo test" cargo test --quiet
 fi
 
-if [ "$QUE" = "todo" ]; then
+if [ "$QUE" = "todo" ] && [ "${SIN_WASM:-}" != "1" ]; then
   paso "stellar contract build (tamaño del WASM)" wasm
   if [ "${SIN_CLIENTE:-}" != "1" ]; then
     paso "Cliente generado al día (web/packages)" cliente_al_dia
