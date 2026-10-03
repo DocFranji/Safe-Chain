@@ -80,7 +80,7 @@ export function traducirError(e: unknown): string {
   if (codigo) return MENSAJES[Number(codigo[1])] ?? `El contrato rechazó la operación (código ${codigo[1]}).`
 
   if (/declin|reject|cancel/i.test(texto)) return 'Cancelaste la firma en Freighter. No se hizo ningún cambio.'
-  if (/account not found|Account not found/i.test(texto)) return 'Esta cuenta no existe en testnet. Fondéala con Friendbot desde Freighter.'
+  if (/account not found|Account not found/i.test(texto)) return 'Tu cuenta todavía no está activada en testnet. Usa el botón «Activar con Friendbot» de la barra de arriba.'
   if (/failed to fetch|networkerror|network error|timeout|timed out/i.test(texto)) return 'No pudimos conectarnos con la red de Stellar. Revisa tu internet e intenta de nuevo.'
   return `No se pudo completar la operación: ${texto.slice(0, 180)}`
 }
