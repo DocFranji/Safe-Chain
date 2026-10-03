@@ -35,9 +35,11 @@ echo "== 3. Contratos: dependencias y pruebas precompiladas =="
 cargo test --workspace --no-run --quiet
 echo "   ok"
 
-echo "== 4. Web, cliente generado y pruebas de navegador =="
+echo "== 4. Web y pruebas de navegador =="
 (cd web && npm install --no-audit --no-fund --loglevel=error)
-(cd web/packages/tanda && npm install --no-audit --no-fund --loglevel=error)
+# OJO: no instalar dependencias dentro de web/packages/*: duplicaría el SDK de Stellar
+# (scripts/generar_cliente.sh las instala solo para compilar y las borra).
+rm -rf web/packages/*/node_modules
 (cd web/e2e && npm install --no-audit --no-fund --loglevel=error)
 echo "   ok"
 

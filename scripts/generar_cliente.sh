@@ -6,7 +6,8 @@
 #
 # Uso (desde cualquier carpeta):   bash scripts/generar_cliente.sh [contrato ...]
 #   Sin argumentos regenera todos los de CONTRATOS (abajo).
-# Requiere la CLI de Stellar (bash scripts/preparar_entorno.sh la instala).
+# Requiere la CLI de Stellar para compilar el WASM y `npm ci` en web/ para el generador
+# (bash scripts/preparar_entorno.sh instala ambos).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,7 +29,10 @@ for c in "${CONTRATOS[@]}"; do
   respaldo=""
   if [ -f "$destino/.gitignore" ]; then respaldo=$(mktemp); cp "$destino/.gitignore" "$respaldo"; fi
 
-  stellar contract bindings typescript --wasm "$wasm" --output-dir "$destino" --overwrite
+  # Usamos el generador del SDK de JavaScript (el mismo con el que se creó el paquete original),
+  # NO `stellar contract bindings typescript`: el de la CLI 28 fija @stellar/stellar-sdk ^16 y
+  # la web usa la 17. Mezclar versiones duplica el SDK y rompe tipos compartidos.
+  (cd web && npx stellar-js generate --wasm "../$wasm" --output-dir "packages/$c" --contract-name "$c" --overwrite)
 
   if [ -n "$respaldo" ]; then
     cp "$respaldo" "$destino/.gitignore"; rm -f "$respaldo"
@@ -37,7 +41,10 @@ for c in "${CONTRATOS[@]}"; do
     sed -i '/^dist\/\?$/d' "$destino/.gitignore" 2>/dev/null || true
   fi
 
-  (cd "$destino" && npm install --no-audit --no-fund --loglevel=error && npm run build)
+  # node_modules solo hace falta para compilar (tsc). Se BORRA después: si se queda, la web y las
+  # pruebas cargan una segunda copia de @stellar/stellar-sdk desde aquí, distinta de la de web/,
+  # y los objetos de una copia no los entiende la otra (en Vercel esta carpeta no existe).
+  (cd "$destino" && npm install --no-audit --no-fund --loglevel=error && npm run build && rm -rf node_modules)
   echo "   tamaño del WASM: $(wc -c < "$wasm") bytes"
 done
 

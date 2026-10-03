@@ -64,19 +64,6 @@ export interface Tanda {
   { tag: "Cancelada"; values: void };
 
 /**
- * Event: EvPago
- */
-export interface EvPagoEvent {
-  name: "EvPago";
-  data: {
-    id: number;
-    miembro?: string;
-    ronda?: number;
-    tarde?: boolean;
-  };
-}
-
-/**
  * Struct: Miembro
  */
 export interface Miembro {
@@ -100,6 +87,19 @@ export interface Miembro {
    * Turno: 0 cobra en la ronda 0.
    */
   posicion: number;
+}
+
+/**
+ * Event: EvPago
+ */
+export interface EvPagoEvent {
+  name: "EvPago";
+  data: {
+    id: number;
+    miembro?: string;
+    ronda?: number;
+    tarde?: boolean;
+  };
 }
 
 /**
