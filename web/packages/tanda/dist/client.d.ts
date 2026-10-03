@@ -26,15 +26,6 @@ export interface Client {
         id: number;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
-     * (ronda actual, fecha límite, quiénes ya pagaron)
-     */
-    get_ronda(args: {
-        id: number;
-    }, options?: MethodOptions): Promise<AssembledTransaction<Result<[number, bigint, Array<string>], Error>>>;
-    get_tanda(args: {
-        id: number;
-    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Tanda, Error>>>;
-    /**
      * Crea una tanda nueva en estado `Abierta` y devuelve su id.
      * El creador NO queda como miembro: si quiere participar, llama `unirse`.
      */
@@ -72,13 +63,6 @@ export interface Client {
     cerrar_ronda(args: {
         id: number;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
-    get_miembros(args: {
-        id: number;
-    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Array<[string, Miembro]>, Error>>>;
-    /**
-     * Cuántas tandas se han creado (los ids van de 1 a este número).
-     */
-    total_tandas(options?: MethodOptions): Promise<AssembledTransaction<number>>;
     /**
      * (P2) El verificador marca una dirección como verificada (KYC hecho fuera de la cadena).
      */
@@ -86,6 +70,22 @@ export interface Client {
         miembro: string | Address;
         verificado: boolean;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * (ronda actual, fecha límite, quiénes ya pagaron)
+     */
+    get_ronda(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<[number, bigint, Array<string>], Error>>>;
+    get_tanda(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Tanda, Error>>>;
+    get_miembros(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Array<[string, Miembro]>, Error>>>;
+    /**
+     * Cuántas tandas se han creado (los ids van de 1 a este número).
+     */
+    total_tandas(options?: MethodOptions): Promise<AssembledTransaction<number>>;
     /**
      * Colateral que pagaría el próximo en unirse (para mostrarlo antes de firmar).
      */
@@ -112,15 +112,15 @@ export declare class Client extends ContractClient {
         unirse: (json: string) => AssembledTransaction<Result<null, Error>>;
         cancelar: (json: string) => AssembledTransaction<Result<null, Error>>;
         finalizar: (json: string) => AssembledTransaction<Result<null, Error>>;
-        get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
-        get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         crear_tanda: (json: string) => AssembledTransaction<Result<number, Error>>;
         inicializar: (json: string) => AssembledTransaction<Result<null, Error>>;
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
+        marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
+        get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         get_miembros: (json: string) => AssembledTransaction<Result<[string, Miembro][], Error>>;
         total_tandas: (json: string) => AssembledTransaction<number>;
-        marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
         colateral_siguiente: (json: string) => AssembledTransaction<Result<bigint, Error>>;
     };
     /** @deprecated Use fromJson instead. */
@@ -128,15 +128,15 @@ export declare class Client extends ContractClient {
         unirse: (json: string) => AssembledTransaction<Result<null, Error>>;
         cancelar: (json: string) => AssembledTransaction<Result<null, Error>>;
         finalizar: (json: string) => AssembledTransaction<Result<null, Error>>;
-        get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
-        get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         crear_tanda: (json: string) => AssembledTransaction<Result<number, Error>>;
         inicializar: (json: string) => AssembledTransaction<Result<null, Error>>;
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
+        marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
+        get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         get_miembros: (json: string) => AssembledTransaction<Result<[string, Miembro][], Error>>;
         total_tandas: (json: string) => AssembledTransaction<number>;
-        marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
         colateral_siguiente: (json: string) => AssembledTransaction<Result<bigint, Error>>;
     };
     /**

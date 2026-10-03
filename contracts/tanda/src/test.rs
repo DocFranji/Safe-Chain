@@ -6,6 +6,9 @@
 #![cfg(test)]
 extern crate std;
 
+// Los helpers (`setup`, `Ctx`, `assert_conservacion`...) son `pub(crate)` para que cada misión
+// escriba sus pruebas en su propio archivo (`test_<mision>.rs`) con `use crate::test::*;`.
+
 use super::*;
 use boveda_simulada::BovedaSimulada;
 use soroban_sdk::{
@@ -15,26 +18,26 @@ use soroban_sdk::{
 };
 
 /// 1 TUSD con 7 decimales.
-const U: i128 = 10_000_000;
-const CUOTA: i128 = 100 * U;
-const PERIODO: u64 = 120;
-const SALDO_INICIAL: i128 = 1_000 * U;
-const FONDEO_BOVEDA: i128 = 10_000 * U;
+pub(crate) const U: i128 = 10_000_000;
+pub(crate) const CUOTA: i128 = 100 * U;
+pub(crate) const PERIODO: u64 = 120;
+pub(crate) const SALDO_INICIAL: i128 = 1_000 * U;
+pub(crate) const FONDEO_BOVEDA: i128 = 10_000 * U;
 
-struct Ctx {
-    env: Env,
-    tanda: TandaContractClient<'static>,
-    tanda_addr: Address,
-    boveda: Address,
-    token: TokenClient<'static>,
-    creador: Address,
-    ana: Address,
-    beto: Address,
-    carla: Address,
-    verificador: Address,
+pub(crate) struct Ctx {
+    pub(crate) env: Env,
+    pub(crate) tanda: TandaContractClient<'static>,
+    pub(crate) tanda_addr: Address,
+    pub(crate) boveda: Address,
+    pub(crate) token: TokenClient<'static>,
+    pub(crate) creador: Address,
+    pub(crate) ana: Address,
+    pub(crate) beto: Address,
+    pub(crate) carla: Address,
+    pub(crate) verificador: Address,
 }
 
-fn setup_con(apr_bps: u32, acelerador: u32, con_verificador: bool) -> Ctx {
+pub(crate) fn setup_con(apr_bps: u32, acelerador: u32, con_verificador: bool) -> Ctx {
     let env = Env::default();
     // En pruebas aceptamos todas las firmas; hay una prueba aparte que verifica firmas reales.
     env.mock_all_auths();
@@ -88,12 +91,12 @@ fn setup_con(apr_bps: u32, acelerador: u32, con_verificador: bool) -> Ctx {
     }
 }
 
-fn setup() -> Ctx {
+pub(crate) fn setup() -> Ctx {
     setup_con(0, 1, false)
 }
 
 impl Ctx {
-    fn crear(&self, cobertura_bps: u32) -> u32 {
+    pub(crate) fn crear(&self, cobertura_bps: u32) -> u32 {
         self.tanda.crear_tanda(
             &self.creador,
             &self.token.address,
@@ -105,7 +108,7 @@ impl Ctx {
         )
     }
 
-    fn crear_y_llenar(&self, cobertura_bps: u32) -> u32 {
+    pub(crate) fn crear_y_llenar(&self, cobertura_bps: u32) -> u32 {
         let id = self.crear(cobertura_bps);
         self.tanda.unirse(&id, &self.ana);
         self.tanda.unirse(&id, &self.beto);
@@ -113,18 +116,18 @@ impl Ctx {
         id
     }
 
-    fn avanzar(&self, segundos: u64) {
+    pub(crate) fn avanzar(&self, segundos: u64) {
         self.env.ledger().with_mut(|l| {
             l.timestamp += segundos;
             l.sequence_number += 1;
         });
     }
 
-    fn saldo(&self, a: &Address) -> i128 {
+    pub(crate) fn saldo(&self, a: &Address) -> i128 {
         self.token.balance(a)
     }
 
-    fn miembro(&self, id: u32, a: &Address) -> Miembro {
+    pub(crate) fn miembro(&self, id: u32, a: &Address) -> Miembro {
         self.tanda
             .get_miembros(&id)
             .iter()
@@ -135,7 +138,7 @@ impl Ctx {
 
     /// La prueba más importante: no se crea ni se pierde dinero.
     /// Suma de saldos de miembros + bóveda + contrato = lo que existía al inicio.
-    fn assert_conservacion(&self) {
+    pub(crate) fn assert_conservacion(&self) {
         let total = self.saldo(&self.ana)
             + self.saldo(&self.beto)
             + self.saldo(&self.carla)

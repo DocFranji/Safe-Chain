@@ -14,16 +14,52 @@
 //! Convenciones:
 //! - Montos en `i128`, en la unidad mínima del token (7 decimales: 100 TUSD = 1_000_000_000).
 //! - Porcentajes en puntos básicos (bps): 10_000 = 100%.
+//!
+//! ## Cómo está organizado (para trabajar en paralelo sin pisarse)
+//! - `lib.rs`: límites, interfaz de la bóveda y el flujo principal (crear, unirse, pagar,
+//!   cerrar ronda, finalizar, cancelar).
+//! - `tipos.rs`: datos guardados (`Tanda`, `Miembro`, `DataKey`) y códigos de `Error`.
+//! - `eventos.rs`: avisos que publica el contrato.
+//! - `consultas.rs`: funciones de solo lectura (`get_*`).
+//! - `turnos.rs`: QUIÉN cobra y CUÁNTO colateral deja cada turno (misión de turnos).
+//! - `ganchos.rs`: avisos internos de lo que pasa (misión de historial crediticio).
+//! - `almacenamiento.rs`: leer/guardar datos y renovar su vida (TTL) (misión de tiempos).
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{
-    contract, contractclient, contracterror, contractevent, contractimpl, contracttype, token,
-    Address, Env, Vec,
-};
+use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, Vec};
+
+mod almacenamiento;
+mod consultas;
+mod eventos;
+mod ganchos;
+mod tipos;
+mod turnos;
+
+// Archivos reservados por misión (ver agentes/PROTOCOLO.md). Empiezan vacíos para que
+// agregar código no choque en este archivo.
+mod deudas; // M1
+mod requisitos; // M2
+mod turnos_acciones; // M3
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_blend; // M4
+#[cfg(test)]
+mod test_deudas; // M1
+#[cfg(test)]
+mod test_historial; // M2
+#[cfg(test)]
+mod test_tiempos; // M1
+#[cfg(test)]
+mod test_turnos; // M3
+
+pub use eventos::*;
+pub use tipos::*;
+
+use almacenamiento::*;
+use turnos::{beneficiario_de_ronda, colateral_para, posicion_al_unirse};
 
 // ---------------------------------------------------------------------------
 // Constantes: límites de los parámetros (sección "Parámetros y estado" de la spec)
@@ -38,10 +74,6 @@ const MIN_PERIODO_SEG: u64 = 60;
 const MAX_PENALIDAD_BPS: u32 = 5_000;
 const MAX_COBERTURA_BPS: u32 = 10_000;
 
-// Vida de los datos guardados (en ledgers de ~5 s). Ver `extender_*` abajo.
-const TTL_UMBRAL: u32 = 17_280; // ~1 día
-const TTL_EXTENDER: u32 = 518_400; // ~30 días
-
 // ---------------------------------------------------------------------------
 // Interfaz de la bóveda. La tanda solo conoce estas 4 funciones, así que la bóveda
 // simulada y un futuro adaptador a Blend son intercambiables.
@@ -53,200 +85,6 @@ pub trait Boveda {
     fn retirar(env: Env, hacia: Address, shares: i128) -> i128;
     fn retirar_monto(env: Env, hacia: Address, monto: i128) -> i128;
     fn valor(env: Env, shares: i128) -> i128;
-}
-
-// ---------------------------------------------------------------------------
-// Tipos guardados en la blockchain
-// ---------------------------------------------------------------------------
-
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Estado {
-    Abierta,
-    Activa,
-    PorLiquidar,
-    Finalizada,
-    Cancelada,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Tanda {
-    pub creador: Address,
-    pub token: Address,
-    pub cuota: i128,
-    pub n_miembros: u32,
-    pub periodo_seg: u64,
-    pub penalidad_bps: u32,
-    pub cobertura_bps: u32,
-    pub estado: Estado,
-    /// Ronda en curso: 0..n_miembros. En la ronda `r` cobra el miembro con `posicion == r`.
-    pub ronda_actual: u32,
-    /// Momento (timestamp) en que abrió la ronda actual. Vence en `inicio_ronda + periodo_seg`.
-    pub inicio_ronda: u64,
-    /// Participaciones de ESTA tanda en la bóveda (varias tandas comparten bóveda).
-    pub shares_boveda: i128,
-    /// Multas cobradas (se llena en `finalizar`).
-    pub fondo_premios: i128,
-    /// Bolsas que no se pagaron porque el beneficiario era moroso.
-    pub retenido: i128,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Miembro {
-    /// Turno: 0 cobra en la ronda 0.
-    pub posicion: u32,
-    pub colateral_inicial: i128,
-    /// Colateral que le queda (baja si cubre impagos o multas).
-    pub colateral: i128,
-    pub atrasos: u32,
-    pub multas_pendientes: i128,
-    /// Cuotas que su colateral no alcanzó a cubrir.
-    pub deuda: i128,
-    pub moroso: bool,
-    /// Ya recibió su turno.
-    pub cobro: bool,
-}
-
-#[contracttype]
-#[derive(Clone)]
-pub enum DataKey {
-    // "instance": datos del contrato completo (viven mientras viva el contrato)
-    Admin,
-    Boveda,
-    Verificador,
-    Contador,
-    // "persistent": un registro por tanda / miembro
-    Tanda(u32),
-    Miembros(u32),
-    Miembro(u32, Address),
-    Pagado(u32, u32, Address),
-    Verificado(Address),
-}
-
-// ---------------------------------------------------------------------------
-// Errores: un código fijo por cada problema, para que la interfaz muestre un
-// mensaje claro en español en vez de "transaction failed".
-// ---------------------------------------------------------------------------
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    YaInicializado = 1,
-    NoEncontrada = 2,
-    EstadoInvalido = 3,
-    ParametroInvalido = 4,
-    YaEsMiembro = 5,
-    TandaLlena = 6,
-    NoEsMiembro = 7,
-    YaPago = 8,
-    RondaNoVencida = 9,
-    MiembroMoroso = 10,
-    NoVerificado = 11,
-    NoAutorizado = 12,
-    NoInicializado = 13,
-}
-
-// ---------------------------------------------------------------------------
-// Eventos: avisos que el contrato publica y la interfaz escucha para actualizarse.
-// ---------------------------------------------------------------------------
-
-#[contractevent(topics = ["creada"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvCreada {
-    #[topic]
-    pub id: u32,
-    pub creador: Address,
-    pub cuota: i128,
-    pub n_miembros: u32,
-}
-
-#[contractevent(topics = ["unido"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvUnido {
-    #[topic]
-    pub id: u32,
-    pub miembro: Address,
-    pub posicion: u32,
-    pub colateral: i128,
-}
-
-#[contractevent(topics = ["iniciada"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvIniciada {
-    #[topic]
-    pub id: u32,
-    pub inicio_ronda: u64,
-}
-
-#[contractevent(topics = ["pago"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvPago {
-    #[topic]
-    pub id: u32,
-    pub miembro: Address,
-    pub ronda: u32,
-    pub tarde: bool,
-}
-
-/// El momento clave de la demo: "el colateral de Ana cubrió su cuota".
-#[contractevent(topics = ["cubierto"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvCubierto {
-    #[topic]
-    pub id: u32,
-    pub miembro: Address,
-    pub ronda: u32,
-    pub monto: i128,
-}
-
-#[contractevent(topics = ["moroso"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvMoroso {
-    #[topic]
-    pub id: u32,
-    pub miembro: Address,
-    pub deuda: i128,
-}
-
-#[contractevent(topics = ["ronda"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvRonda {
-    #[topic]
-    pub id: u32,
-    pub ronda: u32,
-    pub beneficiario: Address,
-    pub monto_pagado: i128,
-}
-
-#[contractevent(topics = ["liquidado"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvLiquidado {
-    #[topic]
-    pub id: u32,
-    pub miembro: Address,
-    pub monto: i128,
-}
-
-#[contractevent(topics = ["finalizada"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvFinalizada {
-    #[topic]
-    pub id: u32,
-    pub rendimiento: i128,
-    pub fondo_premios: i128,
-    pub retenido: i128,
-    /// Lo que no se pudo repartir porque no había a quién (caso extremo).
-    pub sin_repartir: i128,
-}
-
-#[contractevent(topics = ["cancelada"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EvCancelada {
-    #[topic]
-    pub id: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -379,9 +217,12 @@ impl TandaContract {
             return Err(Error::YaEsMiembro);
         }
 
+        ganchos::puede_unirse(&env, &t, id, &miembro)?;
+
         let mut miembros = cargar_miembros(&env, id);
-        let posicion = miembros.len();
-        let colateral = colateral_para(&t, posicion);
+        let posicion = posicion_al_unirse(&env, &t, &miembros);
+        let colateral =
+            ganchos::ajustar_colateral(&env, &t, &miembro, colateral_para(&t, posicion));
 
         // 1) El miembro le pasa el colateral al contrato.
         let yo = env.current_contract_address();
@@ -407,6 +248,7 @@ impl TandaContract {
         guardar_miembro(&env, id, &miembro, &m);
         miembros.push_back(miembro.clone());
         guardar_miembros(&env, id, &miembros);
+        ganchos::al_unirse(&env, &t, id, &miembro, posicion, colateral);
         EvUnido {
             id,
             miembro,
@@ -461,6 +303,7 @@ impl TandaContract {
         }
         env.storage().persistent().set(&clave_pago, &true);
         extender(&env, &clave_pago);
+        ganchos::al_pagar(&env, &t, id, &miembro, t.ronda_actual, tarde);
 
         EvPago {
             id,
@@ -512,6 +355,7 @@ impl TandaContract {
                 m.deuda += t.cuota - m.colateral;
                 if !m.moroso {
                     m.moroso = true;
+                    ganchos::al_quedar_moroso(&env, &t, id, &dir, m.deuda);
                     EvMoroso {
                         id,
                         miembro: dir.clone(),
@@ -526,6 +370,7 @@ impl TandaContract {
                 let quemadas = boveda.retirar_monto(&yo, &cubierto);
                 t.shares_boveda -= quemadas;
                 bolsa += cubierto;
+                ganchos::al_cubrir(&env, &t, id, &dir, ronda, cubierto);
                 EvCubierto {
                     id,
                     miembro: dir.clone(),
@@ -538,7 +383,7 @@ impl TandaContract {
         }
 
         // Regla 3: paga al beneficiario de turno (o retiene si es moroso).
-        let beneficiario = miembros.get(ronda).unwrap();
+        let beneficiario = beneficiario_de_ronda(&env, &t, &miembros, ronda);
         let mut mb = cargar_miembro(&env, id, &beneficiario)?;
         let monto_pagado = if mb.moroso {
             t.retenido += bolsa;
@@ -549,6 +394,7 @@ impl TandaContract {
             }
             mb.cobro = true;
             guardar_miembro(&env, id, &beneficiario, &mb);
+            ganchos::al_cobrar(&env, &t, id, &beneficiario, ronda, bolsa);
             bolsa
         };
         EvRonda {
@@ -684,6 +530,7 @@ impl TandaContract {
                 tok.transfer(&yo, &dir, &monto);
             }
             let mut m = datos.get(i).unwrap();
+            ganchos::al_terminar(&env, &t, id, &dir, &m, monto);
             m.colateral = 0;
             guardar_miembro(&env, id, &dir, &m);
             EvLiquidado {
@@ -751,142 +598,8 @@ impl TandaContract {
         EvCancelada { id }.publish(&env);
         Ok(())
     }
-
-    // ---------------------------------------------------------------------
-    // Consultas (no cambian nada, no cuestan firma): las usa la interfaz.
-    // ---------------------------------------------------------------------
-
-    pub fn get_tanda(env: Env, id: u32) -> Result<Tanda, Error> {
-        cargar_tanda(&env, id)
-    }
-
-    pub fn get_miembros(env: Env, id: u32) -> Result<Vec<(Address, Miembro)>, Error> {
-        cargar_tanda(&env, id)?;
-        let mut out = Vec::new(&env);
-        for dir in cargar_miembros(&env, id).iter() {
-            let m = cargar_miembro(&env, id, &dir)?;
-            out.push_back((dir, m));
-        }
-        Ok(out)
-    }
-
-    /// (ronda actual, fecha límite, quiénes ya pagaron)
-    pub fn get_ronda(env: Env, id: u32) -> Result<(u32, u64, Vec<Address>), Error> {
-        let t = cargar_tanda(&env, id)?;
-        let mut pagaron = Vec::new(&env);
-        for dir in cargar_miembros(&env, id).iter() {
-            if env
-                .storage()
-                .persistent()
-                .has(&DataKey::Pagado(id, t.ronda_actual, dir.clone()))
-            {
-                pagaron.push_back(dir);
-            }
-        }
-        Ok((t.ronda_actual, t.inicio_ronda + t.periodo_seg, pagaron))
-    }
-
-    /// Cuántas tandas se han creado (los ids van de 1 a este número).
-    pub fn total_tandas(env: Env) -> u32 {
-        env.storage()
-            .instance()
-            .get(&DataKey::Contador)
-            .unwrap_or(0)
-    }
-
-    /// Colateral que pagaría el próximo en unirse (para mostrarlo antes de firmar).
-    pub fn colateral_siguiente(env: Env, id: u32) -> Result<i128, Error> {
-        let t = cargar_tanda(&env, id)?;
-        let pos = cargar_miembros(&env, id).len();
-        if pos >= t.n_miembros {
-            return Err(Error::TandaLlena);
-        }
-        Ok(colateral_para(&t, pos))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Funciones internas
-// ---------------------------------------------------------------------------
-
-/// colateral_i = max(cuota, cuota × (n − 1 − i) × cobertura / 100%)
-/// Con cobertura 100%, alcanza exactamente para las cuotas que el miembro aún debe
-/// después de cobrar su turno: huir después de cobrar deja ganancia cero.
-fn colateral_para(t: &Tanda, posicion: u32) -> i128 {
-    let restantes = (t.n_miembros - 1 - posicion) as i128;
-    let base = t.cuota * restantes * t.cobertura_bps as i128 / BPS;
-    base.max(t.cuota)
 }
 
 fn multa(t: &Tanda) -> i128 {
     t.cuota * t.penalidad_bps as i128 / BPS
-}
-
-fn direccion_boveda(env: &Env) -> Result<Address, Error> {
-    env.storage()
-        .instance()
-        .get(&DataKey::Boveda)
-        .ok_or(Error::NoInicializado)
-}
-
-fn cargar_tanda(env: &Env, id: u32) -> Result<Tanda, Error> {
-    let clave = DataKey::Tanda(id);
-    let t = env
-        .storage()
-        .persistent()
-        .get(&clave)
-        .ok_or(Error::NoEncontrada)?;
-    extender(env, &clave);
-    Ok(t)
-}
-
-fn guardar_tanda(env: &Env, id: u32, t: &Tanda) {
-    let clave = DataKey::Tanda(id);
-    env.storage().persistent().set(&clave, t);
-    extender(env, &clave);
-}
-
-fn cargar_miembros(env: &Env, id: u32) -> Vec<Address> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::Miembros(id))
-        .unwrap_or(Vec::new(env))
-}
-
-fn guardar_miembros(env: &Env, id: u32, v: &Vec<Address>) {
-    let clave = DataKey::Miembros(id);
-    env.storage().persistent().set(&clave, v);
-    extender(env, &clave);
-}
-
-fn cargar_miembro(env: &Env, id: u32, dir: &Address) -> Result<Miembro, Error> {
-    let clave = DataKey::Miembro(id, dir.clone());
-    let m = env
-        .storage()
-        .persistent()
-        .get(&clave)
-        .ok_or(Error::NoEsMiembro)?;
-    extender(env, &clave);
-    Ok(m)
-}
-
-fn guardar_miembro(env: &Env, id: u32, dir: &Address, m: &Miembro) {
-    let clave = DataKey::Miembro(id, dir.clone());
-    env.storage().persistent().set(&clave, m);
-    extender(env, &clave);
-}
-
-/// Stellar cobra "alquiler" por guardar datos: si no se renueva, el dato se archiva
-/// y la tanda "desaparece" a mitad de la demo. Cada vez que tocamos un dato, lo renovamos.
-fn extender(env: &Env, clave: &DataKey) {
-    env.storage()
-        .persistent()
-        .extend_ttl(clave, TTL_UMBRAL, TTL_EXTENDER);
-    extender_instancia(env);
-}
-
-fn extender_instancia(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(TTL_UMBRAL, TTL_EXTENDER);
 }
