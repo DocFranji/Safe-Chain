@@ -1,6 +1,6 @@
 # Guion de la demo (abierta al jurado)
 
-**Idea:** el equipo corre una tanda en vivo mientras se proyecta la web; el jurado mira, y después puede probarla con su propia billetera (Freighter, en testnet). Dura unos **5 minutos**: tres rondas de 1 minuto más lo que tarda la red en confirmar cada paso.
+**Idea:** el equipo corre una tanda en vivo mientras se proyecta la web; el jurado mira, y después puede probarla con su propia billetera (una cuenta de Google o Freighter, en testnet). Dura unos **5 minutos**: tres rondas de 1 minuto más lo que tarda la red en confirmar cada paso.
 
 > Solo para testnet. Todo el dinero es de mentira y el contrato no está auditado.
 

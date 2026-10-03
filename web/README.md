@@ -64,6 +64,8 @@ Con Google, [Privy](https://privy.io) le crea a cada persona una billetera Stell
 
 Sin esa variable la web no carga Privy y funciona solo con Freighter.
 
+Quien ya tiene Freighter conectada ve en el encabezado, junto a su dirección, un botón **Entrar con Google**. Al entrar, Google manda sobre Freighter; con **Salir** se vuelve a Freighter (sigue conectada). Quien llega sin billetera ve los dos botones.
+
 Archivos: `src/cuentas/SesionGooglePrivy.tsx` (sesión y creación de la billetera), `src/cuentas/sesionGoogle.ts` (estado compartido), `src/lib/firmante.ts` (Freighter o Privy, según quién entró).
 
 ## Faucet de TUSD (opcional)

@@ -88,6 +88,9 @@ function BotonBilletera({ billetera }: { billetera: Billetera }) {
   if (billetera.direccion) {
     const conocido = NOMBRES[billetera.direccion]
     const google = billetera.tipo === 'google' ? billetera.google : null
+    // Con Freighter conectada también se puede pasar a Google. Al entrar, Google manda sobre Freighter;
+    // con «Salir» se vuelve a Freighter (sigue conectada).
+    const ofrecerGoogle = billetera.tipo === 'freighter' ? billetera.google : null
     return (
       <div className="billetera" title={billetera.direccion}>
         <span className={billetera.redCorrecta ? 'punto ok' : 'punto mal'} aria-hidden="true" />
@@ -101,6 +104,16 @@ function BotonBilletera({ billetera }: { billetera: Billetera }) {
             Salir
           </button>
         )}
+        {ofrecerGoogle &&
+          (ofrecerGoogle.conectada && !ofrecerGoogle.direccion ? (
+            <span className="explica" role="status">
+              {ofrecerGoogle.creandoBilletera ? 'Creando tu billetera de Google…' : (ofrecerGoogle.error ?? 'Preparando tu cuenta…')}
+            </span>
+          ) : (
+            <button type="button" className="boton chico" onClick={ofrecerGoogle.entrar} disabled={!ofrecerGoogle.lista}>
+              Entrar con Google
+            </button>
+          ))}
       </div>
     )
   }
