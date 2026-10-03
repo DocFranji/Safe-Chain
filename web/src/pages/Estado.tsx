@@ -11,14 +11,18 @@ const ICONO: Record<Nivel, string> = { ok: '✓', aviso: '!', error: '✕' }
 /** Lo que solo se sabe desde este navegador: Freighter y su red. */
 function chequeosLocales(b: Billetera): Chequeo[] {
   return [
-    b.instalada
+    b.tipo === 'google'
+      ? { id: 'freighter', titulo: 'Freighter en este navegador', nivel: 'ok', detalle: 'No hace falta: entraste con Google.' }
+      : b.instalada
       ? { id: 'freighter', titulo: 'Freighter en este navegador', nivel: 'ok', detalle: 'Detectada.' }
       : {
           id: 'freighter',
           titulo: 'Freighter en este navegador',
           nivel: 'aviso',
           detalle: 'No se detecta la extensión.',
-          solucion: 'Instálala desde freighter.app (navegador de escritorio). Para solo proyectar la demo no hace falta.',
+          solucion: b.google
+            ? 'No hace falta si entras con Google. Si prefieres Freighter, instálala desde freighter.app.'
+            : 'Instálala desde freighter.app (navegador de escritorio). Para solo proyectar la demo no hace falta.',
         },
     b.direccion === null
       ? {

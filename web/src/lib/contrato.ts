@@ -1,12 +1,12 @@
 // Todo lo que habla con el contrato de la tanda pasa por aquí.
 //
 //  - clienteLectura(): para CONSULTAR (get_tanda, get_miembros...). No pide firma ni cuesta nada.
-//  - clienteFirma(dir): para ACCIONES (unirse, pagar_cuota...). Freighter pide confirmar.
+//  - clienteFirma(dir): para ACCIONES (unirse, pagar_cuota...). Firma Freighter o la cuenta de Google (firmante.ts).
 //  - leer(tx) / enviar(tx): ejecutan la llamada y convierten los errores a mensajes en español.
 import { Client } from 'tanda'
 import { rpc } from '@stellar/stellar-sdk'
 import type { contract } from '@stellar/stellar-sdk'
-import { signTransaction } from '@stellar/freighter-api'
+import { firmarTransaccion } from './firmante'
 import { NETWORK_PASSPHRASE, RPC_URL, TANDA_ID } from '../config'
 
 const base = { contractId: TANDA_ID, networkPassphrase: NETWORK_PASSPHRASE, rpcUrl: RPC_URL }
@@ -16,7 +16,11 @@ export function clienteLectura(): Client {
 }
 
 export function clienteFirma(direccion: string): Client {
-  return new Client({ ...base, publicKey: direccion, signTransaction })
+  return new Client({
+    ...base,
+    publicKey: direccion,
+    signTransaction: (xdr, opciones) => firmarTransaccion(xdr, { ...opciones, address: direccion }),
+  })
 }
 
 // ---------------------------------------------------------------------------

@@ -89,7 +89,7 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
           </div>
 
           {filtro === 'mias' && !yo && (
-            <p className="explica">Conecta tu billetera (arriba a la derecha) para ver las tandas en las que participas.</p>
+            <p className="explica">Entra o conecta tu billetera (arriba a la derecha) para ver las tandas en las que participas.</p>
           )}
 
           {visibles.length === 0 ? (

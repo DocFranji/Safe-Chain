@@ -3,7 +3,7 @@
 //   2) que "acepte" TUSD (trustline: sin esto una cuenta normal G... no puede recibirlo),
 //   3) que tenga saldo (faucet).
 import { Asset, BASE_FEE, Horizon, Operation, TransactionBuilder } from '@stellar/stellar-sdk'
-import { signTransaction } from '@stellar/freighter-api'
+import { firmarTransaccion } from './firmante'
 import { FAUCET_URL, FRIENDBOT_URL, HORIZON_URL, NETWORK_PASSPHRASE } from '../config'
 import { activoToken } from './rpc'
 
@@ -41,7 +41,7 @@ export async function activarConFriendbot(direccion: string): Promise<void> {
   if (!r.ok) throw new ErrorAmigable('Friendbot no pudo activar la cuenta. Intenta de nuevo en un momento.')
 }
 
-/** Le pide a Freighter que firme la aceptación de TUSD y la envía a la red. */
+/** Firma la aceptación de TUSD (con Freighter o con la cuenta de Google) y la envía a la red. */
 export async function aceptarTusd(direccion: string): Promise<void> {
   const { codigo, emisor } = await activoToken()
   const cuenta = await horizon().loadAccount(direccion)
@@ -49,8 +49,8 @@ export async function aceptarTusd(direccion: string): Promise<void> {
     .addOperation(Operation.changeTrust({ asset: new Asset(codigo, emisor) }))
     .setTimeout(60)
     .build()
-  const firmada = await signTransaction(tx.toXDR(), { networkPassphrase: NETWORK_PASSPHRASE, address: direccion })
-  if (firmada.error) throw new ErrorAmigable(firmada.error.message || 'Se canceló la firma en Freighter.')
+  const firmada = await firmarTransaccion(tx.toXDR(), { networkPassphrase: NETWORK_PASSPHRASE, address: direccion })
+  if (firmada.error) throw new ErrorAmigable(firmada.error.message || 'Se canceló la firma.')
   await horizon().submitTransaction(TransactionBuilder.fromXDR(firmada.signedTxXdr, NETWORK_PASSPHRASE))
 }
 

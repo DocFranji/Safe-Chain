@@ -17,6 +17,7 @@ export function BarraCuenta({ billetera, cuenta }: { billetera: Billetera; cuent
   if (!direccion || !billetera.redCorrecta) return null
 
   const { estado, saldo } = cuenta
+  const conGoogle = billetera.tipo === 'google'
   const ocupado = aviso?.tipo === 'esperando'
 
   async function correr(texto: string, accion: () => Promise<void>, listo: string) {
@@ -63,13 +64,14 @@ export function BarraCuenta({ billetera, cuenta }: { billetera: Billetera; cuent
         <div>
           <strong>Acepta {SIMBOLO} para poder usarlo</strong>
           <p className="explica">
-            Una cuenta nueva debe aceptar {SIMBOLO} antes de poder recibirlo. Freighter te pedirá confirmar; no cuesta nada.
+            Una cuenta nueva debe aceptar {SIMBOLO} antes de poder recibirlo.{' '}
+            {conGoogle ? 'Se firma con tu cuenta de Google' : 'Freighter te pedirá confirmar'}; no cuesta nada.
           </p>
         </div>
         <button
           className="boton principal"
           disabled={ocupado}
-          onClick={() => correr('Confirma en Freighter…', () => aceptarTusd(direccion), `Listo: tu cuenta ya acepta ${SIMBOLO}.`)}
+          onClick={() => correr(conGoogle ? 'Firmando…' : 'Confirma en Freighter…', () => aceptarTusd(direccion), `Listo: tu cuenta ya acepta ${SIMBOLO}.`)}
         >
           Aceptar {SIMBOLO}
         </button>

@@ -2,6 +2,7 @@
 // Flujo: crear_tanda (firma 1) y, si la persona quiere, unirse como primera (firma 2).
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
+import { BotonesEntrar } from '../components/BotonesEntrar'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
@@ -274,16 +275,8 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
           <div className="acciones">
             {!yo ? (
               <>
-                <p>Conecta tu billetera para crear la tanda.</p>
-                {billetera.instalada ? (
-                  <button type="button" className="boton principal" onClick={billetera.conectar}>
-                    Conectar billetera
-                  </button>
-                ) : (
-                  <a className="boton principal" href="https://freighter.app" target="_blank" rel="noreferrer">
-                    Instalar Freighter
-                  </a>
-                )}
+                <p>Entra o conecta tu billetera para crear la tanda.</p>
+                <BotonesEntrar billetera={billetera} />
               </>
             ) : !billetera.redCorrecta ? (
               <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>

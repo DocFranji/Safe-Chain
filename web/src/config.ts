@@ -34,3 +34,9 @@ export const BOVEDA_SIMULADA: boolean = import.meta.env.VITE_BOVEDA_SIMULADA !==
 export const INTERVALO_LECTURA_MS = 5000
 
 export const EXPLORADOR = 'https://stellar.expert/explorer/testnet'
+
+/**
+ * Entrar con Google (Privy). Es el "App ID" de dashboard.privy.io; va en web/.env y en Vercel como VITE_PRIVY_APP_ID.
+ * No es secreto (viaja al navegador). Si está vacío, la web funciona como antes: solo con Freighter.
+ */
+export const PRIVY_APP_ID: string = import.meta.env.VITE_PRIVY_APP_ID ?? ''

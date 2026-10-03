@@ -5,6 +5,7 @@ import type { Client } from 'tanda'
 import type { contract } from '@stellar/stellar-sdk'
 import type { DatosTanda } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
+import { BotonesEntrar } from './BotonesEntrar'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { monto, duracion, porcentaje } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
@@ -91,14 +92,8 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
       <div className="acciones">
         {!yo ? (
           <>
-            <p>Conecta tu billetera para participar en esta tanda.</p>
-            {billetera.instalada ? (
-              <button className="boton principal" onClick={billetera.conectar}>Conectar billetera</button>
-            ) : (
-              <a className="boton principal" href="https://freighter.app" target="_blank" rel="noreferrer">
-                Instalar Freighter
-              </a>
-            )}
+            <p>Entra o conecta tu billetera para participar en esta tanda.</p>
+            <BotonesEntrar billetera={billetera} />
           </>
         ) : !billetera.redCorrecta ? (
           <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>

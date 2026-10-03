@@ -10,7 +10,12 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Necesitas la extensión [Freighter](https://freighter.app) en modo **Testnet**. Sin billetera igual puedes ver las tandas; para crear, unirte o pagar hay que conectarla.
+Para crear, unirte o pagar hay que entrar de una de dos formas:
+
+- **Con Google** (si configuraron `VITE_PRIVY_APP_ID`, ver abajo): se crea una billetera Stellar para esa cuenta, sin instalar nada.
+- **Con la extensión [Freighter](https://freighter.app)** en modo **Testnet**.
+
+Sin entrar igual puedes ver las tandas.
 
 Otros comandos:
 
@@ -24,7 +29,7 @@ Otros comandos:
 
 | Pantalla | Ruta | Qué hay |
 | --- | --- | --- |
-| Inicio (landing) | `#/` | Presentación de Rounda: cómo funciona y por qué es segura. Los botones abren la app (`#/tandas`) o la demo. **No tiene registro:** tu billetera Stellar es tu cuenta |
+| Inicio (landing) | `#/` | Presentación de Rounda: cómo funciona y por qué es segura. Los botones abren la app (`#/tandas`) o la demo. Sin contraseñas: se entra con Google o con Freighter |
 | Lobby | `#/tandas` | Todas las tandas, con filtros (abiertas, en curso, terminadas, mías) |
 | Crear tanda | `#/crear` | Formulario con ejemplos y vista previa de la garantía de cada turno, la bolsa, la duración y el riesgo del grupo |
 | Una tanda | `#/tanda/N` | Rueda de turnos, acciones (unirse, pagar, cerrar ronda, repartir, cancelar), invitación por link o WhatsApp, rendimiento en vivo y resultados finales |
@@ -42,11 +47,24 @@ Las direcciones de los contratos están en `src/config.ts`. Si vuelven a despleg
 | `VITE_TANDA_ID` | Contrato de la tanda (está en `scripts/.contratos`) |
 | `VITE_TOKEN_ID` | Contrato del token TUSD |
 | `VITE_RPC_URL`, `VITE_HORIZON_URL` | Servidores de Stellar (por defecto, los públicos de testnet) |
+| `VITE_PRIVY_APP_ID` | App ID de Privy para **entrar con Google**. Vacío = solo Freighter |
 | `VITE_FAUCET_URL` | Dónde está el faucet. Por defecto `/api/faucet`. Vacío = sin botón de faucet |
 | `VITE_NOMBRES` | JSON `{"G...":"Ana", ...}` para mostrar nombres en lugar de direcciones. Lo escribe `scripts/desplegar_testnet.sh` |
 | `VITE_BOVEDA_SIMULADA` | Pónganla en `false` cuando cambien la bóveda simulada por Blend |
 
 La dirección de la bóveda **no** hace falta: la web la lee del almacenamiento del contrato de la tanda.
+
+## Entrar con Google (Privy, opcional)
+
+Con Google, [Privy](https://privy.io) le crea a cada persona una billetera Stellar. La llave la guarda Privy; la app le pide firmar el *hash* de cada transacción (`src/lib/firmante.ts`) y el resto funciona igual que con Freighter.
+
+1. Creen una app en [dashboard.privy.io](https://dashboard.privy.io) y activen **Google** como método de login.
+2. En la configuración de dominios permitidos agreguen `http://localhost:5173` y el dominio de Vercel.
+3. Pongan el App ID en `web/.env` (`VITE_PRIVY_APP_ID=...`) y en Vercel (*Settings → Environment Variables*). No es secreto.
+
+Sin esa variable la web no carga Privy y funciona solo con Freighter.
+
+Archivos: `src/cuentas/SesionGooglePrivy.tsx` (sesión y creación de la billetera), `src/cuentas/sesionGoogle.ts` (estado compartido), `src/lib/firmante.ts` (Freighter o Privy, según quién entró).
 
 ## Faucet de TUSD (opcional)
 
@@ -68,8 +86,9 @@ Sin faucet, se puede dar TUSD con `stellar contract invoke ... mint` (ver `scrip
 src/
   pages/        Lobby, CrearTanda, PaginaTanda
   components/   Rueda, PanelRonda, ListaMiembros, Invitar, Rendimiento, Resultados, BarraCuenta...
-  hooks/        useBilletera (Freighter), useTanda, useTandas, useCuenta, useRuta
-  lib/          contrato.ts (llamadas y errores en español), lectura.ts, rpc.ts, cuenta.ts,
+  hooks/        useBilletera (Google o Freighter), useTanda, useTandas, useCuenta, useRuta
+  cuentas/      Entrar con Google (Privy)
+  lib/          contrato.ts (llamadas y errores en español), firmante.ts, lectura.ts, rpc.ts, cuenta.ts,
                 colateral.ts (replica las reglas del contrato), rutas.ts, formato.ts
 api/faucet.ts   Faucet serverless
 packages/tanda  Cliente TypeScript del contrato (lo genera `stellar contract bindings`; no se edita a mano)
