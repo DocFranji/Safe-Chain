@@ -59,6 +59,10 @@ Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tand
 | `contracts/boveda_simulada/src/lib.rs` | Bóveda con rendimiento simulado (misma interfaz que tendría un adaptador a Blend) |
 | `scripts/desplegar_testnet.sh` | Crea cuentas, el token TUSD y despliega los dos contratos en testnet |
 | `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~5 min). Ver [`DEMO.md`](DEMO.md) |
+| `scripts/preparar_entorno.sh` | Instala el target WASM, la CLI de Stellar y las dependencias (también lo usan las sesiones de Claude Code en la nube) |
+| `scripts/generar_cliente.sh` | Regenera el cliente TypeScript de los contratos para la web |
+| `web/e2e/` | Pruebas de navegador con Stellar y Freighter simulados |
+| `agentes/`, `.claude/agents/`, `CLAUDE.md` | Equipo de agentes de Claude Code: protocolo, misiones y [guía de orquestación](agentes/GUIA-ORQUESTACION.md) |
 
 ## 1. Instalar (una vez por computadora)
 

@@ -1,0 +1,13 @@
+{
+  "name": "rounda-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas de navegador de la web con RPC de Stellar, Horizon y Freighter simulados",
+  "scripts": {
+    "test": "node run.mjs",
+    "foto": "node snap.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  }
+}
