@@ -1,10 +1,54 @@
-# Tanda On-Chain: contratos (Stellar / Soroban)
+# Rounda: tandas con contrato inteligente en Stellar
 
-Tandas con contrato inteligente. El contrato maneja la rotación, cobra un colateral escalonado para que nadie cobre primero y desaparezca, aplica multas por atraso, y el colateral genera rendimiento mientras espera.
+Una tanda es un grupo que aporta la misma cuota cada ronda y, por turnos, uno recibe todo. Funciona por confianza, y el riesgo de siempre es el mismo: **el primero cobra y desaparece**. Rounda deja las reglas en un contrato inteligente (Soroban, en Stellar): el contrato guarda el dinero, exige una garantía a quien cobra antes, cobra multas por atraso y hace trabajar la garantía mientras espera.
 
-**Estado:** 16 de 16 pruebas pasan. El dinero cuadra en todos los escenarios (prueba `assert_conservacion`). Probado con `soroban-sdk` 28.0.0. Testnet está en el protocolo 29, que es compatible.
+> **Solo para testnet y demo.** El dinero es de prueba (TUSD) y el contrato no está auditado: no usar con dinero real.
 
-> Solo para testnet y demo. No está auditado: no usar con dinero real.
+**Pruébalo:** https://rounda-phi.vercel.app (entra con una cuenta de Google o con la billetera Freighter; el guion de la demo está en [`DEMO.md`](DEMO.md) y el del pitch en [`PITCH.md`](PITCH.md)).
+
+## Cómo funciona
+
+1. **Se crea la tanda**: cuota, número de personas, duración de cada ronda, multa por atraso y cuánta garantía cubre lo que aún se debe. Se comparte el enlace.
+2. **Cada quien deja una garantía al unirse.** Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Ejemplo con 3 personas y cuota de 100 TUSD: el turno 1 deja 200, el turno 2 deja 100 y el turno 3 deja 100.
+3. **Cada ronda todos pagan su cuota** y el contrato entrega la bolsa a quien le toca.
+4. **Si alguien no paga, su garantía cubre su cuota.** Quien cobra recibe la bolsa completa y el grupo no pierde nada.
+5. **Pagar tarde tiene costo:** una multa que se descuenta de la garantía y se reparte, al final, entre quienes nunca se atrasaron.
+6. **Al terminar**, cada quien recupera lo que le sobró de garantía más su parte del rendimiento, que la garantía generó en una bóveda mientras esperaba.
+
+Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tanda.
+
+## Qué hay construido
+
+| Pieza | Qué hace | Dónde |
+| --- | --- | --- |
+| Contrato de la tanda | Reglas, garantías, multas, rondas, liquidación y eventos | `contracts/tanda/` |
+| Bóveda simulada | Rendimiento de ejemplo con la misma interfaz que tendría un adaptador a Blend | `contracts/boveda_simulada/` |
+| Web (React) | Landing, lobby, crear tanda, invitaciones, resultados, demo en vivo y estado del sistema | `web/` |
+| Entrar con Google | Billetera Stellar creada y firmada por [Privy](https://privy.io); también funciona Freighter | `web/src/cuentas/`, `web/src/lib/firmante.ts` |
+| Faucet de TUSD | Función serverless de Vercel que regala TUSD de prueba | `web/api/faucet.ts` |
+| Scripts | Desplegar en testnet y correr la demo desde la terminal | `scripts/` |
+
+```
+ Navegador (React, Vercel)                          Stellar testnet
+ ┌──────────────────────────────┐   lecturas     ┌──────────────────────┐
+ │ Landing · Lobby · Tanda      │ ─────────────▶ │ RPC de Soroban        │
+ │ Demo en vivo · Estado        │                │   ├ contrato `tanda`  │
+ │                              │   firmas       │   ├ bóveda simulada   │
+ │ Firma con Freighter          │ ─────────────▶ │   └ token TUSD        │
+ │   o con Privy (Google)       │                └──────────────────────┘
+ └──────────────┬───────────────┘
+                │ /api/faucet (solo testnet)
+                ▼
+      Cuenta emisora de TUSD
+```
+
+## Límites actuales (dichos con claridad)
+
+- **No está auditado** y solo corre en testnet.
+- **La bóveda es simulada.** El rendimiento es de ejemplo y el tiempo de la demo corre más rápido que en la vida real. La interfaz de la bóveda permite cambiarla por un adaptador a Blend sin tocar el contrato de la tanda (ver más abajo).
+- **Las billeteras de Google las custodia Privy.** Es cómodo para probar, pero en producción habría que decidir el modelo de custodia.
+- **El faucet regala dinero de prueba:** nunca debe apuntar a una cuenta con valor real.
+- **Los flujos que firman** (crear, unirse, pagar) no tienen pruebas automáticas contra la red real: la interfaz se verificó con un RPC simulado y los recorridos reales se hacen a mano en testnet antes de cada demo.
 
 ## Qué hay en cada carpeta
 
@@ -29,6 +73,8 @@ cargo install --locked stellar-cli
 En Windows usen WSL (Ubuntu) o sigan la guía oficial de instalación de la Stellar CLI.
 
 ## 2. Correr las pruebas
+
+**Estado del contrato:** 16 de 16 pruebas pasan y el dinero cuadra en todos los escenarios (prueba `assert_conservacion`). Probado con `soroban-sdk` 28.0.0; testnet está en el protocolo 29, que es compatible.
 
 ```bash
 cargo test
@@ -71,7 +117,7 @@ Para presentarla al jurado (pantalla proyectada, qué decir y plan B), vean [`DE
 
 ## 5. La interfaz web
 
-La interfaz vive en `web/` (React + Freighter): lobby, crear tanda, invitaciones, rendimiento, resultados y faucet de TUSD. Para correrla y desplegarla, vean [`web/README.md`](web/README.md).
+La interfaz vive en `web/` (React): landing, lobby, crear tanda, invitaciones, rendimiento, resultados, demo en vivo y faucet de TUSD. Se entra con Google (Privy) o con Freighter. Para correrla y desplegarla, vean [`web/README.md`](web/README.md).
 
 Si cambian la interfaz del contrato, regeneren el cliente TypeScript (revisen `stellar contract bindings typescript --help` por si cambió algún nombre):
 
