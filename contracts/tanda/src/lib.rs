@@ -59,7 +59,6 @@ pub use eventos::*;
 pub use tipos::*;
 
 use almacenamiento::*;
-use turnos::{beneficiario_de_ronda, colateral_para, posicion_al_unirse};
 
 // ---------------------------------------------------------------------------
 // Constantes: límites de los parámetros (sección "Parámetros y estado" de la spec)
@@ -192,8 +191,20 @@ impl TandaContract {
     }
 
     /// Unirse a una tanda abierta: paga el colateral, que va directo a la bóveda.
-    /// El orden de llegada define el turno. Cuando entra el último, la tanda arranca.
+    /// El orden de llegada define el turno (salvo que la tanda use otro modo de turnos,
+    /// ver `turnos.rs`). Cuando entra el último, la tanda arranca.
     pub fn unirse(env: Env, id: u32, miembro: Address) -> Result<(), Error> {
+        Self::unirse_en(env, id, miembro, None)
+    }
+
+    /// (M3) Cuerpo compartido por `unirse` y `unirse_en_turno` (`turnos_acciones.rs`): `turno` es
+    /// el turno que eligió quien se une, si la tanda lo permite. No se exporta (no es `pub`).
+    pub(crate) fn unirse_en(
+        env: Env,
+        id: u32,
+        miembro: Address,
+        turno: Option<u32>,
+    ) -> Result<(), Error> {
         miembro.require_auth();
         let mut t = cargar_tanda(&env, id)?;
         match t.estado {
@@ -220,9 +231,13 @@ impl TandaContract {
         ganchos::puede_unirse(&env, &t, id, &miembro)?;
 
         let mut miembros = cargar_miembros(&env, id);
-        let posicion = posicion_al_unirse(&env, &t, &miembros);
-        let colateral =
-            ganchos::ajustar_colateral(&env, &t, &miembro, colateral_para(&t, posicion));
+        let posicion = turnos::posicion_al_unirse(&env, &t, id, &miembros, turno)?;
+        let colateral = ganchos::ajustar_colateral(
+            &env,
+            &t,
+            &miembro,
+            turnos::colateral_al_unirse(&t, posicion),
+        );
 
         // 1) El miembro le pasa el colateral al contrato.
         let yo = env.current_contract_address();
@@ -248,6 +263,7 @@ impl TandaContract {
         guardar_miembro(&env, id, &miembro, &m);
         miembros.push_back(miembro.clone());
         guardar_miembros(&env, id, &miembros);
+        turnos::al_unirse(&env, &t, id, &miembro, posicion);
         ganchos::al_unirse(&env, &t, id, &miembro, posicion, colateral);
         EvUnido {
             id,
@@ -262,6 +278,7 @@ impl TandaContract {
             t.estado = Estado::Activa;
             t.ronda_actual = 0;
             t.inicio_ronda = env.ledger().timestamp();
+            turnos::al_llenarse(&env, &t, id, &miembros)?;
             EvIniciada {
                 id,
                 inicio_ronda: t.inicio_ronda,
@@ -383,19 +400,25 @@ impl TandaContract {
         }
 
         // Regla 3: paga al beneficiario de turno (o retiene si es moroso).
-        let beneficiario = beneficiario_de_ronda(&env, &t, &miembros, ronda);
+        // (M3) `resolver_ronda` decide quién cobra y aplica la prima o el descuento del modo de
+        // turnos; `completar_garantia` aparta de la bolsa la garantía que le falte a su turno.
+        let (beneficiario, bolsa) =
+            turnos::resolver_ronda(&env, &mut t, id, &miembros, ronda, bolsa)?;
         let mut mb = cargar_miembro(&env, id, &beneficiario)?;
         let monto_pagado = if mb.moroso {
             t.retenido += bolsa;
             0
         } else {
-            if bolsa > 0 {
-                token::Client::new(&env, &t.token).transfer(&yo, &beneficiario, &bolsa);
+            let apartado =
+                turnos::completar_garantia(&env, &mut t, id, &beneficiario, &mut mb, bolsa)?;
+            let neto = bolsa - apartado;
+            if neto > 0 {
+                token::Client::new(&env, &t.token).transfer(&yo, &beneficiario, &neto);
             }
             mb.cobro = true;
             guardar_miembro(&env, id, &beneficiario, &mb);
-            ganchos::al_cobrar(&env, &t, id, &beneficiario, ronda, bolsa);
-            bolsa
+            ganchos::al_cobrar(&env, &t, id, &beneficiario, ronda, neto);
+            neto
         };
         EvRonda {
             id,
