@@ -52,7 +52,7 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
             </div>
           </div>
           <ListaMiembros datos={datos} yo={billetera.direccion} />
-          <Calendario datos={datos} ahora={ahora} />
+          <Calendario id={id} datos={datos} ahora={ahora} yo={billetera.direccion} />
           {estado === 'Finalizada' && (
             <Resultados datos={datos} yo={billetera.direccion} eventos={historia.eventos} error={historia.error} />
           )}

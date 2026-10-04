@@ -61,3 +61,18 @@ export function errorMontoDeuda(monto: bigint | null, deuda: bigint): string | n
   if (monto > deuda) return 'Es más de lo que debes.'
   return null
 }
+
+/**
+ * Quiénes no alcanzan a cubrir su cuota si la ronda se cierra ahora, y cuánto falta de cada uno (como
+ * `cerrar_ronda`): a quien no pagó, su garantía le cubre la cuota; si no le alcanza, entra lo que tiene y la
+ * diferencia falta en la bolsa (esa persona queda debiéndosela a quien cobra).
+ */
+export function faltantesAlCerrar(
+  miembros: { direccion: string; colateral: bigint }[],
+  pagaron: string[],
+  cuota: bigint,
+): { direccion: string; falta: bigint }[] {
+  return miembros
+    .filter((m) => !pagaron.includes(m.direccion) && m.colateral < cuota)
+    .map((m) => ({ direccion: m.direccion, falta: cuota - (m.colateral > 0n ? m.colateral : 0n) }))
+}

@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, conTandaUsdc, historial, ADAPTADOR_USDC } from './mock.mjs'
+import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, conMiBolsaLista, conTandaUsdc, historial, ADAPTADOR_USDC, USDC_ID } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -180,6 +180,15 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Lista: "Saldó su deuda" para Carla', /Saldó su deuda/.test(lista), lista.slice(0, 400))
   const cal = (await page.locator('.calendario').innerText().catch(() => '')).replace(/\u00a0/g, ' ')
   check('Calendario: 4 rondas, 2 cerradas y fechas para las que faltan', (await page.locator('.calendario tbody tr').count()) === 4 && (cal.match(/Cerrada/g) ?? []).length === 2 && /Vence el \S+ \d+ de \S+/.test(cal), cal)
+  // M1 fase 2: "Agregar a mi calendario" baja un .ics con las 2 fechas que faltan y recordatorios.
+  const [descarga] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Agregar a mi calendario' }).click(),
+  ])
+  const ics = fs.readFileSync(await descarga.path(), 'utf8')
+  check('Calendario .ics: se llama rounda-tanda-6.ics', descarga.suggestedFilename() === 'rounda-tanda-6.ics', descarga.suggestedFilename())
+  check('Calendario .ics: 2 fechas de pago (las rondas que faltan) con recordatorio un día antes', (ics.match(/BEGIN:VEVENT/g) ?? []).length === 2 && (ics.match(/TRIGGER:-P1D/g) ?? []).length === 2 && ics.endsWith('END:VCALENDAR\r\n'), ics.slice(0, 600))
+  check('Calendario .ics: en mi ronda dice que cobro mi bolsa, con el enlace a la tanda', /SUMMARY:Tanda 6: pagas tu cuota y cobras tu bolsa \(ronda 4 de 4\)/.test(ics) && /#\/tanda\/6/.test(ics), ics.slice(0, 1500))
   await page.waitForSelector('.historia-item', { timeout: 15000 }).catch(() => {})
   const hist = (await page.locator('.historia-seccion').innerText()).replace(/\u00a0/g, ' ')
   check('Historia: "Carla pagó 50 TUSD y saldó su deuda"', /Carla pagó 50 TUSD y saldó su deuda/.test(hist), hist.slice(0, 500))
@@ -207,6 +216,41 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Móvil (390px): la tanda con deuda y calendario no se desborda', !overflow)
   await shot(page, '06c-tanda-deuda-390')
   check('Tercero: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 5d. M1: "Tu bolsa está lista: cóbrala" (cerrador, opción C)
+{
+  const est = conMiBolsaLista(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  const tarjeta = page.locator('.tarjeta', { hasText: 'Tanda 6' })
+  check('Cobrar: en el lobby, la tarjeta de mi tanda dice "Tu bolsa está lista: cóbrala"', (await tarjeta.locator('.tarjeta-cobro').count()) === 1)
+  check('Cobrar: ninguna otra tarjeta lo dice', (await page.locator('.tarjeta-cobro').count()) === 1)
+  await page.goto(BASE + '#/tanda/6')
+  const boton = page.getByRole('button', { name: 'Tu bolsa está lista: cóbrala' })
+  await boton.waitFor({ timeout: 15000 }).catch(() => {})
+  check('Cobrar: en la tanda, botón principal "Tu bolsa está lista: cóbrala" habilitado', (await boton.count()) === 1 && !(await boton.isDisabled()) && /principal/.test((await boton.getAttribute('class')) ?? ''))
+  const t = (await texto(page)).replace(/\u00a0/g, ' ')
+  check('Cobrar: avisa que a Beto no le alcanza la garantía y que la bolsa sale con 60 TUSD menos', /A Beto no le alcanza la garantía: la bolsa sale con 60 TUSD menos, que te queda debiendo y puede pagar después/.test(t), t.slice(0, 1500))
+  check('Cobrar: ya no dice "Cerrar la ronda y pagarle a"', !/Cerrar la ronda y pagarle a/.test(t))
+  await shot(page, '06d-cobrar-bolsa')
+  check('Cobrar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Otra persona (Ana) ve la misma ronda: cualquiera puede cerrarla, pero no es "su" bolsa.
+  const est = conMiBolsaLista(nuevoEstado())
+  const { page } = await nuevaPagina(browser, { est, direccion: ANA, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('text=Cualquier persona puede cerrar la ronda', { timeout: 15000 }).catch(() => {})
+  const t = (await texto(page)).replace(/\u00a0/g, ' ')
+  check('Cobrar (otra persona): botón "Cerrar la ronda y pagarle a …" y no "cóbrala"', /Cerrar la ronda y pagarle a/.test(t) && !/Tu bolsa está lista/.test(t), t.slice(0, 1200))
+  check('Cobrar (otra persona): la diferencia se le queda debiendo a quien cobra', /que le queda debiendo a /.test(t))
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  check('Cobrar (otra persona): sin aviso de cobro en el lobby', (await page.locator('.tarjeta-cobro').count()) === 0)
   await page.close()
 }
 
@@ -1099,6 +1143,25 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
   const tarjeta = await page.locator('.tarjeta', { hasText: 'Tanda 6' }).innerText({ timeout: 15000 }).catch(() => '')
   check('M4: la tarjeta de la tanda USDC en el lobby dice USDC', /300 USDC/.test(tarjeta) && /cuota 100 USDC/.test(tarjeta), tarjeta)
+  await page.close()
+}
+{
+  // M1 + M4: "Tu bolsa está lista: cóbrala" en una tanda en USDC: el aviso de la garantía que no alcanza
+  // habla en USDC (y nada fuera de la barra de la cuenta dice TUSD).
+  const est = conMiBolsaLista(nuevoEstado())
+  est.tandas[6].boveda = ADAPTADOR_USDC
+  est.tandas[6].tanda.token = USDC_ID
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/6')
+  await page.getByRole('button', { name: 'Tu bolsa está lista: cóbrala' }).waitFor({ timeout: 15000 }).catch(() => {})
+  const principal = await page.evaluate(() => {
+    const copia = document.body.cloneNode(true)
+    copia.querySelectorAll('.barra-cuenta, footer').forEach((n) => n.remove())
+    return copia.innerText.replace(/\u00a0/g, ' ')
+  })
+  check('M4: cóbrala en USDC: "la bolsa sale con 60 USDC menos"', /la bolsa sale con 60 USDC menos/.test(principal), principal.slice(0, 1500))
+  check('M4: cóbrala en USDC: ningún "TUSD" fuera de la barra de la cuenta', !/TUSD/.test(principal), (principal.match(/.{0,40}TUSD.{0,40}/) ?? [''])[0])
+  check('M4: cóbrala en USDC sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 {

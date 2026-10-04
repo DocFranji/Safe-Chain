@@ -1,6 +1,7 @@
 // Pantalla de inicio: todas las tandas, con filtros, y el acceso a crear una nueva.
 import { useState } from 'react'
 import { useTandas } from '../hooks/useTandas'
+import { useAhora } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import type { Cuenta } from '../hooks/useCuenta'
 import type { ResumenTanda } from '../lib/lectura'
@@ -38,6 +39,7 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
   const { total, lista, error, listo, hayMas, verMas } = useTandas()
   const [filtro, setFiltro] = useState<Filtro>('todas')
   const yo = billetera.direccion
+  const ahora = useAhora()
 
   const visibles = lista.filter((r) => coincide(r, filtro, yo))
 
@@ -97,7 +99,7 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
           ) : (
             <ul className="tarjetas">
               {visibles.map((r) => (
-                <TarjetaTanda key={r.id} resumen={r} yo={yo} />
+                <TarjetaTanda key={r.id} resumen={r} yo={yo} ahora={ahora} />
               ))}
             </ul>
           )}

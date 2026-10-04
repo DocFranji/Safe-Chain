@@ -10,6 +10,9 @@
 //! - la gente se une (eligiendo turno o no) y paga a tiempo, tarde o nunca, según su perfil;
 //! - se saldan deudas, completas o en partes, por el moroso o por otra persona;
 //! - hay ofertas en subastas, y propuestas, aceptaciones y cancelaciones de intercambios;
+//! - en las subastas selladas se sella y se revela (también sellos copiados, revelaciones fuera de
+//!   fase y con la sal o el monto equivocados), y al cerrar gana la mayor oferta revelada;
+//! - hay tandas cuyos primeros turnos piden historial: al unirse, al llenarse y al intercambiar;
 //! - se cierran rondas a tiempo o muy tarde, se cancelan tandas abiertas y se finalizan las terminadas.
 //!
 //! También intenta lo que debe fallar y comprueba el código de error exacto.
@@ -55,7 +58,7 @@ use soroban_sdk::{
         Address as _, EnvTestConfig, Ledger,
     },
     token::{StellarAssetClient, TokenClient},
-    Address, Env, IntoVal, Val,
+    Address, Bytes, BytesN, Env, IntoVal, Val,
 };
 use std::{collections::BTreeMap, format, string::String, vec::Vec as StdVec};
 
@@ -135,6 +138,11 @@ struct TandaM {
     perfiles: StdVec<(Address, Perfil)>,
     /// Finalizada o cancelada: ya se revisó al terminar y no cambia más.
     terminada: bool,
+    /// Subasta sellada: lo que cada quien selló (descuento y sal) en la ronda `sellos_ronda`.
+    sellos: StdVec<(Address, u32, [u8; 32])>,
+    sellos_ronda: u32,
+    /// Ronda y momento en que se cerró la anterior: ahí empezó de verdad (para la mitad sellada).
+    inicio_real: Option<(u32, u64)>,
 }
 
 struct Mundo {
@@ -175,6 +183,36 @@ fn garantia_restantes(t: &Tanda, restantes: u32) -> i128 {
 
 fn intercambiable(m: &Miembro, ronda: u32) -> bool {
     m.posicion != SIN_TURNO && m.posicion > ronda && !m.cobro && !m.moroso
+}
+
+/// Los sellos que el modelo espera en la ronda `ronda` (los de rondas pasadas ya no cuentan).
+fn sellos_modelo(tm: &TandaM, ronda: u32) -> &[(Address, u32, [u8; 32])] {
+    if tm.sellos_ronda == ronda {
+        &tm.sellos
+    } else {
+        &[]
+    }
+}
+
+/// Subasta sellada: hasta aquí se sella y desde aquí se revela. Es la mitad del tiempo que la ronda
+/// tuvo de verdad: si la anterior se cerró tarde (calendario anclado de M1), esta empezó al cerrarse
+/// aquella y no en `inicio_ronda`.
+fn mitad_modelo(tm: &TandaM, t: &Tanda) -> u64 {
+    let vence = t.inicio_ronda + t.periodo_seg;
+    let desde = match tm.inicio_real {
+        Some((ronda, momento)) if ronda == t.ronda_actual => momento.clamp(t.inicio_ronda, vence),
+        _ => t.inicio_ronda,
+    };
+    desde + (vence - desde) / 2
+}
+
+/// Subasta: en un empate gana quien va antes en el orden de respaldo (sorteado al llenarse).
+fn antes_en_respaldo(respaldo: &soroban_sdk::Vec<Address>, a: &Address, b: &Address) -> bool {
+    match (respaldo.first_index_of(a), respaldo.first_index_of(b)) {
+        (Some(i), Some(j)) => i < j,
+        (Some(_), None) => true,
+        _ => false,
+    }
 }
 
 impl Mundo {
@@ -357,6 +395,56 @@ impl Mundo {
             .collect()
     }
 
+    /// Subasta sellada: sha256(descuento en 4 bytes big-endian ‖ sal), como la web y el contrato.
+    fn sello(&self, descuento_bps: u32, sal: &[u8; 32]) -> BytesN<32> {
+        let mut datos = Bytes::from_array(&self.env, &descuento_bps.to_be_bytes());
+        datos.append(&Bytes::from_array(&self.env, sal));
+        self.env.crypto().sha256(&datos).to_bytes()
+    }
+
+    fn sal_al_azar(&mut self) -> [u8; 32] {
+        let mut sal = [0u8; 32];
+        for trozo in sal.chunks_mut(8) {
+            trozo.copy_from_slice(&self.azar.sig().to_le_bytes());
+        }
+        sal
+    }
+
+    fn sellos_de(&self, k: usize, ronda: u32) -> StdVec<(Address, u32, [u8; 32])> {
+        sellos_modelo(&self.tandas[k], ronda).to_vec()
+    }
+
+    fn mitad(&self, k: usize, t: &Tanda) -> u64 {
+        mitad_modelo(&self.tandas[k], t)
+    }
+
+    /// Error de llegar al turno `pos` si es de los primeros que piden historial (`None` si puede).
+    fn error_turno_protegido(&self, o: &OpcionesTanda, quien: &Address, pos: u32) -> Option<Error> {
+        if pos >= o.primeros_con_historial {
+            None
+        } else if !self.hist_conectado {
+            Some(Error::HistorialNoConfigurado)
+        } else if self.puntaje(quien) < o.puntaje_primeros {
+            Some(Error::TurnoExigeHistorial)
+        } else {
+            None
+        }
+    }
+
+    /// Intercambio: `de` pasaría al turno de `con` (`b`) y `con` al de `de` (`a`); los dos tienen
+    /// que poder llegar al turno nuevo.
+    fn error_intercambio_protegido(
+        &self,
+        o: &OpcionesTanda,
+        de: &Address,
+        a: &Miembro,
+        con: &Address,
+        b: &Miembro,
+    ) -> Option<Error> {
+        self.error_turno_protegido(o, de, b.posicion)
+            .or_else(|| self.error_turno_protegido(o, con, a.posicion))
+    }
+
     fn anotar(&mut self, s: String) {
         self.bitacora.push(s);
         if self.bitacora.len() > 400 {
@@ -442,7 +530,7 @@ impl Mundo {
     // Crear, unirse, cancelar
     // -----------------------------------------------------------------------
 
-    fn opciones_al_azar(&mut self) -> OpcionesTanda {
+    fn opciones_al_azar(&mut self, n: u32) -> OpcionesTanda {
         let modo = [
             ModoTurnos::Llegada,
             ModoTurnos::Eleccion,
@@ -450,6 +538,17 @@ impl Mundo {
             ModoTurnos::Sorteo,
             ModoTurnos::Subasta,
         ][self.azar.hasta(5)];
+        // Los primeros turnos piden historial (donde cada quien elige su turno). Si el historial
+        // existe pero está desconectado, crear la tanda debe fallar.
+        let elige = matches!(modo, ModoTurnos::Eleccion | ModoTurnos::PrecioPorTurno);
+        let (primeros, puntaje) = if elige && self.hist.is_some() && self.azar.si(40) {
+            (
+                self.azar.entre(1, n as u64 - 1) as u32,
+                [40u32, 100, 100, 300][self.azar.hasta(4)],
+            )
+        } else {
+            (0, 0)
+        };
         OpcionesTanda {
             modo,
             permitir_intercambio: modo != ModoTurnos::Subasta && self.azar.si(80),
@@ -463,10 +562,61 @@ impl Mundo {
             } else {
                 0
             },
-            // Opciones de M3 que vinieron después de estas pruebas: apagadas.
+            primeros_con_historial: primeros,
+            puntaje_primeros: puntaje,
+            ofertas_selladas: modo == ModoTurnos::Subasta && self.azar.si(50),
+        }
+    }
+
+    /// Opciones que no se pueden crear (todas dan `OpcionesInvalidas`), para `n` personas.
+    fn opciones_invalidas(&mut self, n: u32) -> OpcionesTanda {
+        let base = OpcionesTanda {
+            modo: ModoTurnos::Subasta,
+            permitir_intercambio: false,
+            prima_max_bps: 0,
+            descuento_max_bps: 1_000,
             primeros_con_historial: 0,
             puntaje_primeros: 0,
             ofertas_selladas: false,
+        };
+        let eleccion = OpcionesTanda {
+            modo: ModoTurnos::Eleccion,
+            descuento_max_bps: 0,
+            ..base.clone()
+        };
+        match self.azar.hasta(6) {
+            // Subasta con intercambio.
+            0 => OpcionesTanda {
+                permitir_intercambio: true,
+                ..base
+            },
+            // Ofertas selladas fuera de la subasta.
+            1 => OpcionesTanda {
+                ofertas_selladas: true,
+                ..eleccion
+            },
+            // Historial para los primeros turnos donde el turno no se elige.
+            2 => OpcionesTanda {
+                primeros_con_historial: 1,
+                puntaje_primeros: 100,
+                ..base
+            },
+            // Todos los turnos (o más) piden historial: ninguno queda para cualquiera.
+            3 => OpcionesTanda {
+                primeros_con_historial: n + self.azar.entre(0, 2) as u32,
+                puntaje_primeros: 100,
+                ..eleccion
+            },
+            // Turnos con historial pero sin puntaje.
+            4 => OpcionesTanda {
+                primeros_con_historial: 1,
+                ..eleccion
+            },
+            // Puntaje sin turnos.
+            _ => OpcionesTanda {
+                puntaje_primeros: 100,
+                ..eleccion
+            },
         }
     }
 
@@ -492,16 +642,8 @@ impl Mundo {
                 "crear_tanda inválida ({cuota}, {n}, {periodo}, {pen}) -> {r:?}"
             ));
             self.segun("crear_tanda inválida", r, Some(Error::ParametroInvalido));
-            // Opciones de turnos inválidas (subasta con intercambio).
-            let mala = OpcionesTanda {
-                modo: ModoTurnos::Subasta,
-                permitir_intercambio: true,
-                prima_max_bps: 0,
-                descuento_max_bps: 1_000,
-                primeros_con_historial: 0,
-                puntaje_primeros: 0,
-                ofertas_selladas: false,
-            };
+            // Opciones de turnos inválidas.
+            let mala = self.opciones_invalidas(3);
             let r = self.tanda.try_crear_tanda_avanzada(
                 &creador,
                 &tok,
@@ -513,6 +655,7 @@ impl Mundo {
                 &mala,
             );
             let r = self.res("crear_tanda_avanzada", r);
+            self.anotar(format!("crear_tanda_avanzada inválida ({mala:?}) -> {r:?}"));
             self.segun("opciones inválidas", r, Some(Error::OpcionesInvalidas));
             self.exigir(self.tanda.total_tandas() == antes, || {
                 String::from("una tanda rechazada cambió el contador")
@@ -558,8 +701,14 @@ impl Mundo {
         let opciones = if self.azar.si(35) {
             None
         } else {
-            Some(self.opciones_al_azar())
+            Some(self.opciones_al_azar(n))
         };
+        // Los primeros turnos con historial necesitan el historial conectado.
+        let esperado = opciones
+            .as_ref()
+            .filter(|o| o.primeros_con_historial > 0 && !self.hist_conectado)
+            .map(|_| Error::HistorialNoConfigurado);
+        let antes = self.tanda.total_tandas();
         let r = match &opciones {
             None => {
                 let r = self
@@ -574,7 +723,15 @@ impl Mundo {
                 self.res("crear_tanda_avanzada", r)
             }
         };
-        let id = self.segun("crear_tanda", r, None).unwrap();
+        let Some(id) = self.segun("crear_tanda", r, esperado) else {
+            self.anotar(format!(
+                "crear_tanda_avanzada sin historial conectado ({opciones:?}) -> {esperado:?}"
+            ));
+            self.exigir(self.tanda.total_tandas() == antes, || {
+                String::from("una tanda rechazada cambió el contador")
+            });
+            return;
+        };
         self.anotar(format!(
             "t{id} creada: n={n} cuota={cuota} periodo={periodo}s multa={pen} cobertura={cob} \
              opciones={opciones:?}"
@@ -616,6 +773,9 @@ impl Mundo {
             opciones,
             perfiles: StdVec::new(),
             terminada: false,
+            sellos: StdVec::new(),
+            sellos_ronda: 0,
+            inicio_real: None,
         });
     }
 
@@ -658,7 +818,12 @@ impl Mundo {
 
     fn unirse_persona(&mut self, k: usize, p: &Address, turno: Option<u32>) {
         let id = self.tandas[k].id;
-        let modo = self.tandas[k].opciones.as_ref().map(|o| o.modo);
+        let opciones = self.tandas[k].opciones.clone();
+        let modo = opciones.as_ref().map(|o| o.modo);
+        let primeros = opciones
+            .as_ref()
+            .map(|o| o.primeros_con_historial)
+            .unwrap_or(0);
         let t = self.tanda.get_tanda(&id);
         let lista = self.miembros(id);
         let ocupados: StdVec<u32> = lista.iter().map(|(_, m)| m.posicion).collect();
@@ -668,7 +833,14 @@ impl Mundo {
             modo,
             Some(ModoTurnos::Eleccion) | Some(ModoTurnos::PrecioPorTurno)
         );
-        let esperado = if t.estado == Estado::Cancelada {
+        // Un turno que pide historial se revisa antes que todo lo demás (`unirse_en_turno`).
+        let protegido = match (&opciones, turno) {
+            (Some(o), Some(x)) => self.error_turno_protegido(o, p, x),
+            _ => None,
+        };
+        let esperado = if protegido.is_some() {
+            protegido
+        } else if t.estado == Estado::Cancelada {
             Some(Error::EstadoInvalido)
         } else if t.estado != Estado::Abierta {
             Some(Error::TandaLlena)
@@ -683,6 +855,10 @@ impl Mundo {
                 (true, Some(x)) if x >= t.n_miembros => Some(Error::TurnoInvalido),
                 (true, Some(x)) if ocupados.contains(&x) => Some(Error::TurnoOcupado),
                 (false, Some(_)) => Some(Error::ModoNoPermite),
+                // Sin elegir solo se da un turno que no pide historial.
+                (true, None) if (primeros..t.n_miembros).all(|x| ocupados.contains(&x)) => {
+                    Some(Error::TurnoExigeHistorial)
+                }
                 _ => None,
             }
         };
@@ -692,13 +868,16 @@ impl Mundo {
             None | Some(ModoTurnos::Llegada) => lista.len() as u32,
             Some(ModoTurnos::Eleccion) | Some(ModoTurnos::PrecioPorTurno) => {
                 turno.unwrap_or_else(|| {
-                    (0..t.n_miembros)
+                    (primeros..t.n_miembros)
                         .find(|x| !ocupados.contains(x))
                         .unwrap_or(0)
                 })
             }
             _ => SIN_TURNO,
         };
+        if esperado.is_none() && pos < primeros {
+            self.contar("· unirse en un turno que pide historial");
+        }
         let colateral = if esperado.is_none() {
             let base = if pos == SIN_TURNO {
                 garantia_turno(&t, t.n_miembros - 1)
@@ -769,12 +948,25 @@ impl Mundo {
     }
 
     /// Junta gente hasta llenar la tanda `k`; si no alcanza (requisitos, poca gente), la cancela.
+    /// Si solo quedan turnos que piden historial, los elige alguien que lo tenga.
     fn llenar(&mut self, k: usize) {
         let id = self.tandas[k].id;
+        let opciones = self.tandas[k].opciones.clone();
         let mut intentos = 0;
         while self.tanda.get_tanda(&id).estado == Estado::Abierta && intentos < 40 {
             intentos += 1;
-            let dentro: StdVec<Address> = self.miembros(id).into_iter().map(|(d, _)| d).collect();
+            let t = self.tanda.get_tanda(&id);
+            let lista = self.miembros(id);
+            let dentro: StdVec<Address> = lista.iter().map(|(d, _)| d.clone()).collect();
+            let ocupados: StdVec<u32> = lista.iter().map(|(_, m)| m.posicion).collect();
+            let protegido = opciones.as_ref().and_then(|o| {
+                (o.primeros_con_historial..t.n_miembros)
+                    .all(|x| ocupados.contains(&x))
+                    .then(|| {
+                        let libre = (0..o.primeros_con_historial).find(|x| !ocupados.contains(x));
+                        (libre.unwrap(), o.puntaje_primeros)
+                    })
+            });
             let req = self.tanda.get_requisitos(&id);
             let fuera: StdVec<Address> = self
                 .gente
@@ -784,13 +976,17 @@ impl Mundo {
                     req.puntaje_minimo == 0
                         || (self.hist_conectado && self.puntaje(p) >= req.puntaje_minimo)
                 })
+                .filter(|p| match protegido {
+                    None => true,
+                    Some((_, minimo)) => self.hist_conectado && self.puntaje(p) >= minimo,
+                })
                 .cloned()
                 .collect();
             if fuera.is_empty() {
                 break;
             }
             let p = fuera[self.azar.hasta(fuera.len())].clone();
-            self.unirse_persona(k, &p, None);
+            self.unirse_persona(k, &p, protegido.map(|(x, _)| x));
             self.revisar();
         }
         if self.tanda.get_tanda(&id).estado == Estado::Abierta {
@@ -1058,8 +1254,19 @@ impl Mundo {
             self.segun("intercambio sin opciones", r, Some(Error::ModoNoPermite));
             return;
         };
-        if o.modo == ModoTurnos::Subasta && self.azar.si(70) {
-            self.ofertar(k);
+        if o.modo == ModoTurnos::Subasta && o.ofertas_selladas && self.azar.si(80) {
+            match self.azar.hasta(20) {
+                0..=6 => self.sellar(k),
+                7..=13 => self.revelar(k),
+                14..=18 => self.ronda_sellada(k),
+                _ => self.ofertar(k), // la oferta abierta no aplica: ModoNoPermite
+            }
+        } else if o.modo == ModoTurnos::Subasta && self.azar.si(70) {
+            if self.azar.si(8) {
+                self.sellar(k); // sellar en una subasta abierta: ModoNoPermite
+            } else {
+                self.ofertar(k);
+            }
         } else if self.propuestas(self.tandas[k].id).is_empty() {
             match self.azar.hasta(10) {
                 0..=7 => self.proponer(k),
@@ -1097,20 +1304,10 @@ impl Mundo {
         } else {
             self.azar.entre(1, o.descuento_max_bps as u64 + 50) as u32
         };
-        let m = lista.iter().find(|(x, _)| *x == p).map(|(_, m)| m.clone());
-        let esperado = if t.estado != Estado::Activa {
-            Some(Error::EstadoInvalido)
-        } else if t.ronda_actual + 1 >= t.n_miembros
-            || self.ahora() > t.inicio_ronda + t.periodo_seg
-        {
-            Some(Error::SinSubasta)
-        } else {
-            match &m {
-                None => Some(Error::NoEsMiembro),
-                Some(m) if m.posicion != SIN_TURNO || m.moroso => Some(Error::NoPuedeOfertar),
-                _ if d <= mejor || d > o.descuento_max_bps => Some(Error::OfertaInvalida),
-                _ => None,
-            }
+        let esperado = match self.error_subasta(k, &p, false) {
+            Some(e) => Some(e),
+            None if d <= mejor || d > o.descuento_max_bps => Some(Error::OfertaInvalida),
+            None => None,
         };
         let r = self.tanda.try_ofertar(&id, &p, &d);
         let r = self.res("ofertar", r);
@@ -1126,6 +1323,218 @@ impl Mundo {
                 || format!("t{id}: la oferta no quedó como la mejor"),
             );
         }
+    }
+
+    /// Los errores de una jugada de subasta de `p`, en el orden del contrato: el modo (abierta o
+    /// sellada, según `sellada`), el estado, si hay subasta en esta ronda y si `p` puede jugar.
+    fn error_subasta(&self, k: usize, p: &Address, sellada: bool) -> Option<Error> {
+        let id = self.tandas[k].id;
+        let t = self.tanda.get_tanda(&id);
+        let es_la_subasta = self.tandas[k]
+            .opciones
+            .as_ref()
+            .map(|o| o.modo == ModoTurnos::Subasta && o.ofertas_selladas == sellada)
+            .unwrap_or(false);
+        if !es_la_subasta {
+            Some(Error::ModoNoPermite)
+        } else if t.estado != Estado::Activa {
+            Some(Error::EstadoInvalido)
+        } else if t.ronda_actual + 1 >= t.n_miembros
+            || self.ahora() > t.inicio_ronda + t.periodo_seg
+        {
+            Some(Error::SinSubasta)
+        } else {
+            match self.miembro(id, p) {
+                None => Some(Error::NoEsMiembro),
+                Some(m) if m.posicion != SIN_TURNO || m.moroso => Some(Error::NoPuedeOfertar),
+                _ => None,
+            }
+        }
+    }
+
+    /// Subasta sellada, primera mitad: alguien sella su oferta (a veces copia el sello de otro, o
+    /// sella un monto que no vale y que solo se nota al revelar).
+    fn sellar(&mut self, k: usize) {
+        let id = self.tandas[k].id;
+        let max = self.tandas[k]
+            .opciones
+            .as_ref()
+            .map(|o| o.descuento_max_bps)
+            .unwrap_or(0);
+        let t = self.tanda.get_tanda(&id);
+        let sin_turno: StdVec<Address> = self
+            .miembros(id)
+            .into_iter()
+            .filter(|(_, m)| m.posicion == SIN_TURNO)
+            .map(|(d, _)| d)
+            .collect();
+        let p = if !sin_turno.is_empty() && self.azar.si(85) {
+            sin_turno[self.azar.hasta(sin_turno.len())].clone()
+        } else {
+            self.persona()
+        };
+        let sellos = self.sellos_de(k, t.ronda_actual);
+        // Copiar el sello de otra persona (anticopia: SelloRepetido).
+        let de_otros: StdVec<_> = sellos.iter().filter(|(q, _, _)| *q != p).cloned().collect();
+        let copia = if !de_otros.is_empty() && self.azar.si(15) {
+            Some(de_otros[self.azar.hasta(de_otros.len())].clone())
+        } else {
+            None
+        };
+        let (d, sal) = match &copia {
+            Some((_, d, sal)) => (*d, *sal),
+            None => {
+                let d = match self.azar.hasta(20) {
+                    0 => 0,
+                    1 => max + self.azar.entre(1, 50) as u32,
+                    // El mismo monto que otro, con otra sal: no es copia, es un empate.
+                    2..=6 if !sellos.is_empty() => sellos[self.azar.hasta(sellos.len())].1,
+                    _ => self.azar.entre(1, max.max(1) as u64) as u32,
+                };
+                (d, self.sal_al_azar())
+            }
+        };
+        let de_otro = copia.is_some();
+        let esperado = match self.error_subasta(k, &p, true) {
+            Some(e) => Some(e),
+            None if self.ahora() >= self.mitad(k, &t) => Some(Error::FaseEquivocada),
+            None if de_otro => Some(Error::SelloRepetido),
+            None => None,
+        };
+        let sello = self.sello(d, &sal);
+        let r = self.tanda.try_ofertar_sellada(&id, &p, &sello);
+        let r = self.res("ofertar_sellada", r);
+        self.anotar(format!(
+            "t{id} r{} ofertar_sellada({}, {d} bps{}) -> {r:?}",
+            t.ronda_actual,
+            self.nombre(&p),
+            if de_otro { ", sello copiado" } else { "" }
+        ));
+        if self.segun("ofertar_sellada", r, esperado).is_none() {
+            return;
+        }
+        let tm = &mut self.tandas[k];
+        if tm.sellos_ronda != t.ronda_actual {
+            tm.sellos.clear();
+            tm.sellos_ronda = t.ronda_actual;
+        }
+        tm.sellos.retain(|(q, _, _)| *q != p);
+        tm.sellos.push((p.clone(), d, sal));
+        self.exigir(
+            self.tanda.get_estado_turnos(&id).sellos.contains(&p),
+            || format!("t{id}: el sello de {} no quedó guardado", self.nombre(&p)),
+        );
+    }
+
+    /// Una ronda de subasta sellada de principio a fin: sellan varios (a veces copiando o empatando),
+    /// el reloj pasa a la segunda mitad y revelan (a veces mal). Después, `cerrar` revisa que cobre
+    /// la mayor oferta revelada.
+    fn ronda_sellada(&mut self, k: usize) {
+        for _ in 0..self.azar.entre(1, 5) {
+            self.sellar(k);
+            self.revisar();
+        }
+        let t = self.tanda.get_tanda(&self.tandas[k].id);
+        let mitad = self.mitad(k, &t);
+        if t.estado == Estado::Activa && self.ahora() < mitad {
+            let vence = t.inicio_ronda + t.periodo_seg;
+            let seg = mitad - self.ahora() + self.azar.entre(0, (vence - mitad) / 2);
+            self.avanzar(seg);
+        }
+        for _ in 0..self.azar.entre(1, 6) {
+            self.revelar(k);
+            self.revisar();
+        }
+    }
+
+    /// Subasta sellada, segunda mitad: alguien revela (a veces con la sal o el monto equivocados,
+    /// o sin haber sellado). A veces el reloj se adelanta hasta esta mitad para jugarla.
+    fn revelar(&mut self, k: usize) {
+        let id = self.tandas[k].id;
+        let max = self.tandas[k]
+            .opciones
+            .as_ref()
+            .map(|o| o.descuento_max_bps)
+            .unwrap_or(0);
+        let t = self.tanda.get_tanda(&id);
+        let mitad = self.mitad(k, &t);
+        if t.estado == Estado::Activa && self.ahora() < mitad && self.azar.si(50) {
+            let vence = t.inicio_ronda + t.periodo_seg;
+            let hasta = mitad + self.azar.entre(0, (vence - mitad) / 2);
+            let seg = hasta - self.ahora();
+            self.avanzar(seg);
+        }
+        let sellos = self.sellos_de(k, t.ronda_actual);
+        let (p, d, sal) = if !sellos.is_empty() && self.azar.si(85) {
+            let (p, d, sal) = sellos[self.azar.hasta(sellos.len())].clone();
+            match self.azar.hasta(20) {
+                0 => (p, d, self.sal_al_azar()),  // otra sal
+                1 => (p, d.wrapping_add(1), sal), // otro monto
+                _ => (p, d, sal),
+            }
+        } else {
+            let lista = self.miembros(id);
+            let p = if !lista.is_empty() && self.azar.si(80) {
+                lista[self.azar.hasta(lista.len())].0.clone()
+            } else {
+                self.persona()
+            };
+            (p, self.azar.entre(1, 100) as u32, self.sal_al_azar())
+        };
+        let coincide = sellos
+            .iter()
+            .any(|(q, d0, s0)| *q == p && *d0 == d && *s0 == sal);
+        let esperado = match self.error_subasta(k, &p, true) {
+            Some(e) => Some(e),
+            None if self.ahora() < mitad => Some(Error::FaseEquivocada),
+            None if !coincide => Some(Error::SelloInvalido),
+            None if d == 0 || d > max => Some(Error::OfertaInvalida),
+            None => None,
+        };
+        let et0 = self.tanda.get_estado_turnos(&id);
+        let r = self
+            .tanda
+            .try_revelar_oferta(&id, &p, &d, &BytesN::from_array(&self.env, &sal));
+        let r = self.res("revelar_oferta", r);
+        self.anotar(format!(
+            "t{id} r{} revelar_oferta({}, {d} bps) -> {r:?}",
+            t.ronda_actual,
+            self.nombre(&p)
+        ));
+        if self.segun("revelar_oferta", r, esperado).is_none() {
+            return;
+        }
+        // Revelada: el sello ya no sirve. Gana si supera la mejor, o si la empata y va antes en el
+        // orden de respaldo (así nadie tiene que apurarse a revelar).
+        self.tandas[k].sellos.retain(|(q, _, _)| *q != p);
+        let gana = match &et0.mejor_postor {
+            None => true,
+            Some(q) => {
+                if d == et0.mejor_oferta_bps {
+                    self.contar("· revelación empatada: decide el orden de respaldo");
+                }
+                d > et0.mejor_oferta_bps
+                    || (d == et0.mejor_oferta_bps && antes_en_respaldo(&et0.respaldo, &p, q))
+            }
+        };
+        let (postor, bps) = if gana {
+            (Some(p.clone()), d)
+        } else {
+            (et0.mejor_postor.clone(), et0.mejor_oferta_bps)
+        };
+        let et1 = self.tanda.get_estado_turnos(&id);
+        self.exigir(
+            et1.mejor_postor == postor && et1.mejor_oferta_bps == bps && !et1.sellos.contains(&p),
+            || {
+                format!(
+                    "t{id}: al revelar {d} bps de {}, la mejor oferta quedó {:?} ({} bps) y \
+                     debía quedar {postor:?} ({bps} bps)",
+                    self.nombre(&p),
+                    et1.mejor_postor,
+                    et1.mejor_oferta_bps
+                )
+            },
+        );
     }
 
     fn proponer(&mut self, k: usize) {
@@ -1145,7 +1554,22 @@ impl Mundo {
             .filter(|(_, m)| intercambiable(m, t.ronda_actual))
             .map(|(d, _)| d.clone())
             .collect();
-        let (de, con) = if validos.len() >= 2 && self.azar.si(75) {
+        // Con turnos que piden historial, a menudo se cruza uno de esos con uno que no.
+        let (protegidos, libres): (StdVec<Address>, StdVec<Address>) =
+            validos.iter().cloned().partition(|d| {
+                lista
+                    .iter()
+                    .any(|(x, m)| x == d && m.posicion < o.primeros_con_historial)
+            });
+        let (de, con) = if !protegidos.is_empty() && !libres.is_empty() && self.azar.si(60) {
+            let a = protegidos[self.azar.hasta(protegidos.len())].clone();
+            let b = libres[self.azar.hasta(libres.len())].clone();
+            if self.azar.si(50) {
+                (a, b)
+            } else {
+                (b, a)
+            }
+        } else if validos.len() >= 2 && self.azar.si(75) {
             let i = self.azar.hasta(validos.len());
             let j = (i + 1 + self.azar.hasta(validos.len() - 1)) % validos.len();
             (validos[i].clone(), validos[j].clone())
@@ -1177,8 +1601,15 @@ impl Mundo {
                 {
                     Some(Error::IntercambioInvalido)
                 }
-                _ if props.iter().any(|p| p.de == de) => Some(Error::PropuestaExistente),
-                _ => None,
+                // Nadie llega por un intercambio a un turno que pide más historial del que tiene.
+                (Some(a), Some(b)) => self
+                    .error_intercambio_protegido(&o, &de, a, &con, b)
+                    .or_else(|| {
+                        props
+                            .iter()
+                            .any(|p| p.de == de)
+                            .then_some(Error::PropuestaExistente)
+                    }),
             }
         };
         let s0 = self.saldo(&de);
@@ -1220,6 +1651,11 @@ impl Mundo {
                 {
                     Some(Error::IntercambioInvalido)
                 }
+                // Se revisa otra vez al aceptar: el puntaje o el historial pudieron cambiar.
+                (_, Some(a), Some(b)) => self.tandas[k]
+                    .opciones
+                    .as_ref()
+                    .and_then(|o| self.error_intercambio_protegido(o, &de, a, &con, b)),
                 _ => None,
             }
         };
@@ -1245,6 +1681,14 @@ impl Mundo {
             a1.posicion == b0.posicion && b1.posicion == a0.posicion,
             || format!("t{id}: el intercambio no cambió los turnos"),
         );
+        let primeros = self.tandas[k]
+            .opciones
+            .as_ref()
+            .map(|o| o.primeros_con_historial)
+            .unwrap_or(0);
+        if a0.posicion < primeros || b0.posicion < primeros {
+            self.contar("· intercambio aceptado con un turno que pide historial");
+        }
         // comp > 0: ya la había dejado `de`; la recibe `con`. comp < 0: `con` le paga a `de`.
         self.exigir(
             self.saldo(&de) - s_de == (-comp).max(0) && self.saldo(&con) - s_con == comp,
@@ -1325,9 +1769,13 @@ impl Mundo {
         let s1 = self.saldos();
         let ronda = t0.ronda_actual;
 
+        // La ronda que sigue empieza de verdad ahora (para la mitad de la subasta sellada).
+        self.tandas[k].inicio_real = Some((t0.ronda_actual + 1, ahora));
+
         // Cuotas: lo que les pasa a quienes no pagaron es igual en todos los modos de turnos.
         let multa = t0.cuota * t0.penalidad_bps as i128 / BPS;
         let mut bolsa = pagaron.len() as i128 * t0.cuota;
+        let mut en_mora = StdVec::new();
         for (i, (dir, m0)) in lista0.iter().enumerate() {
             let m1 = &lista1[i].1;
             let mut e = m0.clone();
@@ -1344,6 +1792,7 @@ impl Mundo {
                 e.colateral -= cubierto;
                 bolsa += cubierto;
             }
+            en_mora.push(e.moroso);
             let ok = m1.atrasos == e.atrasos
                 && m1.multas_pendientes == e.multas_pendientes
                 && m1.deuda == e.deuda
@@ -1378,6 +1827,49 @@ impl Mundo {
         self.exigir(mb1.moroso || mb1.cobro, || {
             format!("t{id}: el dueño de la ronda {ronda} está al día y no cobró")
         });
+
+        // Subasta (abierta o sellada): cobra la mejor oferta (en la sellada, la mayor revelada) si
+        // quien la hizo sigue sin turno y al día; si no, el primero del orden de respaldo que pueda;
+        // y si todos los que faltan están en mora, el primero sin turno (su bolsa se retiene).
+        if self.tandas[k].opciones.as_ref().map(|o| o.modo) == Some(ModoTurnos::Subasta) {
+            let puede = |d: &Address| {
+                lista0
+                    .iter()
+                    .position(|(x, _)| x == d)
+                    .is_some_and(|i| lista0[i].1.posicion == SIN_TURNO && !en_mora[i])
+            };
+            let ganador = et0
+                .mejor_postor
+                .clone()
+                .filter(|d| puede(d))
+                .or_else(|| et0.respaldo.iter().find(|d| puede(d)))
+                .or_else(|| {
+                    lista0
+                        .iter()
+                        .find(|(_, m)| m.posicion == SIN_TURNO)
+                        .map(|(d, _)| d.clone())
+                });
+            self.exigir(ganador.as_ref() == Some(&dir_b), || {
+                format!(
+                    "t{id}: la ronda {ronda} de la subasta la cobró {} y debía cobrarla {:?} \
+                     (mejor oferta: {:?})",
+                    self.nombre(&dir_b),
+                    ganador.as_ref().map(|d| self.nombre(d)),
+                    et0.mejor_postor.as_ref().map(|d| self.nombre(d))
+                )
+            });
+            if et0.mejor_postor.as_ref() == Some(&dir_b) {
+                let sellada = self.tandas[k]
+                    .opciones
+                    .as_ref()
+                    .is_some_and(|o| o.ofertas_selladas);
+                self.contar(if sellada {
+                    "· cerrar: cobra la mayor oferta revelada"
+                } else {
+                    "· cerrar: cobra la mejor oferta"
+                });
+            }
+        }
 
         // Dinero: nadie más que el beneficiario recibe algo, salvo compensaciones de propuestas
         // que se retiraron solas (su turno llegó o alguien cayó en mora).
@@ -1808,6 +2300,8 @@ impl Mundo {
                 ("Respaldo", ClaveM3::Respaldo(id)),
                 ("Propuestas", ClaveM3::Propuestas(id)),
                 ("FondoPrimas", ClaveM3::FondoPrimas(id)),
+                ("Sellos", ClaveM3::Sellos(id)),
+                ("InicioReal", ClaveM3::InicioReal(id)),
             ] {
                 vidas.push((String::from(nombre), self.ttl(&self.yo, &clave)));
             }
@@ -1974,6 +2468,34 @@ impl Mundo {
                     _ => sin_turno == 0,
                 };
             self.exigir(ok, || format!("t{id}: turnos imposibles: {pos:?} en {t:?}"));
+
+            // Subasta sellada: la mitad que muestra la web y quiénes sellaron son los del modelo.
+            let sellada = tm.opciones.as_ref().is_some_and(|o| o.ofertas_selladas);
+            let fin = if sellada && t.estado == Estado::Activa {
+                mitad_modelo(tm, &t)
+            } else {
+                0
+            };
+            let sellos = sellos_modelo(tm, t.ronda_actual);
+            self.exigir(
+                et.fin_sellado == fin
+                    && et.sellos.len() as usize == sellos.len()
+                    && sellos.iter().all(|(q, _, _)| et.sellos.contains(q)),
+                || {
+                    format!(
+                        "t{id}: fin del sellado {} y sellos de {:?}; el modelo espera {fin} y {:?}",
+                        et.fin_sellado,
+                        et.sellos
+                            .iter()
+                            .map(|q| self.nombre(&q))
+                            .collect::<StdVec<_>>(),
+                        sellos
+                            .iter()
+                            .map(|(q, _, _)| self.nombre(q))
+                            .collect::<StdVec<_>>()
+                    )
+                },
+            );
             if let Some(postor) = &et.mejor_postor {
                 let m = lista.iter().find(|(d, _)| d == postor).map(|(_, m)| m);
                 self.exigir(m.map(|m| m.posicion == SIN_TURNO).unwrap_or(false), || {
@@ -2140,9 +2662,17 @@ impl Mundo {
                     self.pagar_deuda_al_azar(k);
                     self.revisar();
                 }
-                for _ in 0..self.azar.entre(0, 3) {
-                    self.turnos_al_azar(k);
-                    self.revisar();
+                let sellada = self.tandas[k]
+                    .opciones
+                    .as_ref()
+                    .is_some_and(|o| o.ofertas_selladas);
+                if sellada && self.azar.si(70) {
+                    self.ronda_sellada(k);
+                } else {
+                    for _ in 0..self.azar.entre(0, 3) {
+                        self.turnos_al_azar(k);
+                        self.revisar();
+                    }
                 }
                 let vence = t.inicio_ronda + t.periodo_seg;
                 let extra = self.azar.entre(0, t.periodo_seg.min(2 * DIA));

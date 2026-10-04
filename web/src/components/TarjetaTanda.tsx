@@ -3,12 +3,18 @@ import type { ResumenTanda } from '../lib/lectura'
 import { bolsa, colateralDeTurno } from '../lib/colateral'
 import { claseEstado, duracion, etiquetaEstado, monto } from '../lib/formato'
 import { rutaTanda } from '../lib/rutas'
+import { bolsaListaParaCobrar } from '../lib/cobro'
 import { tituloModo } from '../lib/turnos'
 import { monedaDe } from '../lib/monedas'
 
-type Props = { resumen: ResumenTanda; yo: string | null }
+type Props = {
+  resumen: ResumenTanda
+  yo: string | null
+  /** Segundos Unix actuales (para avisar si la bolsa de quien está conectado ya se puede cobrar). */
+  ahora: number
+}
 
-export function TarjetaTanda({ resumen, yo }: Props) {
+export function TarjetaTanda({ resumen, yo, ahora }: Props) {
   const { id, tanda, miembros, modo } = resumen
   const SIMBOLO = monedaDe(tanda.token).simbolo
   const estado = tanda.estado.tag
@@ -71,6 +77,8 @@ export function TarjetaTanda({ resumen, yo }: Props) {
             {creada && <span className="marca-yo">La creaste tú</span>}
           </p>
         )}
+        {/* M1: a quien le toca cobrar, su bolsa lo espera (al cobrarla cierra la ronda). */}
+        {bolsaListaParaCobrar(tanda, miembros, yo, ahora) && <p className="tarjeta-cobro">Tu bolsa está lista: cóbrala</p>}
       </a>
     </li>
   )
