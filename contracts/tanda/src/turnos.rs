@@ -47,15 +47,28 @@ pub enum ClaveM3 {
 // Leer y guardar (con la misma vida que los datos de la tanda)
 // ---------------------------------------------------------------------------
 
-// Misma política que `almacenamiento.rs`. Cuando M1 esté en `integracion`, `renovar` pasa a
-// `almacenamiento::renovar_para_tanda(env, t, clave)` (ACORDADO en el tablero).
-const TTL_UMBRAL: u32 = 17_280;
-const TTL_EXTENDER: u32 = 518_400;
+/// Mismas reglas de vida que los datos de la tanda (M1, ACORDADO en el tablero).
+fn renovar(env: &Env, t: &Tanda, clave: &ClaveM3) {
+    renovar_para_tanda(env, t, clave);
+}
 
-fn renovar(env: &Env, _t: &Tanda, clave: &ClaveM3) {
-    env.storage()
-        .persistent()
-        .extend_ttl(clave, TTL_UMBRAL, TTL_EXTENDER);
+/// Renueva todas las claves de M3 que existan para la tanda. Se llama al llenarse y en cada
+/// cierre, así ninguna se archiva en una tanda de meses aunque no se lea en alguna ronda
+/// (por ejemplo, el orden de respaldo cuando siempre hay ofertas).
+fn renovar_claves(env: &Env, t: &Tanda, id: u32) {
+    let p = env.storage().persistent();
+    for clave in [
+        ClaveM3::Opciones(id),
+        ClaveM3::Turnos(id),
+        ClaveM3::Oferta(id),
+        ClaveM3::Respaldo(id),
+        ClaveM3::Propuestas(id),
+        ClaveM3::FondoPrimas(id),
+    ] {
+        if p.has(&clave) {
+            renovar(env, t, &clave);
+        }
+    }
 }
 
 fn leer<V: TryFromVal<Env, Val>>(env: &Env, t: &Tanda, clave: &ClaveM3) -> Option<V> {
@@ -239,6 +252,7 @@ pub(crate) fn al_llenarse(
     let Some(o) = opciones(env, t, id) else {
         return Ok(());
     };
+    renovar_claves(env, t, id);
     match o.modo {
         ModoTurnos::Sorteo => {
             let mut orden = miembros.clone();
@@ -280,6 +294,7 @@ pub(crate) fn resolver_ronda(
     let Some(o) = opciones(env, t, id) else {
         return Ok((miembros.get(ronda).unwrap(), bolsa));
     };
+    renovar_claves(env, t, id);
     limpiar_propuestas(env, t, id, ronda + 1)?;
     match o.modo {
         ModoTurnos::Subasta => resolver_subasta(env, t, id, miembros, ronda, bolsa),
@@ -536,10 +551,10 @@ pub(crate) fn devolver_compensacion(env: &Env, t: &Tanda, p: &Propuesta) {
 // ---------------------------------------------------------------------------
 
 /// Deposita en la bóveda `monto` que ya está en el contrato (como `unirse`).
-fn depositar_en_boveda(env: &Env, t: &mut Tanda, _id: u32, monto: i128) -> Result<(), Error> {
+fn depositar_en_boveda(env: &Env, t: &mut Tanda, id: u32, monto: i128) -> Result<(), Error> {
     let yo = env.current_contract_address();
-    // Cuando M1 esté en `integracion`: `boveda_de(env, id, t)` (ACORDADO en el tablero).
-    let boveda = direccion_boveda(env)?;
+    // La bóveda de ESTA tanda (M1: cada tanda guarda la suya al crearse).
+    let boveda = boveda_de(env, id, t)?;
     token::Client::new(env, &t.token).approve(
         &yo,
         &boveda,

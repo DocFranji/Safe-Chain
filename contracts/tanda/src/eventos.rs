@@ -104,6 +104,56 @@ pub struct EvCancelada {
 }
 
 // ---------------------------------------------------------------------------
+// --- M1: tiempos reales y pago de deudas ---
+// ---------------------------------------------------------------------------
+
+/// Alguien pagó (toda o una parte) la deuda de `miembro`. Puede ser el miembro u otra persona.
+#[contractevent(topics = ["deuda_pag"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvDeudaPagada {
+    #[topic]
+    pub id: u32,
+    pub miembro: Address,
+    pub pagador: Address,
+    pub monto: i128,
+    pub deuda_restante: i128,
+}
+
+/// Una parte de ese pago llegó a quien cobró de menos en la ronda `ronda`.
+/// Si su bolsa estaba retenida (también era moroso), `retenida` es `true` y el monto se sumó a esa bolsa.
+#[contractevent(topics = ["abono"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvAbono {
+    #[topic]
+    pub id: u32,
+    pub deudor: Address,
+    pub acreedor: Address,
+    pub ronda: u32,
+    pub monto: i128,
+    pub retenida: bool,
+}
+
+/// Un moroso saldó su deuda y recuperó su bolsa retenida: recibió `monto`; se descontaron `multas`
+/// (al fondo de premios) y `garantia` (repone su garantía para las cuotas que aún debe).
+#[contractevent(topics = ["bolsa_rec"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvBolsaRecuperada {
+    #[topic]
+    pub id: u32,
+    pub miembro: Address,
+    pub monto: i128,
+    pub multas: i128,
+    pub garantia: i128,
+}
+
+/// El admin cambió la bóveda rápida (solo afecta a las tandas que se creen después).
+#[contractevent(topics = ["bov_rapid"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvBovedaRapida {
+    pub boveda: Option<Address>,
+}
+
+// ---------------------------------------------------------------------------
 // --- M3: turnos ---
 // Todos con tópicos [nombre, id], como los de arriba: la web los lee con el mismo filtro.
 // ---------------------------------------------------------------------------

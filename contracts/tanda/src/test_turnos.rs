@@ -929,57 +929,6 @@ fn intercambio_pide_las_firmas_correctas() {
 // Peor caso con los contratos compilados a WASM (costo real de la VM)
 // ===========================================================================
 
-/// Como `setup`, pero con la tanda y la bóveda en WASM (`stellar contract build`). Es la misma idea
-/// que `setup_wasm` de M1; cuando M1 esté en `integracion`, esta prueba usa la suya.
-fn setup_wasm_turnos() -> Ctx {
-    use soroban_sdk::testutils::Ledger as _;
-    let leer = |nombre: &str| {
-        let ruta = std::format!(
-            "{}/../../target/wasm32v1-none/release/{nombre}.wasm",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        std::fs::read(&ruta)
-            .unwrap_or_else(|_| panic!("falta {ruta}: corre `stellar contract build`"))
-    };
-    let (wasm_tanda, wasm_boveda) = (leer("tanda"), leer("boveda_simulada"));
-    let env = soroban_sdk::Env::default();
-    env.mock_all_auths();
-    env.ledger().with_mut(|l| {
-        l.timestamp = 1_000;
-        l.sequence_number = 100;
-    });
-    let token_addr = env
-        .register_stellar_asset_contract_v2(Address::generate(&env))
-        .address();
-    let sac = StellarAssetClient::new(&env, &token_addr);
-    let token = soroban_sdk::token::TokenClient::new(&env, &token_addr);
-    let boveda = env.register(wasm_boveda.as_slice(), (token_addr.clone(), 0u32, 1u32));
-    sac.mint(&boveda, &FONDEO_BOVEDA);
-    let tanda_addr = env.register(wasm_tanda.as_slice(), ());
-    let tanda = TandaContractClient::new(&env, &tanda_addr);
-    tanda.inicializar(&Address::generate(&env), &boveda, &None);
-    let (ana, beto, carla) = (
-        Address::generate(&env),
-        Address::generate(&env),
-        Address::generate(&env),
-    );
-    for p in [&ana, &beto, &carla] {
-        sac.mint(p, &SALDO_INICIAL);
-    }
-    Ctx {
-        creador: Address::generate(&env),
-        verificador: Address::generate(&env),
-        env,
-        tanda,
-        tanda_addr,
-        boveda,
-        token,
-        ana,
-        beto,
-        carla,
-    }
-}
-
 /// Peor caso de cada modo con 12 miembros y WASM real. Necesita `stellar contract build` antes, por
 /// eso solo corre con `PEOR_CASO_WASM=1`:
 /// `stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso_turnos -- --nocapture`
@@ -1006,7 +955,10 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     std::println!("Peor caso con 12 miembros (WASM real):");
 
     // Sorteo: el último `unirse` baraja y reescribe a los 12.
-    let c = setup_wasm_turnos();
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    // El presupuesto del entorno se acumula en toda la prueba; cada llamada se mide sola con
+    // `resources()` y el entorno aplica igual los límites de mainnet por invocación.
+    c.env.cost_estimate().budget().reset_unlimited();
     let id = c.crear_con(12, 10_000, &opciones(ModoTurnos::Sorteo));
     let gente = c.personas(12);
     for p in &gente {
@@ -1018,7 +970,10 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     medir(&c, "sorteo: cerrar_ronda 1 (aparta 1 000)", &mut peor);
 
     // Subasta: oferta en cada ronda y dividendos para 11; la mitad no paga (sus garantías cubren).
-    let c = setup_wasm_turnos();
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    // El presupuesto del entorno se acumula en toda la prueba; cada llamada se mide sola con
+    // `resources()` y el entorno aplica igual los límites de mainnet por invocación.
+    c.env.cost_estimate().budget().reset_unlimited();
     let id = c.crear_con(12, 10_000, &subasta(5_000));
     let gente = c.personas(12);
     for p in &gente {
@@ -1036,7 +991,10 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     );
 
     // Precio por turno: prima y garantía apartada al cobrar.
-    let c = setup_wasm_turnos();
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    // El presupuesto del entorno se acumula en toda la prueba; cada llamada se mide sola con
+    // `resources()` y el entorno aplica igual los límites de mainnet por invocación.
+    c.env.cost_estimate().budget().reset_unlimited();
     let id = c.crear_con(12, 10_000, &con_intercambio(precio(2_000)));
     let gente = c.personas(12);
     for (i, p) in gente.iter().enumerate() {
@@ -1051,6 +1009,28 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     c.pagan_todos(id, &gente);
     c.cerrar(id);
     medir(&c, "precio: cerrar_ronda (prima)", &mut peor);
+
+    // Lo más pesado combinado con M1: subasta con garantía mínima donde casi nadie paga (deudas en
+    // cada ronda), con una oferta y dividendos en cada cierre.
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    c.env.cost_estimate().budget().reset_unlimited();
+    let id = c.crear_con(12, 0, &subasta(5_000));
+    let gente = c.personas(12);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    for r in 0..11usize {
+        // Oferta quien todavía no tiene turno y está al día (el último de la lista que lo cumpla).
+        if let Some(p) = gente.iter().rev().find(|p| {
+            let m = c.miembro(id, p);
+            m.posicion == SIN_TURNO && !m.moroso
+        }) {
+            c.tanda.ofertar(&id, p, &(100 * (r as u32 + 1)));
+        }
+        c.tanda.pagar_cuota(&id, &gente[11]);
+        c.cerrar(id);
+        medir(&c, "subasta + M1: cerrar_ronda casi sin pagos", &mut peor);
+    }
 
     std::println!(
         "  Máximo: {} instrucciones · {} lecturas · {} escrituras",

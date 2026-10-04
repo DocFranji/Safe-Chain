@@ -7,6 +7,7 @@ import type { DatosTanda } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from './BotonesEntrar'
 import { AccionesTurnos } from './AccionesTurnos'
+import { PagarDeuda } from './PagarDeuda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { monto, duracion, porcentaje } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
@@ -147,6 +148,8 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 )}
               </>
             )}
+
+            <PagarDeuda id={id} datos={datos} yo={yo} saldo={saldo} alCambiar={alCambiar} />
 
             {estado === 'Activa' && vencida && (
               <>

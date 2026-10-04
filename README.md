@@ -14,8 +14,9 @@ Una tanda es un grupo que aporta la misma cuota cada ronda y, por turnos, uno re
 4. **Si alguien no paga, su garantía cubre su cuota.** Quien cobra recibe la bolsa completa y el grupo no pierde nada.
 5. **Pagar tarde tiene costo:** una multa que se descuenta de la garantía y se reparte, al final, entre quienes nunca se atrasaron.
 6. **Al terminar**, cada quien recupera lo que le sobró de garantía más su parte del rendimiento, que la garantía generó en una bóveda mientras esperaba.
+7. **Quien queda en mora puede pagar su deuda** (o un familiar por él). El dinero le llega a quien cobró de menos por su atraso y la persona vuelve a estar al día.
 
-Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tanda.
+Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tanda. Las rondas pueden durar de 1 minuto a 3 meses (semanal, quincenal, mensual...), con fechas de pago fijas: un cierre atrasado no corre el calendario. Detalles en [`docs/tiempos-y-deudas.md`](docs/tiempos-y-deudas.md).
 
 **Quién cobra primero lo decide el grupo**, no solo el orden de llegada. Al crear la tanda se elige el mecanismo ([`docs/turnos.md`](docs/turnos.md)):
 
@@ -55,7 +56,7 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 ## Límites actuales (dichos con claridad)
 
 - **No está auditado** y solo corre en testnet.
-- **La bóveda es simulada.** El rendimiento es de ejemplo y el tiempo de la demo corre más rápido que en la vida real. La interfaz de la bóveda permite cambiarla por un adaptador a Blend sin tocar el contrato de la tanda (ver más abajo).
+- **La bóveda es simulada.** Las tandas reales (días, semanas o meses) rinden 5 % anual al ritmo de la vida real; las tandas de prueba (rondas de hasta 10 minutos) usan una bóveda acelerada para que el rendimiento se note en una demo. La interfaz de la bóveda permite cambiarla por un adaptador a Blend sin tocar el contrato de la tanda (ver más abajo).
 - **Las billeteras de Google las custodia Privy.** Es cómodo para probar, pero en producción habría que decidir el modelo de custodia.
 - **El faucet regala dinero de prueba:** nunca debe apuntar a una cuenta con valor real.
 - **Los flujos que firman** (crear, unirse, pagar) no tienen pruebas automáticas contra la red real: la interfaz se verificó con un RPC simulado y los recorridos reales se hacen a mano en testnet antes de cada demo.
@@ -110,8 +111,8 @@ Qué hace, en orden:
 3. Crea el token TUSD.
 4. Hace que ana, beto y carla acepten TUSD (trustline).
 5. Les reparte 1 000 TUSD a cada una.
-6. Despliega la bóveda y la fondea con 10 000 TUSD para que pueda pagar intereses.
-7. Despliega la tanda y la inicializa.
+6. Despliega dos bóvedas y las fondea con 10 000 TUSD cada una para que puedan pagar intereses: la principal (5 % anual al ritmo real) y la rápida (acelerada, solo para tandas de prueba con rondas de hasta 10 minutos; `SIN_BOVEDA_RAPIDA=1` para no crearla).
+7. Despliega la tanda, la inicializa con la bóveda principal y le configura la rápida.
 
 Las direcciones quedan en `scripts/.contratos`.
 

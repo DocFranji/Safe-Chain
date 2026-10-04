@@ -101,11 +101,28 @@ export function direccionBoveda(): Promise<string> {
   return bovedaEnCache
 }
 
-/** Cuántos TUSD valen hoy `shares` participaciones de la bóveda. */
-export async function valorBoveda(shares: bigint): Promise<bigint> {
-  const boveda = await direccionBoveda()
-  const v = await simular(boveda, 'valor', [nativeToScVal(shares, { type: 'i128' })])
+/** Cuántos TUSD valen hoy `shares` participaciones de la bóveda (la de la tanda, o la principal). */
+export async function valorBoveda(shares: bigint, boveda?: string | null): Promise<bigint> {
+  const direccion = boveda ?? (await direccionBoveda())
+  const v = await simular(direccion, 'valor', [nativeToScVal(shares, { type: 'i128' })])
   return BigInt(v as bigint | number | string)
+}
+
+const aceleradores = new Map<string, Promise<number>>()
+
+/**
+ * Cuántas veces más rápido corre el tiempo para los intereses en esa bóveda (1 = como en la vida real).
+ * Una bóveda que no lo sabe decir (por ejemplo, un adaptador a un protocolo real) cuenta como 1.
+ */
+export function aceleradorBoveda(boveda: string): Promise<number> {
+  let a = aceleradores.get(boveda)
+  if (!a) {
+    a = simular(boveda, 'acelerador')
+      .then((v) => Number(v))
+      .catch(() => 1)
+    aceleradores.set(boveda, a)
+  }
+  return a
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# Despliega todo en testnet: token TUSD, bóveda simulada y contrato de la tanda.
+# Despliega todo en testnet: token TUSD, bóvedas simuladas y contrato de la tanda.
 # Crea 5 cuentas de prueba (admin, emisor, ana, beto, carla) con XLM de Friendbot.
 # Al final guarda las direcciones en scripts/.contratos para que demo.sh las use.
 #
 # Uso (desde la carpeta raíz del proyecto):   bash scripts/desplegar_testnet.sh
+#
+# Bóvedas (misión M1, docs/tiempos-y-deudas.md):
+#   - principal: rinde 5 % anual al ritmo de la vida real (ACELERADOR=1). La usan las tandas de días,
+#     semanas o meses: con el tiempo acelerado, una tanda de meses dejaría a la bóveda sin fondos.
+#   - rápida: acelerada (ACELERADOR_RAPIDA=52560: 1 minuto = 36,5 días) solo para tandas de prueba con
+#     rondas de 10 minutos o menos, para que el rendimiento se note en la demo. Para no crearla:
+#     SIN_BOVEDA_RAPIDA=1. Para cambiarla por una nueva antes de la presentación (la acelerada rinde
+#     menos cuanto más vieja es): bash scripts/renovar_boveda_rapida.sh
 set -euo pipefail
 NET="--network testnet"
 
@@ -30,22 +38,37 @@ for p in ana beto carla; do
   stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$(stellar keys address $p)" --amount 10000000000
 done
 
-echo "== 6. Bóveda simulada: 5% anual, acelerada para la demo (ACELERADOR=${ACELERADOR:-52560}) =="
+echo "== 6. Bóveda principal: 5% anual al ritmo real (ACELERADOR=${ACELERADOR:-1}) =="
 BOVEDA=$(stellar contract deploy --wasm target/wasm32v1-none/release/boveda_simulada.wasm \
-  --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR:-52560}")
+  --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR:-1}")
 echo "   BOVEDA=$BOVEDA"
 # La bóveda necesita fondos para pagar intereses (los contratos no necesitan trustline).
 stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$BOVEDA" --amount 100000000000
+
+BOVEDA_RAPIDA=""
+if [ "${SIN_BOVEDA_RAPIDA:-0}" != "1" ]; then
+  echo "== 6b. Bóveda rápida para tandas de prueba (ACELERADOR_RAPIDA=${ACELERADOR_RAPIDA:-52560}) =="
+  BOVEDA_RAPIDA=$(stellar contract deploy --wasm target/wasm32v1-none/release/boveda_simulada.wasm \
+    --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR_RAPIDA:-52560}")
+  echo "   BOVEDA_RAPIDA=$BOVEDA_RAPIDA"
+  stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$BOVEDA_RAPIDA" --amount 100000000000
+fi
 
 echo "== 7. Contrato de la tanda =="
 TANDA=$(stellar contract deploy --wasm target/wasm32v1-none/release/tanda.wasm --source admin $NET)
 echo "   TANDA=$TANDA"
 stellar contract invoke --id "$TANDA" --source admin $NET -- inicializar \
   --admin "$(stellar keys address admin)" --boveda "$BOVEDA"
+if [ -n "$BOVEDA_RAPIDA" ]; then
+  # Las tandas con rondas de hasta 10 minutos usan la bóveda rápida (cada tanda guarda la suya al crearse).
+  # (La CLI recibe los argumentos opcionales como JSON: por eso la dirección va entre comillas.)
+  stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "\"$BOVEDA_RAPIDA\""
+fi
 
 cat > scripts/.contratos <<EOF
 TOKEN=$TOKEN
 BOVEDA=$BOVEDA
+BOVEDA_RAPIDA=$BOVEDA_RAPIDA
 TANDA=$TANDA
 EOF
 echo "Listo. Direcciones guardadas en scripts/.contratos"

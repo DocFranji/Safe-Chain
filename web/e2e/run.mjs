@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, nuevoEstado, nuevoEstadoTurnos } from './mock.mjs'
+import { ME, ANA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 
 const BASE = BASE_URL
@@ -60,12 +60,22 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.locator('#cuota').fill('abc')
   check('Crear: cuota inválida muestra error y deshabilita el botón', /mayor que cero/.test(await texto(page)) && (await page.locator('button[type=submit]').isDisabled()))
   await page.locator('#cuota').fill('100')
-  await page.locator('#periodo').fill('40')
   await page.locator('#cobertura').fill('100')
-  await page.locator('select[aria-label="Unidad de tiempo"]').selectOption('dias')
-  check('Crear: más de 25 días muestra la nota de precaución', /no se ha probado con plazos tan/.test(await texto(page)))
-  await page.getByRole('button', { name: 'Semanal' }).click()
-  check('Preset "Semanal" rellena el formulario', (await page.locator('#cuota').inputValue()) === '50' && (await page.locator('#periodo').inputValue()) === '7')
+  // M1: rondas de semanas y meses, con un máximo de 3 meses por ronda (igual que el contrato).
+  const unidades = await page.locator('select[aria-label="Unidad de tiempo"] option').allInnerTexts()
+  check('Crear: ofrece semanas y meses', unidades.includes('semanas') && unidades.includes('meses'), JSON.stringify(unidades))
+  await page.locator('#periodo').fill('4')
+  await page.locator('select[aria-label="Unidad de tiempo"]').selectOption('meses')
+  check('Crear: una ronda de 4 meses se rechaza (máximo 3 meses)', /hasta 3 meses/.test(await texto(page)) && (await page.locator('button[type=submit]').isDisabled()))
+  await page.locator('#periodo').fill('3')
+  check('Crear: 3 meses sí se aceptan y dice "1 mes = 30 días"', /1 mes = 30 días/.test(await texto(page)) && !(await page.locator('button[type=submit]').isDisabled()))
+  await page.getByRole('button', { name: 'Mensual × 12' }).click()
+  const previa = (await page.locator('.vista-previa').innerText()).replace(/\u00a0/g, ' ')
+  check('Preset "Mensual × 12": dura 12 meses y dice cuándo vence la última ronda', /12 meses/.test(previa) && /la última ronda vence el \S+ \d+ de \S+ de \d{4}/.test(previa), previa.slice(0, 400))
+  check('Preset "Mensual × 12": 12 turnos en la tabla de garantías', (await page.locator('.vista-previa tbody tr').count()) === 12)
+  await shot(page, '03b-crear-mensual')
+  await page.getByRole('button', { name: 'Semanal × 4' }).click()
+  check('Preset "Semanal × 4" rellena el formulario', (await page.locator('#cuota').inputValue()) === '25' && (await page.locator('#periodo').inputValue()) === '1' && (await page.locator('select[aria-label="Unidad de tiempo"]').inputValue()) === 'semanas')
   check('Crear: botón habilitado con billetera conectada', !(await page.locator('button[type=submit]').isDisabled()))
   await shot(page, '03-crear-semanal')
   check('Crear: sin errores de consola', errores.length === 0, errores.join(' | '))
@@ -95,6 +105,18 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.getByRole('button', { name: 'No, mantenerla' }).click()
   check('Tanda 3: "No, mantenerla" vuelve al botón normal', await page.getByRole('button', { name: 'Cancelar esta tanda' }).isVisible())
   check('Tanda 3: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 3b. M1: rendimiento acelerado solo en tandas de prueba
+{
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/3')
+  await page.waitForSelector('.rendimiento dl', { timeout: 15000 }).catch(() => {})
+  const rend = (await page.locator('.rendimiento').innerText()).replace(/\u00a0/g, ' ')
+  check('M1: tanda de prueba (rondas de 2 min) dice que su bóveda corre más rápido', /1 minuto equivale a 36,5 días/.test(rend), rend.slice(-300))
+  check('M1: tanda de prueba sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 
@@ -130,6 +152,60 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Tanda 1: no muestra rendimiento en vivo (ya terminó)', !/Rendimiento de la garantía/.test(t))
   await shot(page, '06-tanda-terminada')
   check('Tanda 1: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 5b. M1: tanda mensual, "yo" estoy en mora y pago mi deuda
+{
+  const est = conTandaMorosa(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('.pagar-deuda', { timeout: 15000 }).catch(() => {})
+  const t = (await texto(page)).replace(/\u00a0/g, ' ')
+  const panel = (await page.locator('.pagar-deuda').innerText().catch(() => '')).replace(/\u00a0/g, ' ')
+  check('Deuda: "Tienes una deuda de 100 TUSD"', /Tienes una deuda de 100 TUSD/.test(panel), panel.slice(0, 300))
+  check('Deuda: dice a quién le llega (Beto, ronda 2)', /Beto/.test(panel) && /ronda 2/.test(panel), panel)
+  check('Deuda: dice qué recupera (cobra en la ronda 4)', /Cobras tu bolsa en la ronda 4/.test(panel), panel)
+  const boton = page.getByRole('button', { name: 'Pagar mi deuda (100 TUSD)' })
+  check('Deuda: botón "Pagar mi deuda (100 TUSD)" habilitado', (await boton.count()) === 1 && !(await boton.isDisabled()))
+  check('Deuda: ya no ofrece "Pagar mi cuota" (está en mora)', !/Pagar mi cuota/.test(t))
+  await page.locator('summary', { hasText: 'Pagar solo una parte' }).click()
+  await page.locator('#monto-deuda').fill('150')
+  check('Deuda: pagar más de lo que se debe se rechaza antes de firmar', /más de lo que debes/.test(await page.locator('.pagar-deuda').innerText()) && (await page.getByRole('button', { name: 'Pagar este monto' }).isDisabled()))
+  await page.locator('#monto-deuda').fill('40')
+  check('Deuda: un pago parcial válido habilita "Pagar 40 TUSD"', !(await page.getByRole('button', { name: 'Pagar 40 TUSD' }).isDisabled()))
+  const lista = (await page.locator('.miembros').first().innerText()).replace(/\u00a0/g, ' ')
+  check('Lista: "Debe 100 TUSD" para quien está en mora', /Debe 100 TUSD/.test(lista), lista.slice(0, 400))
+  check('Lista: "Saldó su deuda" para Carla', /Saldó su deuda/.test(lista), lista.slice(0, 400))
+  const cal = (await page.locator('.calendario').innerText().catch(() => '')).replace(/\u00a0/g, ' ')
+  check('Calendario: 4 rondas, 2 cerradas y fechas para las que faltan', (await page.locator('.calendario tbody tr').count()) === 4 && (cal.match(/Cerrada/g) ?? []).length === 2 && /Vence el \S+ \d+ de \S+/.test(cal), cal)
+  await page.waitForSelector('.historia-item', { timeout: 15000 }).catch(() => {})
+  const hist = (await page.locator('.historia-seccion').innerText()).replace(/\u00a0/g, ' ')
+  check('Historia: "Carla pagó 50 TUSD y saldó su deuda"', /Carla pagó 50 TUSD y saldó su deuda/.test(hist), hist.slice(0, 500))
+  check('Historia: "Beto recibió los 50 TUSD que le faltaban" (momento clave)', /Beto recibió los 50 TUSD que le faltaban/.test(hist) && (await page.locator('.historia-item.clave').count()) >= 2)
+  await page.waitForSelector('.rendimiento dl', { timeout: 15000 }).catch(() => {})
+  check('M1: tanda mensual dice que su bóveda rinde al ritmo de la vida real', /al ritmo de la vida real/.test(await page.locator('.rendimiento').innerText()))
+  await shot(page, '06b-tanda-deuda')
+  check('Deuda: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 5c. M1: otra persona paga la deuda; y a 390 px
+{
+  const est = conTandaMorosa(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est, direccion: ANA, viewport: { width: 390, height: 844 } })
+  est.cuentas[ANA] = { existe: true, trustline: true, saldo: 500n * 10_000_000n }
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('.pagar-deuda', { timeout: 15000 }).catch(() => {})
+  const panel = await page.locator('.pagar-deuda').innerText().catch(() => '')
+  check('Tercero: quien no debe ve "Pagar la deuda de otra persona"', /Pagar la deuda de otra persona/.test(panel), panel)
+  check('Tercero: no le dice "Tienes una deuda"', !/Tienes una deuda/.test(panel))
+  await page.locator('summary', { hasText: 'Pagar la deuda de otra persona' }).click()
+  check('Tercero: puede pagar la deuda de quien está en mora', (await page.getByRole('button', { name: 'Pagar su deuda' }).count()) === 1 && !(await page.getByRole('button', { name: 'Pagar su deuda' }).isDisabled()))
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
+  check('Móvil (390px): la tanda con deuda y calendario no se desborda', !overflow)
+  await shot(page, '06c-tanda-deuda-390')
+  check('Tercero: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 

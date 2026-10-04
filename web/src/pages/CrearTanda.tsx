@@ -16,13 +16,10 @@ import {
   type ParametrosTanda,
 } from '../lib/colateral'
 import { aSegundos, parseMonto, type UnidadPeriodo } from '../lib/entradas'
-import { duracion, monto } from '../lib/formato'
+import { duracion, fechaLarga, monto } from '../lib/formato'
 import { RUTA_LOBBY, irA, rutaTanda } from '../lib/rutas'
 import { SIMBOLO, TOKEN_ID } from '../config'
 import { OPCIONES_CLASICAS, aContrato, esClasica, garantiaAlUnirse, validarOpciones, type OpcionesForm } from '../lib/turnos'
-
-/** Por encima de esto avisamos: esta versión de pruebas no se ha probado con tandas tan largas. */
-const DIAS_PROBADOS_MAX = 25
 
 type Formulario = {
   cuota: string
@@ -38,14 +35,24 @@ const INICIAL: Formulario = { cuota: '100', n: 3, periodo: '1', unidad: 'minutos
 const PRESETS: { nombre: string; detalle: string; valores: Formulario }[] = [
   { nombre: 'Demo rápida', detalle: '3 personas · 1 min por ronda', valores: INICIAL },
   {
-    nombre: 'Diaria',
-    detalle: '5 personas · 1 día por ronda',
-    valores: { cuota: '20', n: 5, periodo: '1', unidad: 'dias', multa: 5, cobertura: 100 },
+    nombre: 'Semanal × 4',
+    detalle: '4 personas · una ronda por semana (1 mes en total)',
+    valores: { cuota: '25', n: 4, periodo: '1', unidad: 'semanas', multa: 5, cobertura: 100 },
   },
   {
-    nombre: 'Semanal',
-    detalle: '3 personas · 7 días por ronda',
-    valores: { cuota: '50', n: 3, periodo: '7', unidad: 'dias', multa: 5, cobertura: 100 },
+    nombre: 'Quincenal × 6',
+    detalle: '6 personas · una ronda cada 15 días (3 meses en total)',
+    valores: { cuota: '50', n: 6, periodo: '15', unidad: 'dias', multa: 5, cobertura: 100 },
+  },
+  {
+    nombre: 'Mensual × 6',
+    detalle: '6 personas · una ronda por mes (6 meses en total)',
+    valores: { cuota: '50', n: 6, periodo: '1', unidad: 'meses', multa: 5, cobertura: 100 },
+  },
+  {
+    nombre: 'Mensual × 12',
+    detalle: '12 personas · una ronda por mes (1 año en total)',
+    valores: { cuota: '50', n: 12, periodo: '1', unidad: 'meses', multa: 5, cobertura: 100 },
   },
 ]
 
@@ -82,7 +89,9 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const faltaSaldo = unirmeYo && saldo !== null && saldo < garantiaPropia ? garantiaPropia - saldo : 0n
 
   const duracionTotal = params ? params.periodoSeg * params.nMiembros : 0
-  const demasiadoLarga = duracionTotal > DIAS_PROBADOS_MAX * 86_400
+  const [hoy] = useState(() => Math.floor(Date.now() / 1000))
+  // Para rondas de días, semanas o meses ayuda ver la fecha en que terminaría si se llena hoy.
+  const fechaFin = params && params.periodoSeg >= 86_400 ? fechaLarga(hoy + duracionTotal, hoy) : null
 
   function cambiar<K extends keyof Formulario>(campo: K, valor: Formulario[K]) {
     setF((prev) => ({ ...prev, [campo]: valor }))
@@ -218,10 +227,15 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 <option value="minutos">minutos</option>
                 <option value="horas">horas</option>
                 <option value="dias">días</option>
+                <option value="semanas">semanas</option>
+                <option value="meses">meses</option>
               </select>
             </div>
             <p id="periodo-ayuda" className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-              {errores.periodoSeg ?? 'Quien paga después de este plazo cuenta como atrasado.'}
+              {errores.periodoSeg ??
+                `Quien paga después de este plazo cuenta como atrasado. Hasta 3 meses por ronda${
+                  f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''
+                }.`}
             </p>
           </div>
 
@@ -353,6 +367,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   <dd>{duracion(duracionTotal)}</dd>
                 </div>
               </dl>
+              {fechaFin && (
+                <p className="explica">
+                  Las fechas de pago quedan fijas desde que se completa el grupo. Si se llena hoy, la última ronda vence
+                  el {fechaFin}.
+                </p>
+              )}
 
               <h3>Garantía de cada turno</h3>
               <div className="tabla-scroll">
@@ -384,12 +404,6 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
 
               <RiesgoGrupo params={params} />
 
-              {demasiadoLarga && (
-                <p className="aviso nota">
-                  Esta tanda dura más de {DIAS_PROBADOS_MAX} días. La versión de pruebas no se ha probado con plazos tan
-                  largos y podría pedir pasos extra para continuar. Para una demo, usa rondas cortas.
-                </p>
-              )}
             </>
           ) : (
             <p className="explica">Completa los datos de la izquierda para ver la vista previa.</p>

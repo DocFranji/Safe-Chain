@@ -18,17 +18,34 @@ Un script hace de **Ana, Beto y Carla** desde la terminal, así nadie pierde tie
 
 Los tiempos marcan cuándo termina cada paso y son aproximados: dependen de la red (cada transacción tarda unos 5 a 6 segundos). Ensáyalo para calibrarlos.
 
+### Variante con deuda (`DEUDA=1`)
+
+Muestra que en Rounda **un moroso puede ponerse al día**. La tanda usa la garantía mínima (cada quien deja una cuota), así la de Ana se acaba antes:
+
+| Qué pasa | Qué se ve en pantalla | Qué decir |
+| --- | --- | --- |
+| **Ronda 2** | *"Ana no pagó: su garantía cubrió 100 TUSD"* | "Su garantía alcanzó para esta ronda…" |
+| **Ronda 3** | *"Ana quedó en mora"* y *"Carla cobró 200 TUSD"* | "…pero ya no le queda garantía: Carla cobró 100 de menos." |
+| **Ana vuelve** | Resaltados: *"Ana pagó 100 TUSD y saldó su deuda"* y *"Carla recibió los 100 TUSD que le faltaban"* | **El momento clave.** "La deuda no se pierde: cuando Ana paga, el dinero le llega a quien cobró de menos, y Ana vuelve a estar al día. También lo podría pagar un familiar." |
+
+```bash
+DEUDA=1 WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
+```
+
+Desde la web, quien está en mora ve el botón **"Pagar mi deuda"** con cuánto debe, a quién le llega y qué recupera.
+
 ## Antes de la demo (una hora antes)
 
 1. **¿Testnet sigue con el contrato?** Stellar reinicia testnet cada tanto. Abre `<tu-web>/#/estado`: debe decir *"Todo listo para la demo"*. Si el contrato no responde, hay que volver a desplegar (ver "Si algo falla").
 2. **Faucet** (para que el jurado consiga TUSD): en Vercel deben estar `FAUCET_ISSUER_SECRET`, `VITE_TANDA_ID`, `VITE_TOKEN_ID` y `VITE_NOMBRES`. `#/estado` lo comprueba. Pruébalo con una cuenta nueva de Freighter: activar con Friendbot, aceptar TUSD y pedir TUSD.
 3. **Bóveda con fondos:** paga los intereses con su propio saldo. `#/estado` avisa si le falta.
-4. **Ensayo completo** (30 minutos antes), tal como será la demo real:
+4. **Bóveda rápida nueva (1 a 2 horas antes):** la acelerada rinde menos cuanto más vieja es (con un día de edad, unas 8 veces menos). Cámbiala por una nueva con `bash scripts/renovar_boveda_rapida.sh` (en la máquina que tiene la cuenta `emisor`). Las tandas que ya existen no se afectan.
+5. **Ensayo completo** (30 minutos antes), tal como será la demo real:
    ```bash
    WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
    ```
    Abre el enlace que imprime (`.../#/demo/<id>`), pulsa ENTER y mira que todo salga. Graba la pantalla: sirve de respaldo.
-5. En el proyector, abre la web en pantalla completa (F11) y pon el zoom del navegador en 100% o 110%.
+6. En el proyector, abre la web en pantalla completa (F11) y pon el zoom del navegador en 100% o 110%.
 
 ## Durante la demo
 
@@ -79,13 +96,15 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 | El script se corta a la mitad | Corre `T --source admin -- cerrar_ronda --id <id>` (o `finalizar`) a mano, o simplemente vuelve a correr `demo.sh`: crea una tanda nueva y `#/demo` se va sola a la que está en curso |
 | Freighter da problemas | La demo proyectada **no usa billetera**: sigue igual. Solo se afecta la parte de que el jurado pruebe |
 | La pantalla va lenta | Recarga la página. El RPC público tiene límites de uso; no abras la demo en muchas pestañas |
-| Fondos de la bóveda bajos | `stellar contract invoke --id $TOKEN --source emisor --network testnet -- mint --to $BOVEDA --amount 100000000000` (10 000 TUSD) |
+| Fondos de la bóveda bajos | `stellar contract invoke --id $TOKEN --source emisor --network testnet -- mint --to $BOVEDA --amount 100000000000` (10 000 TUSD; para la rápida, `--to $BOVEDA_RAPIDA`). Si se agotan, la bóveda no falla: solo deja de dar rendimiento |
 | Todo falló | Muestra la grabación del ensayo |
 
 ## Qué decir si preguntan
 
 - **¿Es dinero real?** No. Es testnet con TUSD de prueba.
-- **¿Y el rendimiento?** La bóveda es simulada (misma interfaz que tendría un adaptador a Blend, que está planeado). En la demo el tiempo corre más rápido.
+- **¿Y el rendimiento?** La bóveda es simulada (misma interfaz que tendría un adaptador a Blend, que está planeado). En la tanda de la demo (rondas de 1 minuto) el tiempo corre más rápido para que se note; una tanda real de semanas o meses rinde 5 % anual, al ritmo de la vida real.
+- **¿Funciona para una tanda de verdad, de meses?** Sí: rondas de hasta 3 meses y tandas de hasta un año o más, con fechas de pago fijas. El contrato renueva solo sus datos en la red para que nada se archive a mitad de la tanda.
+- **¿Y si alguien queda en mora?** Puede pagar su deuda cuando quiera (o un familiar por él). El dinero le llega a quien cobró de menos y la persona vuelve a estar al día.
 - **¿Qué pasa si alguien no paga?** Su garantía cubre su cuota. Si no alcanza, queda en mora y su parte se reparte entre quienes cumplieron.
 - **¿Está auditado?** No. Es un prototipo de hackathon.
 - **¿Quién puede cerrar las rondas?** Cualquiera: así nadie puede bloquear la tanda.

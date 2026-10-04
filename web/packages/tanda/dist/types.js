@@ -1,6 +1,6 @@
 /**
-* Error Enum: Error
-*/
+ * Error Enum: Error
+ */
 export const Error = {
     1: { message: "YaInicializado" },
     2: { message: "NoEncontrada" },
@@ -15,6 +15,9 @@ export const Error = {
     11: { message: "NoVerificado" },
     12: { message: "NoAutorizado" },
     13: { message: "NoInicializado" },
+    14: { message: "SinDeuda" },
+    15: { message: "PagoExcesivo" },
+    16: { message: "MontoInvalido" },
     30: { message: "OpcionesInvalidas" },
     31: { message: "ModoNoPermite" },
     32: { message: "TurnoInvalido" },

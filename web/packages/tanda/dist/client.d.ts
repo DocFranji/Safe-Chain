@@ -1,4 +1,4 @@
-import { OpcionesTanda, EstadoTurnos, Tanda, Miembro, ContractEvent } from './types.js';
+import { OpcionesTanda, EstadoTurnos, Deuda, Tanda, Miembro, ContractEvent } from './types.js';
 import { Result, AssembledTransaction, Client as ContractClient, ClientOptions as ContractClientOptions, MethodOptions, ExternalExecutableRef } from '@stellar/stellar-sdk/contract';
 import { Address, xdr } from '@stellar/stellar-sdk';
 export interface Client {
@@ -156,6 +156,46 @@ export interface Client {
         compensacion: bigint;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
+     * La deuda de `miembro` en la tanda `id`: a quién le debe (por ronda), su bolsa retenida si la
+     * tiene, y cuánto ha pagado. Si nunca debió nada, todo vacío.
+     */
+    get_deuda(args: {
+        id: number;
+        miembro: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Deuda, Error>>>;
+    /**
+     * Las deudas de la tanda `id` en una sola consulta: solo de quienes alguna vez debieron algo
+     * (incluye a quienes ya saldaron: `faltantes` vacío y `pagado > 0`).
+     */
+    get_deudas(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Array<[string, Deuda]>, Error>>>;
+    /**
+     * Paga (toda o una parte) la deuda de `miembro` en la tanda `id`. Puede pagarla otra persona
+     * (`pagador`, que es quien firma y de quien sale el dinero). Devuelve la deuda que queda.
+     *
+     * Solo mientras la tanda está `Activa` o `PorLiquidar`. No se puede pagar de más.
+     */
+    pagar_deuda(args: {
+        id: number;
+        miembro: string | Address;
+        pagador: string | Address;
+        monto: bigint;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<bigint, Error>>>;
+    /**
+     * La bóveda donde está la garantía de la tanda `id` (la web la usa para mostrar el rendimiento).
+     */
+    get_boveda(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<string, Error>>>;
+    /**
+     * (Solo el admin) Bóveda rápida para tandas de prueba (rondas de hasta 10 minutos).
+     * `None` la quita. Solo afecta a las tandas que se creen después: cada tanda conserva la suya.
+     */
+    configurar_boveda_rapida(args: {
+        boveda: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
      * (ronda actual, fecha límite, quiénes ya pagaron)
      */
     get_ronda(args: {
@@ -212,6 +252,11 @@ export declare class Client extends ContractClient {
         aceptar_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
         crear_tanda_avanzada: (json: string) => AssembledTransaction<Result<number, Error>>;
         proponer_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
+        get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
+        pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda: (json: string) => AssembledTransaction<Result<string, Error>>;
+        configurar_boveda_rapida: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
         get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         get_miembros: (json: string) => AssembledTransaction<Result<[string, Miembro][], Error>>;
@@ -237,6 +282,11 @@ export declare class Client extends ContractClient {
         aceptar_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
         crear_tanda_avanzada: (json: string) => AssembledTransaction<Result<number, Error>>;
         proponer_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
+        get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
+        pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda: (json: string) => AssembledTransaction<Result<string, Error>>;
+        configurar_boveda_rapida: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
         get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         get_miembros: (json: string) => AssembledTransaction<Result<[string, Miembro][], Error>>;
@@ -251,6 +301,12 @@ export declare class Client extends ContractClient {
      * Build a topics filter row for the "EvPago" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evPagoEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvAbono" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evAbonoEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**
@@ -350,9 +406,25 @@ export declare class Client extends ContractClient {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvDeudaPagada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evDeudaPagadaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvIntercambio" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evIntercambioEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvBovedaRapida" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBovedaRapidaEventFilter(): string[];
+    /**
+     * Build a topics filter row for the "EvBolsaRecuperada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBolsaRecuperadaEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**
