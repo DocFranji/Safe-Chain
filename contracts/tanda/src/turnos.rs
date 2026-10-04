@@ -309,10 +309,11 @@ pub(crate) fn completar_garantia(
     m: &mut Miembro,
     disponible: i128,
 ) -> Result<i128, Error> {
-    if disponible <= 0 || opciones(env, t, id).is_none() {
+    // Quien cobra la ronda `r` tiene el turno `r` (m.posicion == ronda). Sin turno válido no se
+    // aparta nada (no debería pasar; así `colateral_para` nunca se desborda).
+    if disponible <= 0 || m.posicion >= t.n_miembros || opciones(env, t, id).is_none() {
         return Ok(0);
     }
-    // Quien cobra la ronda `r` tiene el turno `r` (m.posicion == ronda).
     let ronda = m.posicion;
     let objetivo = ganchos::ajustar_colateral(env, t, dir, colateral_para(t, ronda));
     let apartar = (objetivo - m.colateral).min(disponible);
