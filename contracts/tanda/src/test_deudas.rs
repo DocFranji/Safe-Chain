@@ -81,6 +81,10 @@ fn moroso_paga_toda_su_deuda_y_le_llega_a_quien_cobro_de_menos() {
     let d = c.tanda.get_deuda(&id, ana);
     assert_eq!(d.faltantes.len(), 0);
     assert_eq!(d.pagado, 100 * U);
+    // get_deudas: solo quien alguna vez debió (Ana), aunque ya saldó.
+    let todas = c.tanda.get_deudas(&id);
+    assert_eq!(todas.len(), 1);
+    assert_eq!(todas.get(0).unwrap(), (ana.clone(), d));
 
     // Ya al día: vuelve a pagar su cuota y Dani cobra la bolsa completa.
     pagan(&c, id, &[ana, beto, carla, dani]);

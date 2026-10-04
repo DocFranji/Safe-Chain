@@ -6,6 +6,7 @@ import type { Billetera } from '../hooks/useBilletera'
 import { Rueda } from '../components/Rueda'
 import { PanelRonda } from '../components/PanelRonda'
 import { ListaMiembros } from '../components/ListaMiembros'
+import { Calendario } from '../components/Calendario'
 import { Invitar } from '../components/Invitar'
 import { Rendimiento } from '../components/Rendimiento'
 import { Resultados } from '../components/Resultados'
@@ -46,6 +47,7 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
             </div>
           </div>
           <ListaMiembros datos={datos} yo={billetera.direccion} />
+          <Calendario datos={datos} ahora={ahora} />
           {estado === 'Finalizada' && (
             <Resultados datos={datos} yo={billetera.direccion} eventos={historia.eventos} error={historia.error} />
           )}

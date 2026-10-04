@@ -176,6 +176,15 @@ impl BovedaSimulada {
             .unwrap_or(0)
     }
 
+    /// Cuántas veces más rápido corre el tiempo para los intereses (1 = como en la vida real).
+    /// La web lo usa para decir si el rendimiento es acelerado (de demostración) o real.
+    pub fn acelerador(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&Clave::Acelerador)
+            .unwrap_or(1)
+    }
+
     /// Participaciones de todos juntos.
     pub fn total_shares(env: Env) -> i128 {
         env.storage()

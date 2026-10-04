@@ -194,6 +194,20 @@ impl TandaContract {
         cargar_miembro(&env, id, &miembro)?;
         Ok(cargar_deuda(&env, id, &miembro))
     }
+
+    /// Las deudas de la tanda `id` en una sola consulta: solo de quienes alguna vez debieron algo
+    /// (incluye a quienes ya saldaron: `faltantes` vacío y `pagado > 0`).
+    pub fn get_deudas(env: Env, id: u32) -> Result<Vec<(Address, Deuda)>, Error> {
+        cargar_tanda(&env, id)?;
+        let p = env.storage().persistent();
+        let mut out = Vec::new(&env);
+        for dir in cargar_miembros(&env, id).iter() {
+            if let Some(d) = p.get::<_, Deuda>(&ClaveM1::DeudaDe(id, dir.clone())) {
+                out.push_back((dir, d));
+            }
+        }
+        Ok(out)
+    }
 }
 
 /// Entrega `monto` a `acreedor` (quien cobró de menos). Si su bolsa sigue retenida porque también

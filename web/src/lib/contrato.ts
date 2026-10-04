@@ -4,6 +4,7 @@
 //  - clienteFirma(dir): para ACCIONES (unirse, pagar_cuota...). Firma Freighter o la cuenta de Google (firmante.ts).
 //  - leer(tx) / enviar(tx): ejecutan la llamada y convierten los errores a mensajes en español.
 import { Client } from 'tanda'
+import type { ClientOptions as ContractClientOptions } from '@stellar/stellar-sdk/contract'
 import { rpc } from '@stellar/stellar-sdk'
 import type { contract } from '@stellar/stellar-sdk'
 import { firmarTransaccion } from './firmante'
@@ -16,11 +17,16 @@ export function clienteLectura(): Client {
 }
 
 export function clienteFirma(direccion: string): Client {
-  return new Client({
+  // `restore`: si algún dato de la tanda se archivó (Stellar archiva lo que nadie toca por meses) y la
+  // red no puede restaurarlo sola dentro de la misma transacción, el SDK manda antes una restauración.
+  // Esa firma extra también pasa por `firmarTransaccion`: sirve con Freighter y con la cuenta de Google.
+  const opciones: ContractClientOptions & Pick<contract.MethodOptions, 'restore'> = {
     ...base,
     publicKey: direccion,
     signTransaction: (xdr, opciones) => firmarTransaccion(xdr, { ...opciones, address: direccion }),
-  })
+    restore: true,
+  }
+  return new Client(opciones)
 }
 
 // ---------------------------------------------------------------------------
@@ -37,10 +43,14 @@ const MENSAJES: Record<number, string> = {
   7: 'Esta billetera no es miembro de la tanda.',
   8: 'Ya pagaste la cuota de esta ronda.',
   9: 'La ronda todavía no vence. Espera a que termine el plazo.',
-  10: 'Tienes una deuda pendiente en esta tanda, así que no puedes pagar esta ronda.',
+  10: 'Tienes una deuda pendiente en esta tanda. Págala con «Pagar mi deuda» para volver a pagar tus cuotas.',
   11: 'Tu dirección todavía no está verificada.',
   12: 'Esta billetera no tiene permiso para hacer esto.',
   13: 'El contrato todavía no se ha configurado.',
+  // M1: pagar deudas
+  14: 'Esa persona no tiene deuda en esta tanda.',
+  15: 'Ese monto es mayor que la deuda. Revisa cuánto falta por pagar.',
+  16: 'Escribe un monto mayor que cero.',
 }
 
 // A veces el SDK entrega el NOMBRE del error del contrato en vez del código.
@@ -58,6 +68,9 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   NoVerificado: 11,
   NoAutorizado: 12,
   NoInicializado: 13,
+  SinDeuda: 14,
+  PagoExcesivo: 15,
+  MontoInvalido: 16,
 }
 
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */

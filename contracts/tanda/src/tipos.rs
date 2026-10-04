@@ -93,13 +93,11 @@ pub enum Error {
     NoVerificado = 11,
     NoAutorizado = 12,
     NoInicializado = 13,
-    // --- M1: pagar deudas (14–19) ---
-    /// Esa persona no tiene deuda en esta tanda.
-    SinDeuda = 14,
-    /// El monto es mayor que la deuda.
-    PagoExcesivo = 15,
-    /// El monto debe ser mayor que cero.
-    MontoInvalido = 16,
+    // --- M1: pagar deudas (14–19). Sin comentarios `///`: el SDK de JS usaría ese texto como
+    // mensaje en vez del nombre, y la web traduce por nombre o por código (contrato.ts). ---
+    SinDeuda = 14,      // esa persona no tiene deuda en esta tanda
+    PagoExcesivo = 15,  // el monto es mayor que la deuda
+    MontoInvalido = 16, // el monto debe ser mayor que cero
 }
 
 // ---------------------------------------------------------------------------
