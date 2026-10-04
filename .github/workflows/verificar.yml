@@ -1,0 +1,49 @@
+# Verificación automática de cada PR hacia `integracion` y `main` (y de cada push a `integracion`).
+# Corre scripts/verificar.sh: contratos (fmt, clippy, pruebas), web (lint, pruebas, build) y navegador (web/e2e).
+# Lo único que no corre aquí es la compilación a WASM y la revisión del cliente generado, porque necesitan la
+# CLI de Stellar; esas las corre el orquestador antes de integrar (bash scripts/verificar.sh, sin SIN_WASM).
+name: Verificación
+
+on:
+  pull_request:
+    branches: [integracion, main]
+  push:
+    branches: [integracion]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verificar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # La misma versión de Rust que usan las sesiones de los agentes en la nube.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Verificación (sin WASM)
+        env:
+          SIN_WASM: "1"
+          # Chrome viene instalado en las máquinas de GitHub; web/e2e lo usa en vez de /opt/pw-browsers.
+          CHROMIUM_PATH: /usr/bin/google-chrome
+        run: bash scripts/verificar.sh
