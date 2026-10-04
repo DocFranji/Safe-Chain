@@ -1,6 +1,7 @@
 // Lecturas del contrato (no piden firma ni cuestan nada). Las usan el lobby y la página de cada tanda.
 import type { EstadoTurnos, Miembro, Tanda } from 'tanda'
 import { clienteLectura, leer, revisarSimulacion } from './contrato'
+import type { Modo } from './turnos'
 
 export type MiembroConDireccion = Miembro & { direccion: string }
 
@@ -12,6 +13,8 @@ export type ResumenTanda = {
   tanda: Tanda
   /** Ordenados por turno (posicion 0 cobra primero). */
   miembros: MiembroConDireccion[]
+  /** (M3) Cómo se reparten los turnos. 'Llegada' si el contrato no lo dice (versión anterior). */
+  modo: Modo
 }
 
 /** Todo lo que necesita la página de una tanda. */
@@ -50,8 +53,16 @@ export async function leerTotal(): Promise<number> {
 
 export async function leerResumen(id: number): Promise<ResumenTanda> {
   const c = clienteLectura()
-  const [tanda, lista] = await Promise.all([c.get_tanda({ id }).then(leer), c.get_miembros({ id }).then(leer)])
-  return { id, tanda, miembros: ordenarMiembros(lista) }
+  const [tanda, lista, modo] = await Promise.all([
+    c.get_tanda({ id }).then(leer),
+    c.get_miembros({ id }).then(leer),
+    c
+      .get_opciones({ id })
+      .then(leer)
+      .then((o): Modo => o.modo.tag)
+      .catch((): Modo => 'Llegada'),
+  ])
+  return { id, tanda, miembros: ordenarMiembros(lista), modo }
 }
 
 export async function leerTandaCompleta(id: number): Promise<DatosTanda> {

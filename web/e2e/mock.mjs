@@ -90,6 +90,8 @@ const estadoTurnos = (opciones, o = {}) => ({
  */
 export function nuevoEstadoTurnos() {
   const e = nuevoEstado()
+  // La 6 es una tanda de siempre (cancelada) para que los ids queden seguidos (el lobby pide 1..total).
+  e.tandas[6] = { tanda: tanda({ creador: CARLA, estado: est('Cancelada') }), miembros: [], pagaron: [] }
   e.tandas[7] = {
     tanda: tanda({ creador: ANA, shares_boveda: 100n * U }),
     miembros: [[ANA, miembro(SIN_TURNO)]],

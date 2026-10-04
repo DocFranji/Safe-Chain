@@ -526,6 +526,21 @@ const browser = await chromium.launch(opcionesNavegador())
 }
 {
   const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 })
+  await page.waitForFunction(() => document.querySelectorAll('.tarjeta').length === 10, null, { timeout: 15000 }).catch(() => {})
+  const tarjeta = async (n) => page.locator('.tarjeta', { has: page.locator('h2', { hasText: new RegExp(`^Tanda ${n}$`) }) }).innerText()
+  check('Turnos/lobby: sorteo abierta entra con una cuota', /Entras con 100 TUSD de garantía \(el orden se sortea\)/.test(await tarjeta(7)) && /Turnos: sorteo/.test(await tarjeta(7)))
+  check('Turnos/lobby: precio por turno -> "Eliges tu turno al entrar"', /Eliges tu turno al entrar/.test(await tarjeta(8)) && /Turnos: precio por turno/.test(await tarjeta(8)))
+  check('Turnos/lobby: la subasta muestra su modo', /Turnos: subasta/.test(await tarjeta(9)))
+  check('Turnos/lobby: las tandas de siempre no muestran modo', !/Turnos:/.test(await tarjeta(3)) && /\(turno 2\)/.test(await tarjeta(3)))
+  await shot(page, 'm3-10-lobby-turnos')
+  check('Turnos/lobby: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
   const { page, errores } = await nuevaPagina(browser, { est, conectado: false })
   await page.goto(BASE + '#/demo/9')
   await page.waitForSelector('.demo-personas', { timeout: 15000 })
