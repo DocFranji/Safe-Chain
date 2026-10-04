@@ -366,7 +366,7 @@ MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después 
 
 Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al anotar a las 12 personas en el `finalizar`, igual que en cualquier tanda de 12 con historial.
 
-**Tamaño:** `tanda.wasm` pesa 80 008 bytes con M1 + M2 + M3, el historial mínimo para los primeros turnos y las ofertas selladas (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes). Con las ofertas selladas, al llenarse la tanda y en cada cierre se leen 2 entradas más (se revisa si existen las dos claves de las ofertas selladas para renovarlas, aunque la tanda no las use): el máximo de lecturas pasa de 72 a 74. Ninguna de las tres mejoras agrega escrituras.
+**Tamaño:** `tanda.wasm` pesa 80 034 bytes con M1 + M2 + M3, el historial mínimo para los primeros turnos y las ofertas selladas (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes). Con las ofertas selladas, al llenarse la tanda y en cada cierre se leen 2 entradas más (se revisa si existen las dos claves de las ofertas selladas para renovarlas, aunque la tanda no las use): el máximo de lecturas pasa de 72 a 74. Ninguna de las tres mejoras agrega escrituras.
 
 ### Cómo se combina con M1 (deudas) y M2 (historial)
 
