@@ -335,10 +335,14 @@ fn abono_a_una_bolsa_retenida_y_luego_recuperada() {
     c.assert_conservacion();
 }
 
-/// Límites de mainnet por transacción (más estrictos que los de testnet).
+/// Límites de mainnet por transacción (más estrictos que los de testnet: 400 M y 200 entradas).
 const MAX_INSTRUCCIONES: i64 = 100_000_000;
 const MAX_MEMORIA: i64 = 40 * 1024 * 1024;
 const MAX_ESCRITURAS: u32 = 50;
+const MAX_LECTURAS: u32 = 100;
+
+/// Lo más caro que se midió de cada operación: (nombre, instrucciones, lecturas, escrituras).
+type Medidas = StdVec<(&'static str, i64, u32, u32)>;
 
 /// Peor caso: 12 personas con garantía mínima y casi nadie paga. Cada cierre anota hasta 12
 /// faltantes y Ana termina debiendo en 10 rondas distintas. Cada operación se mide sola y se compara
@@ -346,11 +350,13 @@ const MAX_ESCRITURAS: u32 = 50;
 ///
 /// (Se mide con presupuesto ilimitado porque el del entorno de pruebas se acumula durante toda la
 /// prueba, incluido el registro de diagnósticos y firmas, y no representa una sola transacción.)
-fn recorrer_peor_caso(c: &Ctx) -> (i64, u32, i64, u32) {
-    let medir = |que: &str, f: &dyn Fn()| {
+fn recorrer_peor_caso(c: &Ctx) -> Medidas {
+    let medidas = core::cell::RefCell::new(Medidas::new());
+    let medir = |que: &'static str, f: &dyn Fn()| {
         c.env.cost_estimate().budget().reset_unlimited();
         f();
         let r = c.env.cost_estimate().resources();
+        let lecturas = r.disk_read_entries + r.memory_read_entries;
         assert!(
             r.instructions < MAX_INSTRUCCIONES,
             "{que}: {} instrucciones",
@@ -366,7 +372,16 @@ fn recorrer_peor_caso(c: &Ctx) -> (i64, u32, i64, u32) {
             "{que}: {} escrituras",
             r.write_entries
         );
-        r
+        assert!(lecturas <= MAX_LECTURAS, "{que}: {lecturas} lecturas");
+        let mut m = medidas.borrow_mut();
+        match m.iter_mut().find(|x| x.0 == que) {
+            Some(x) => {
+                x.1 = x.1.max(r.instructions);
+                x.2 = x.2.max(lecturas);
+                x.3 = x.3.max(r.write_entries);
+            }
+            None => m.push((que, r.instructions, lecturas, r.write_entries)),
+        }
     };
     let g = personas(c, 12);
     let id = c.tanda.crear_tanda(
@@ -379,10 +394,8 @@ fn recorrer_peor_caso(c: &Ctx) -> (i64, u32, i64, u32) {
         &0,
     );
     for p in &g {
-        medir("unirse", &|| c.tanda.unirse(&id, p));
+        medir("unirse", &|| c.tanda.unirse(&id, p)); // el último activa la tanda
     }
-    let mut max_instr = 0i64;
-    let mut max_escrituras = 0u32;
     for ronda in 0..12u32 {
         // Solo paga quien cobra esta ronda (y en la primera, todos).
         for (i, p) in g.iter().enumerate() {
@@ -391,28 +404,37 @@ fn recorrer_peor_caso(c: &Ctx) -> (i64, u32, i64, u32) {
             }
         }
         c.avanzar(PERIODO);
-        let r = medir("cerrar_ronda", &|| c.tanda.cerrar_ronda(&id));
-        max_instr = max_instr.max(r.instructions);
-        max_escrituras = max_escrituras.max(r.write_entries);
+        medir("cerrar_ronda", &|| c.tanda.cerrar_ronda(&id));
     }
     let ana = &g[0];
     let deuda = c.miembro(id, ana).deuda;
     assert!(c.tanda.get_deuda(&id, ana).faltantes.len() >= 10);
-    let r = medir("pagar_deuda", &|| {
+    medir("pagar_deuda", &|| {
         c.tanda.pagar_deuda(&id, ana, ana, &deuda);
     });
     medir("finalizar", &|| c.tanda.finalizar(&id));
     assert_eq!(c.saldo(&c.tanda_addr), 0);
     assert_conservacion_de(c, &g);
-    (max_instr, max_escrituras, r.instructions, r.write_entries)
+    medidas.into_inner()
+}
+
+fn imprimir(titulo: &str, m: &Medidas) {
+    std::println!("{titulo}");
+    for (que, instr, lecturas, escrituras) in m {
+        std::println!(
+            "  {que:<13} {:>6.1} M instrucciones · {lecturas:>3} lecturas · {escrituras:>3} escrituras",
+            *instr as f64 / 1e6
+        );
+    }
 }
 
 #[test]
 fn peor_caso_12_miembros_con_morosos() {
     let c = setup();
-    let (ci, ce, pi, pe) = recorrer_peor_caso(&c);
-    std::println!(
-        "Peor caso (contratos nativos, sin costo de VM): cerrar_ronda máx {ci} instrucciones y {ce} escrituras; pagar_deuda {pi} instrucciones y {pe} escrituras"
+    let m = recorrer_peor_caso(&c);
+    imprimir(
+        "Peor caso, 12 miembros (contratos nativos, sin costo de VM):",
+        &m,
     );
 }
 
@@ -426,8 +448,9 @@ fn peor_caso_12_miembros_con_morosos_en_wasm() {
         return;
     }
     let c = crate::test_tiempos::setup_wasm(0, 1);
-    let (ci, ce, pi, pe) = recorrer_peor_caso(&c);
-    std::println!(
-        "Peor caso (WASM): cerrar_ronda máx {ci} instrucciones y {ce} escrituras; pagar_deuda {pi} instrucciones y {pe} escrituras"
+    let m = recorrer_peor_caso(&c);
+    imprimir(
+        "Peor caso, 12 miembros (WASM, con el costo real de la VM):",
+        &m,
     );
 }

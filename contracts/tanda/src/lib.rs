@@ -307,7 +307,10 @@ impl TandaContract {
             guardar_miembro(&env, id, &miembro, &m);
         }
         env.storage().persistent().set(&clave_pago, &true);
-        renovar(&env, &clave_pago, vida_ronda(&env, &t)); // M1: vive hasta que se cierre la ronda
+        // M1: el pago vive hasta que se cierre la ronda. `pagar_cuota` solo toca lo de quien paga (la
+        // tanda y su registro se renuevan con el piso al leerse); todo lo demás lo renueva
+        // `cerrar_ronda` (vía `guardar_tanda`), que pasa al menos una vez por ronda.
+        renovar(&env, &clave_pago, vida_ronda(&env, &t));
         ganchos::al_pagar(&env, &t, id, &miembro, t.ronda_actual, tarde);
 
         EvPago {
@@ -375,9 +378,9 @@ impl TandaContract {
             };
             if cubierto > 0 {
                 m.colateral -= cubierto;
-                let quemadas = boveda.retirar_monto(&yo, &cubierto);
-                t.shares_boveda -= quemadas;
-                bolsa += cubierto;
+                // Nunca gasta participaciones de otra tanda: si la bóveda vale menos de lo anotado,
+                // entra lo que de verdad salió (M4/M1, ver `sacar_de_boveda`).
+                bolsa += sacar_de_boveda(&env, &boveda, &mut t, cubierto);
                 ganchos::al_cubrir(&env, &t, id, &dir, ronda, cubierto);
                 EvCubierto {
                     id,

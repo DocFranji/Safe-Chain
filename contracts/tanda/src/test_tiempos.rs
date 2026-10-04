@@ -672,3 +672,100 @@ fn una_tanda_no_se_traba_por_redondeo_de_la_boveda() {
     }
     c.assert_conservacion();
 }
+
+/// Hallazgo de M4: si el precio de la bóveda no sube (bóveda sin acelerar en el mismo minuto, o
+/// topada por saldo), sacar toda la garantía de una tanda pide unas unidades más de las que tiene.
+/// Antes las tomaba de OTRA tanda del mismo contrato, que después no podía finalizar.
+#[test]
+fn una_tanda_nunca_gasta_participaciones_de_otra() {
+    let c = setup_con(500, 1, false);
+    pasar(&c, 64); // precio 1,0000001 durante el próximo minuto
+    let gente = personas(&c, 6);
+    let b = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &3,
+        &MES,
+        &1_000,
+        &10_000,
+    );
+    for p in &gente[3..6] {
+        c.tanda.unirse(&b, p);
+    }
+    let a = c
+        .tanda
+        .crear_tanda(&c.creador, &c.token.address, &CUOTA, &3, &60, &1_000, &0);
+    for p in &gente[0..3] {
+        c.tanda.unirse(&a, p);
+    }
+    pasar(&c, 60); // mismo precio
+    c.tanda.cerrar_ronda(&a); // nadie pagó en A: sus tres garantías salen completas
+    assert!(c.tanda.get_tanda(&a).shares_boveda >= 0);
+
+    // B sigue con sus participaciones intactas y termina bien.
+    for _ in 0..3 {
+        for p in &gente[3..6] {
+            c.tanda.pagar_cuota(&b, p);
+        }
+        pasar(&c, MES);
+        c.tanda.cerrar_ronda(&b);
+    }
+    c.tanda.finalizar(&b);
+    for _ in 0..2 {
+        pasar(&c, 60);
+        c.tanda.cerrar_ronda(&a);
+    }
+    c.tanda.finalizar(&a);
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    assert_conservacion_de(&c, &gente);
+}
+
+/// Pedido de ORQ: con la bóveda casi sin fondeo (1 TUSD) y el acelerador de la demo, el tope de
+/// solvencia se activa enseguida. Con depósitos y retiros alternados, el precio nunca baja y la
+/// bóveda nunca promete más de lo que tiene.
+#[test]
+fn boveda_casi_sin_fondeo_precio_nunca_baja_con_depositos_y_retiros_alternados() {
+    let c = setup();
+    let pobre = c.env.register(
+        boveda_simulada::BovedaSimulada,
+        (c.token.address.clone(), 500u32, 52_560u32),
+    );
+    StellarAssetClient::new(&c.env, &c.token.address).mint(&pobre, &U);
+    let b = boveda_simulada::BovedaSimuladaClient::new(&c.env, &pobre);
+    let mut precio = b.precio();
+    let revisar = |precio: &mut i128| {
+        let p = b.precio();
+        assert!(p >= *precio, "el precio bajó de {} a {p}", *precio);
+        *precio = p;
+        assert!(b.valor(&b.total_shares()) <= c.saldo(&pobre));
+    };
+    let s_ana = depositar_directo(&c, &pobre, &c.ana, 300 * U);
+    revisar(&mut precio);
+    pasar(&c, DIA);
+    revisar(&mut precio);
+    let s_beto = depositar_directo(&c, &pobre, &c.beto, 200 * U);
+    revisar(&mut precio);
+    let quemadas = b.retirar_monto(&c.ana, &(100 * U));
+    revisar(&mut precio);
+    pasar(&c, 3 * DIA);
+    let s_carla = depositar_directo(&c, &pobre, &c.carla, 100 * U);
+    revisar(&mut precio);
+    b.retirar(&c.beto, &s_beto);
+    revisar(&mut precio);
+    pasar(&c, MES);
+    let s_beto2 = depositar_directo(&c, &pobre, &c.beto, 50 * U);
+    revisar(&mut precio);
+    b.retirar(&c.ana, &(s_ana - quemadas));
+    revisar(&mut precio);
+    b.retirar(&c.carla, &s_carla);
+    revisar(&mut precio);
+    b.retirar(&c.beto, &s_beto2);
+    assert_eq!(b.total_shares(), 0);
+    // Nadie perdió más que el redondeo de la última cifra; el fondeo (1 TUSD) se repartió.
+    let redondeo = 4 * (precio / 10_000_000 + 1);
+    for p in [&c.ana, &c.beto, &c.carla] {
+        assert!(c.saldo(p) >= SALDO_INICIAL - redondeo, "{}", c.saldo(p));
+    }
+    assert!(c.saldo(&pobre) >= 0);
+}

@@ -17,7 +17,7 @@
 //! Otras misiones: si agregan una clave por tanda, renuévenla con `renovar_para_tanda`.
 use soroban_sdk::{vec, Address, Env, IntoVal, Symbol, Val, Vec};
 
-use crate::{ClaveM1, DataKey, Error, Estado, Miembro, Tanda};
+use crate::{BovedaClient, ClaveM1, DataKey, Error, Estado, Miembro, Tanda};
 
 /// Segundos por ledger (testnet: 5,0 s medidos el 3 de octubre de 2026).
 pub(crate) const SEG_POR_LEDGER: u64 = 5;
@@ -70,6 +70,31 @@ pub(crate) fn boveda_de(env: &Env, id: u32, t: &Tanda) -> Result<Address, Error>
     match env.storage().persistent().get(&ClaveM1::BovedaDe(id)) {
         Some(b) => Ok(b),
         None => fijar_boveda(env, id, t),
+    }
+}
+
+/// Saca `monto` de la bóveda para la tanda `t` sin tocar participaciones de otras tandas del contrato
+/// (la bóveda solo ve el total del contrato). Devuelve lo que de verdad salió: menos que `monto` solo
+/// si la bóveda vale menos de lo anotado (pérdida o redondeo con el precio quieto). Esa diferencia es
+/// pérdida de la bóveda, no deuda de nadie. (Hallazgo y arreglo de M4, `docs/blend.md` §5.)
+pub(crate) fn sacar_de_boveda(
+    env: &Env,
+    boveda: &BovedaClient,
+    t: &mut Tanda,
+    monto: i128,
+) -> i128 {
+    if t.shares_boveda <= 0 {
+        return 0;
+    }
+    let yo = env.current_contract_address();
+    // Si valor(shares) >= monto, entonces ceil(monto / precio) <= shares: alcanza con las propias.
+    if boveda.valor(&t.shares_boveda) >= monto {
+        t.shares_boveda -= boveda.retirar_monto(&yo, &monto);
+        monto
+    } else {
+        let entregado = boveda.retirar(&yo, &t.shares_boveda);
+        t.shares_boveda = 0;
+        entregado
     }
 }
 
