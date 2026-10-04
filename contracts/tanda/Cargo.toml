@@ -15,3 +15,5 @@ soroban-sdk = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 # En las pruebas desplegamos también la bóveda simulada para probar todo junto.
 boveda_simulada = { path = "../boveda_simulada" }
+# M2: el historial crediticio, para probar los ganchos de punta a punta.
+historial = { path = "../historial" }

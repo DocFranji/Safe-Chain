@@ -98,6 +98,10 @@ pub enum Error {
     SinDeuda = 14,      // esa persona no tiene deuda en esta tanda
     PagoExcesivo = 15,  // el monto es mayor que la deuda
     MontoInvalido = 16, // el monto debe ser mayor que cero
+    // --- M2: historial crediticio (20–29). Sin `///` por la misma razón. ---
+    HistorialNoConfigurado = 20, // no hay historial configurado o no responde
+    PuntajeInsuficiente = 21,    // la tanda pide un puntaje mínimo que no alcanza
+    RequisitosBloqueados = 22,   // la tanda ya no está abierta o ya tiene miembros
 }
 
 // ---------------------------------------------------------------------------
@@ -136,4 +140,53 @@ pub enum ClaveM1 {
     BovedaDe(u32),
     /// Deuda del miembro en la tanda `id` (solo existe si alguna vez debió algo).
     DeudaDe(u32, Address),
+}
+
+// ---------------------------------------------------------------------------
+// --- M2: historial crediticio ---
+// ---------------------------------------------------------------------------
+
+/// Requisitos de historial de una tanda (`configurar_requisitos`). Por defecto: ninguno.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Requisitos {
+    /// Puntaje mínimo para unirse (0 = cualquiera puede).
+    pub puntaje_minimo: u32,
+    /// Dar descuento de garantía según el nivel del historial.
+    pub descuento: bool,
+}
+
+/// Lo que la tanda le reporta al contrato `historial` (mismos nombres que allá).
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Hecho {
+    CuotaATiempo,
+    CuotaTarde,
+    CuotaCubierta,
+    Moroso,
+    DeudaSaldada,
+    TandaCumplida,
+    TandaConAtrasos,
+    Cobro,
+}
+
+/// Un hecho de un miembro (mismo formato que `historial::HechoMiembro`).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HechoMiembro {
+    pub miembro: Address,
+    pub hecho: Hecho,
+    pub monto: i128,
+}
+
+/// Claves de almacenamiento de M2. Enum propio para no tocar `DataKey`.
+#[contracttype]
+#[derive(Clone)]
+pub enum ClaveM2 {
+    /// (instancia) Contrato de historial. Si no existe, los ganchos no hacen nada.
+    Historial,
+    /// Requisitos de la tanda `id` (solo existe si el creador los configuró).
+    Requisitos(u32),
+    /// (temporal) Hechos de la operación en curso de la tanda `id`, para enviarlos en un solo lote.
+    HechosPendientes(u32),
 }
