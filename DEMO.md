@@ -68,7 +68,7 @@ Al terminar, `demo.sh` imprime el puntaje de cada persona y el enlace a su pági
 Para mostrar los mecanismos de turnos, en otra terminal (unos 4 minutos por modo; imprime el enlace `…/#/tanda/<id>` de cada tanda):
 
 ```bash
-WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.sh   # o sorteo, precio, intercambio, todos
+WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.sh   # o sorteo, precio, intercambio, sellada, todos
 ```
 
 | Modo | Qué se ve | Qué decir |
@@ -77,6 +77,7 @@ WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.s
 | **Subasta** | Beto ofrece 5 %, Carla 10 % y gana: "cada uno de los demás recibió 15 TUSD en su garantía" | "Cada ronda gana quien más necesita el dinero, y paga a los demás por adelantarse. Son los chit funds de la India, pero sin administrador." |
 | **Sorteo** | "El contrato sorteó el orden de cobro" | "Nadie tiene ventaja por llegar primero. El sorteo lo hace la red." |
 | **Intercambio** | "Carla y Beto cambiaron de turno": Carla le pagó 10 TUSD | "Si a alguien le surge una emergencia, negocia el turno con otro, sin intermediarios." |
+| **Subasta sellada** (`MODO=sellada`) | "Beto selló una oferta", "Carla selló una oferta" (sin montos); en la segunda mitad revelan y gana Carla con 10 % | "Nadie ve las ofertas de los demás: nadie puede ganarle a otro por un pelo en el último segundo. Se sella, se revela y gana la mayor." |
 
 Si preguntan por la garantía en el sorteo o la subasta: "Como el turno no se sabe al unirse, todos dejan una cuota. A quien cobra primero se le aparta de su bolsa el resto de su garantía, y lo recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado."
 
@@ -102,6 +103,7 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 | Síntoma | Qué hacer |
 | --- | --- |
 | `#/estado` dice que el contrato no responde | Testnet se reinició. `bash scripts/desplegar_testnet.sh` (unos minutos) escribe `web/.env.local` y **imprime las variables para Vercel**: pégalas allí y vuelve a desplegar |
+| `#/estado` dice que la web y el contrato no coinciden | La web es de una versión y el contrato de otra (pasa si se cambia el contrato sin actualizar Vercel, o al revés). Si el contrato es el nuevo, revisa que `VITE_TANDA_ID` en Vercel sea el que imprimió `desplegar_testnet.sh` y vuelve a desplegar la web; si no, despliega el contrato de esta versión con ese script |
 | Los nombres salen como `GADM…TVPD` en vez de Ana | Falta `VITE_NOMBRES` en Vercel (lo imprime el script de despliegue) |
 | El script se corta a la mitad | Corre `T --source admin -- cerrar_ronda --id <id>` (o `finalizar`) a mano, o simplemente vuelve a correr `demo.sh`: crea una tanda nueva y `#/demo` se va sola a la que está en curso |
 | Freighter da problemas | La demo proyectada **no usa billetera**: sigue igual. Solo se afecta la parte de que el jurado pruebe |

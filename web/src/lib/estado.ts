@@ -1,7 +1,9 @@
 // Chequeo previo a la demo (#/estado): ¿está todo listo? Cada punto dice qué pasa y qué hacer si falla.
 // Las funciones `evaluar...` son puras (se prueban sin red); `ejecutarChequeos` es la parte que consulta la red.
-import { FAUCET_URL, SIMBOLO } from '../config'
+import { contract, xdr } from '@stellar/stellar-sdk'
+import { FAUCET_URL, NETWORK_PASSPHRASE, RPC_URL, SIMBOLO, TANDA_ID } from '../config'
 import { direccionesBovedas, evaluarPrincipal, evaluarRapida, leerBoveda } from './bovedas'
+import { clienteLectura } from './contrato'
 import { leerTotal } from './lectura'
 import { activoToken, servidor } from './rpc'
 
@@ -48,6 +50,73 @@ export function evaluarFaucet(status: number, cuerpo: unknown): Resultado {
   }
 }
 
+// ---------------------------------------------------------------------------
+// (M3) ¿La web y el contrato desplegado coinciden?
+// Si VITE_TANDA_ID apunta a un contrato de otra versión, la web carga igual, pero lo que cambió falla
+// recién al usarlo. Se compara la interfaz del contrato desplegado (su WASM) con la del cliente
+// generado que trae la web: funciones con sus argumentos y tipos con sus campos. Los comentarios no
+// cuentan, así un cambio de texto no da un falso error.
+// ---------------------------------------------------------------------------
+
+/** Una parte de la interfaz: su nombre y una firma sin comentarios (igual firma = igual interfaz). */
+export type ParteInterfaz = { nombre: string; firma: string }
+
+const tipo = (t: xdr.ScSpecTypeDef) => t.toXdr('base64')
+const texto = (s: { toString(): string }) => s.toString()
+
+/** Firma de una entrada del spec del contrato. Los eventos no se comparan: no cambian las llamadas. */
+export function parteDeInterfaz(e: xdr.ScSpecEntry): ParteInterfaz | null {
+  switch (e.type) {
+    case 'scSpecEntryFunctionV0': {
+      const f = e.functionV0
+      const args = f.inputs.map((a) => `${texto(a.name)}:${tipo(a.type)}`)
+      return { nombre: texto(f.name), firma: `fn(${args.join(',')})->${f.outputs.map(tipo).join(',')}` }
+    }
+    case 'scSpecEntryUdtStructV0': {
+      const u = e.udtStructV0
+      return { nombre: texto(u.name), firma: `struct{${u.fields.map((c) => `${texto(c.name)}:${tipo(c.type)}`).join(',')}}` }
+    }
+    case 'scSpecEntryUdtUnionV0': {
+      const u = e.udtUnionV0
+      const casos = u.cases.map((c) =>
+        c.type === 'scSpecUdtUnionCaseVoidV0'
+          ? texto(c.voidCase.name)
+          : `${texto(c.tupleCase.name)}(${c.tupleCase.type.map(tipo).join(',')})`,
+      )
+      return { nombre: texto(u.name), firma: `union{${casos.join(',')}}` }
+    }
+    case 'scSpecEntryUdtEnumV0': {
+      const u = e.udtEnumV0
+      return { nombre: texto(u.name), firma: `enum{${u.cases.map((c) => `${texto(c.name)}=${c.value}`).join(',')}}` }
+    }
+    case 'scSpecEntryUdtErrorEnumV0': {
+      const u = e.udtErrorEnumV0
+      return { nombre: texto(u.name), firma: `error{${u.cases.map((c) => `${texto(c.name)}=${c.value}`).join(',')}}` }
+    }
+    default:
+      return null
+  }
+}
+
+export const interfazDe = (entradas: xdr.ScSpecEntry[]): ParteInterfaz[] =>
+  entradas.map(parteDeInterfaz).filter((p): p is ParteInterfaz => p !== null)
+
+/** Compara lo que espera la web con lo que tiene el contrato desplegado. */
+export function evaluarInterfaz(desplegada: ParteInterfaz[], esperada: ParteInterfaz[]): Resultado {
+  const tiene = new Set(desplegada.map((p) => `${p.nombre}|${p.firma}`))
+  const distintas = esperada.filter((p) => !tiene.has(`${p.nombre}|${p.firma}`)).map((p) => p.nombre)
+  if (distintas.length === 0) {
+    return { nivel: 'ok', detalle: `Coinciden: el contrato tiene las ${esperada.length} funciones y tipos que usa esta web.` }
+  }
+  const lista = distintas.slice(0, 5).join(', ') + (distintas.length > 5 ? ` y ${distintas.length - 5} más` : '')
+  return {
+    nivel: 'error',
+    detalle: `El contrato desplegado es de otra versión: le faltan o le cambiaron ${distintas.length === 1 ? 'una parte' : `${distintas.length} partes`} que usa esta web (${lista}).`,
+    solucion:
+      'Despliega el contrato que corresponde a esta versión de la web (bash scripts/desplegar_testnet.sh) y actualiza VITE_TANDA_ID, en Vercel y en web/.env.local. Si el contrato es el correcto, la web es de otra versión: vuelve a desplegar la web del mismo commit.',
+  }
+}
+
 async function paso(id: string, titulo: string, fn: () => Promise<Resultado>, falla: Omit<Resultado, 'detalle'>): Promise<Chequeo> {
   try {
     return { id, titulo, ...(await fn()) }
@@ -84,6 +153,20 @@ export function ejecutarChequeos(): Promise<Chequeo[]> {
         return { nivel: 'ok', detalle: n === 1 ? 'Responde. Hay 1 tanda creada.' : `Responde. Hay ${n} tandas creadas.` }
       },
       { nivel: 'error', solucion: REDESPLEGAR },
+    ),
+    paso(
+      'interfaz',
+      'La web y el contrato coinciden',
+      async () => {
+        const desplegado = await contract.Client.from({
+          contractId: TANDA_ID,
+          networkPassphrase: NETWORK_PASSPHRASE,
+          rpcUrl: RPC_URL,
+          allowHttp: RPC_URL.startsWith('http://'),
+        })
+        return evaluarInterfaz(interfazDe(desplegado.spec.entries), interfazDe(clienteLectura().spec.entries))
+      },
+      { nivel: 'aviso', solucion: 'No se pudo leer el contrato desplegado para compararlo con la web. Vuelve a revisar en un rato.' },
     ),
     paso(
       'token',

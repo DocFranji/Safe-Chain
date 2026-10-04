@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, historial } from './mock.mjs'
+import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, historial } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -389,7 +389,8 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForSelector('.estado-resumen', { timeout: 20000 })
   const t = await texto(page)
   check('Estado: todo en verde -> "Todo listo para la demo"', /Todo listo para la demo/.test(t), t.slice(0, 500))
-  check('Estado: 8 puntos revisados (6 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 8, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado: 9 puntos revisados (7 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 9, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado (M3): la web y el contrato desplegado coinciden', /Coinciden: el contrato tiene las \d+ funciones y tipos que usa esta web/.test(t), t.slice(0, 900))
   // M1: las dos bóvedas, con lo libre para intereses (no el saldo bruto, que incluye las garantías).
   check('M1 estado: la principal rinde al ritmo real y dice lo libre y para cuánto alcanza', /Rinde al ritmo de la vida real \(5 % al año\)\. Tiene 3[\s.\u00a0\u202f]?99\d(,\d\d)? TUSD libres para pagar intereses: con las garantías de hoy alcanzan para más de 10 años/.test(t), t.slice(0, 900))
   check('M1 estado: la rápida dice su acelerador y cuánto rinde hoy una demo de 5 minutos', /1 minuto equivale a 36,5 días de intereses\. Una demo de 5 minutos rinde hoy ~2,3\d TUSD por cada 100\. Tiene 9[\s.\u00a0\u202f]?3[67]\d(,\d\d)? TUSD libres/.test(t), t.slice(0, 900))
@@ -452,6 +453,21 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.goto(BASE + '#/tandas')
   await page.waitForSelector('.aviso.error', { timeout: 15000 }).catch(() => {})
   check('Lobby con el contrato caído: muestra un error (no queda en blanco)', (await page.locator('.aviso.error[role=alert]').count()) >= 1)
+  await page.close()
+}
+{
+  // (M3) VITE_TANDA_ID apunta a un contrato de otra versión: le falta una función y un tipo cambió.
+  const est = nuevoEstado()
+  est.interfazSin = ['crear_tanda_avanzada', 'OpcionesTanda']
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/estado')
+  await page.waitForSelector('.estado-resumen', { timeout: 20000 })
+  const t = await texto(page)
+  check('Estado (M3): contrato de otra versión -> "Hay 1 problema"', /Hay 1 problema/.test(t), t.slice(0, 600))
+  check('Estado (M3): dice qué no coincide', /otra versión/.test(t) && /crear_tanda_avanzada/.test(t) && /OpcionesTanda/.test(t))
+  check('Estado (M3): dice qué hacer (VITE_TANDA_ID)', /VITE_TANDA_ID/.test(t))
+  await shot(page, '15b-estado-otra-version')
+  check('Estado (M3): sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 
@@ -696,6 +712,158 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   check('Historial + turnos: el botón usa la garantía con descuento', await page.getByRole('button', { name: 'Unirme en el turno 1 y dejar 180 TUSD' }).isEnabled())
   await shot(page, 'm2m3-01-precio-con-historial')
   check('Historial + turnos: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M3: subasta con ofertas selladas
+{
+  // Crear: la casilla aparece en la subasta.
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  await page.locator('.modo', { hasText: 'Subasta' }).click()
+  const casilla = page.getByLabel(/Ofertas selladas/)
+  check('Sellada/crear: la subasta ofrece ofertas selladas (apagadas por defecto)', (await casilla.count()) === 1 && !(await casilla.isChecked()))
+  await casilla.check()
+  check('Sellada/crear: explica que se revela desde el mismo navegador', /Se revela desde el mismo navegador/.test(await texto(page)))
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  check('Sellada/crear: en otros modos no aparece', (await page.getByLabel(/Ofertas selladas/).count()) === 0)
+  check('Sellada/crear: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Primera mitad: se sella. Beto ya selló; nadie ve porcentajes.
+  const est = conSubastaSellada(nuevoEstadoTurnos(), 'sellar')
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  const t = await texto(page)
+  check('Sellada/sellar: cuántos sellaron, sin porcentajes', /Ofertas selladas\s*1 persona/.test(t) && !/Beto: 5 %/.test(t), t.slice(0, 900))
+  check('Sellada/sellar: cuánto queda para sellar', /Se sella durante/.test(t))
+  const boton = page.getByRole('button', { name: 'Sellar mi oferta' })
+  check('Sellada/sellar: sin porcentaje no se puede sellar', await boton.isDisabled())
+  await page.locator('#oferta-sellada').fill('8')
+  check('Sellada/sellar: con 8 % se habilita "Sellar mi oferta"', await boton.isEnabled())
+  check('Sellada/sellar: avisa que la clave queda en este navegador', /revélala desde aquí mismo/.test(await texto(page)))
+  await page.locator('#oferta-sellada').fill('31')
+  check('Sellada/sellar: más del máximo (30 %) no se puede', await boton.isDisabled())
+  await shot(page, 'm3-12-sellada-sellar')
+  check('Sellada/sellar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Segunda mitad: "yo" sellé 8 % desde este navegador y puedo revelarla; Beto ya reveló 5 %.
+  const est = conSubastaSellada(nuevoEstadoTurnos(), 'revelar')
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.addInitScript(
+    ({ k, v }) => localStorage.setItem(k, v),
+    { k: `rounda:oferta-sellada:${TANDA_ID}:9:0:${ME}`, v: JSON.stringify({ bps: 800, sal: '07'.repeat(32) }) },
+  )
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  const t = await texto(page)
+  check('Sellada/revelar: muestra la mejor revelada', /Mejor oferta revelada\s*Beto: 5 % menos/.test(t), t.slice(0, 900))
+  check('Sellada/revelar: botón "Revelar mi oferta (8 %)"', await page.getByRole('button', { name: 'Revelar mi oferta (8 %)' }).isEnabled())
+  await shot(page, 'm3-13-sellada-revelar')
+  check('Sellada/revelar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Segunda mitad, pero sellé desde otro navegador: no hay clave aquí.
+  const est = conSubastaSellada(nuevoEstadoTurnos(), 'revelar')
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  check('Sellada/revelar sin clave: lo explica', /Sellaste tu oferta desde otro navegador/.test(await texto(page)))
+  check('Sellada/revelar sin clave: no ofrece revelar', (await page.getByRole('button', { name: /Revelar mi oferta/ }).count()) === 0)
+  const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }))
+  check('Sellada (390 px): sin desborde horizontal', ancho.sw <= ancho.cw + 1, JSON.stringify(ancho))
+  check('Sellada/revelar sin clave: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M2 + M3: los primeros turnos piden historial
+{
+  // Crear: la opción aparece donde se elige turno (con historial activo) y marca los turnos en la tabla.
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  check('Primeros con historial: no se ofrece en orden de llegada', (await page.locator('.primeros-historial').count()) === 0)
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  await page.waitForSelector('.primeros-historial', { timeout: 15000 }).catch(() => {})
+  check('Primeros con historial: se ofrece en precio por turno', (await page.locator('.primeros-historial').count()) === 1)
+  await page.getByLabel(/Los primeros turnos, solo para quien tenga buen historial/).check()
+  const t = await texto(page)
+  check('Primeros con historial: por defecto, turnos 1 a 2 con Bronce', /Los turnos 1 a 2 solo los puede elegir quien tenga historial Bronce o mejor/.test(t), t.slice(0, 900))
+  const filas = await page.locator('.turnos-previa tbody tr').allInnerTexts()
+  check('Primeros con historial: la tabla marca los turnos 1 y 2', /Bronce/.test(filas[0] ?? '') && /Bronce/.test(filas[1] ?? '') && !/Bronce/.test(filas[2] ?? ''), JSON.stringify(filas))
+  check('Primeros con historial: con Bronce (tengo 110) me uno en el turno 1', /dejarás 200 TUSD de garantía y cobrarás en la ronda 1/.test(t))
+  await page.locator('#primeros-nivel').selectOption('300')
+  await page.getByText(/cobrarás en la ronda 3/).waitFor({ timeout: 15000 }).catch(() => {})
+  const t2 = await texto(page)
+  check('Primeros con historial: se puede pedir Plata', /historial Plata o mejor/.test(t2))
+  check('Primeros con historial: con Plata (tengo 110) me uno en el primer turno abierto: el 3', /dejarás 100 TUSD de garantía y cobrarás en la ronda 3/.test(t2), t2.slice(0, 1200))
+  check('Primeros con historial: el botón de crear sigue habilitado', !(await page.locator('button[type=submit]').isDisabled()))
+  await shot(page, 'm2m3-02-crear-primeros-con-historial')
+  check('Primeros con historial (crear): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // A 390 px, con la opción abierta, nada se desborda.
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  await page.getByLabel(/Los primeros turnos, solo para quien tenga buen historial/).check()
+  await page.waitForTimeout(400)
+  const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }))
+  check('Primeros con historial (390 px): sin desborde horizontal', ancho.sw <= ancho.cw + 1, JSON.stringify(ancho))
+  await shot(page, 'm2m3-04-crear-primeros-390')
+  check('Primeros con historial (390 px): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Sin historial conectado (contrato anterior a M2), la opción no existe.
+  const est = nuevoEstadoTurnos()
+  est.historialActivo = false
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  await page.waitForTimeout(800)
+  check('Primeros con historial: sin historial no se ofrece', (await page.locator('.primeros-historial').count()) === 0)
+  await page.close()
+}
+{
+  // Elegir turno: "yo" tengo 110 puntos y el turno 1 pide Bronce (100): lo puedo elegir.
+  const est = conPrimerosConHistorial(nuevoEstadoTurnos(), 8, 1, 100)
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  await page.getByText(/tienes 110/).waitFor({ timeout: 15000 }).catch(() => {})
+  const t = await texto(page)
+  check('Turno con historial (alcanza): lo explica con mi puntaje', /El turno 1 pide historial Bronce o mejor \(100 puntos\): tienes 110/.test(t), t.slice(0, 900))
+  const casilla = page.locator('.turno-casilla').nth(0)
+  check('Turno con historial (alcanza): la casilla dice "Pide Bronce" y se puede elegir', /Pide Bronce/.test(await casilla.innerText()) && !(await casilla.isDisabled()))
+  check('Turno con historial (alcanza): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Si pide Plata (300) y tengo 110, el turno 1 no se puede elegir; el 3 sí.
+  const est = conPrimerosConHistorial(nuevoEstadoTurnos(), 8, 1, 300)
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  await page.getByText(/tienes 110/).waitFor({ timeout: 15000 }).catch(() => {})
+  const casillas = page.locator('.turno-casilla')
+  check('Turno con historial (no alcanza): el turno 1 no se puede elegir', await casillas.nth(0).isDisabled())
+  check('Turno con historial (no alcanza): el turno 3 sí', !(await casillas.nth(2).isDisabled()))
+  check('Turno con historial (no alcanza): dice cuánto tengo', /historial Plata o mejor \(300 puntos\): tienes 110/.test(await texto(page)))
+  await shot(page, 'm2m3-03-turno-con-historial')
+  check('Turno con historial (no alcanza): sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 

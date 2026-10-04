@@ -30,5 +30,9 @@ export const Error = {
     36: { message: "SinSubasta" },
     37: { message: "IntercambioInvalido" },
     38: { message: "PropuestaExistente" },
-    39: { message: "SinPropuesta" }
+    39: { message: "SinPropuesta" },
+    40: { message: "TurnoExigeHistorial" },
+    41: { message: "FaseEquivocada" },
+    42: { message: "SelloInvalido" },
+    43: { message: "SelloRepetido" }
 };

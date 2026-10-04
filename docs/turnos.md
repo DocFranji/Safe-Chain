@@ -36,6 +36,8 @@ pub struct OpcionesTanda {
     pub permitir_intercambio: bool,
     pub prima_max_bps: u32,      // PrecioPorTurno: prima del primer turno, sobre la bolsa (máx. 2 000 = 20 %)
     pub descuento_max_bps: u32,  // Subasta: descuento máximo que se puede ofrecer (máx. 5 000 = 50 %)
+    pub primeros_con_historial: u32, // Eleccion / PrecioPorTurno: cuántos de los primeros turnos piden historial (0 = ninguno)
+    pub puntaje_primeros: u32,       // puntaje de historial (M2) que piden esos turnos
 }
 
 pub struct Oferta { pub ronda: u32, pub miembro: Address, pub descuento_bps: u32 }
@@ -84,7 +86,7 @@ Todas se renuevan con `almacenamiento::renovar_para_tanda` de M1 (ACORDADO) al l
 
 `unirse(id, miembro)` se mantiene: en `Eleccion`/`PrecioPorTurno` toma el turno libre más bajo; en `Sorteo`/`Subasta` entra sin turno.
 
-### Errores (rango 30–49; uso 30–39)
+### Errores (rango 30–49; uso 30–40)
 
 | Código | Nombre | Mensaje en la web |
 | --- | --- | --- |
@@ -98,12 +100,13 @@ Todas se renuevan con `almacenamiento::renovar_para_tanda` de M1 (ACORDADO) al l
 | 37 | `IntercambioInvalido` | Ese intercambio no es posible: los dos turnos deben ser futuros y ninguno puede estar en mora. |
 | 38 | `PropuestaExistente` | Ya tienes una propuesta de intercambio abierta. Retírala antes de hacer otra. |
 | 39 | `SinPropuesta` | No hay una propuesta de intercambio pendiente entre ustedes. |
+| 40 | `TurnoExigeHistorial` | Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en «Mi historial». |
 
 ### Eventos (bloque M3 de `eventos.rs`; todos con tópicos `[nombre, id]`, como los de hoy, para que la web los lea con el mismo filtro)
 
 | Tópico | Datos | Frase en la web |
 | --- | --- | --- |
-| `opciones` | modo, permitir_intercambio, prima_max_bps, descuento_max_bps | "Turnos: precio por turno (el primero paga 10 %)" |
+| `opciones` | modo, permitir_intercambio, prima_max_bps, descuento_max_bps, primeros_con_historial, puntaje_primeros | "Turnos: precio por turno (el primero paga 10 %; los turnos 1 a 2 piden historial de 100 puntos o más)" |
 | `sorteo` | orden: Vec<Address> | "El contrato sorteó el orden: 1 Carla, 2 Ana, 3 Beto" |
 | `oferta` | ronda, miembro, descuento_bps, descuento | "Beto ofrece recibir 8 % menos para cobrar en la ronda 2" |
 | `subasta` | ronda, ganador, descuento, dividendo, por_respaldo | "Beto ganó la ronda 2 con 8 % de descuento: cada uno recibió 12 TUSD" |
@@ -179,7 +182,7 @@ Cada quien elige un turno libre al unirse (`unirse_en_turno`), gratis, y ve la g
 - Si la bolsa de un turno queda retenida (beneficiario moroso), la prima igual se aparta, así el fondo sigue cuadrando. Por seguridad, si al final quedara algo en el fondo, pasa al retenido que se reparte en `finalizar`.
 - Ejemplo (3 personas, bolsa 300, prima máxima 8 %): turno 1 cobra **276** (paga 24), turno 2 cobra **300**, turno 3 cobra **324** (gana 24). Con 12 personas y 10 %: el turno 1 paga 120 y el 12 gana 120.
 - Si dos quieren el mismo turno, gana quien firma primero (`TurnoOcupado` para el segundo, que ve los turnos libres actualizados).
-- Extra (después del MVP): con M2, exigir un nivel mínimo para los primeros turnos, como MoneyFellows.
+- **Historial mínimo para los primeros turnos** (con M2, como MoneyFellows; ✅ aprobado por @DocFranji): ver §4.7.
 
 ### 4.4 Sorteo verificable (`Sorteo`)
 
@@ -200,7 +203,7 @@ Cada quien elige un turno libre al unirse (`unirse_en_turno`), gratis, y ve la g
   - El **descuento se reparte en partes iguales entre los demás miembros que no están en mora, como dividendo que se suma a su garantía.** Va a la bóveda en un solo depósito y vuelve en `finalizar` con rendimiento, sin cambiar `finalizar`. Además protege al grupo: si alguien deja de pagar, su dividendo cubre primero. El residuo del redondeo va al último que lo recibe; si nadie puede recibirlo, va al retenido.
 - En la última ronda solo queda una persona: cobra la bolsa completa, sin subasta (`SinSubasta`).
 - Ejemplo (3 personas, cuota 100, cobertura 100 %): en la ronda 1 Beto ofrece 5 % (15). Al cerrar, Beto recibe 300 − 15 = 285, de los que se apartan 100 de garantía → **185 en efectivo**. Ana y Carla reciben 7,5 cada una en su garantía.
-- **Ofertas selladas** (comprometer y revelar) quedan como extra. Riesgo documentado de las abiertas: se puede mejorar una oferta en el último segundo (como en cualquier subasta abierta).
+- **Ofertas abiertas (por defecto):** se puede mejorar una oferta en el último segundo, como en cualquier subasta abierta. Para evitarlo están las ofertas selladas (§4.8).
 
 ### 4.6 Intercambio de turnos (`permitir_intercambio`)
 
@@ -212,6 +215,45 @@ Cada quien elige un turno libre al unirse (`unirse_en_turno`), gratis, y ve la g
 - Al cerrar cada ronda, las propuestas que ya no se pueden aceptar (un turno pasó o alguien cayó en mora) se retiran solas y la compensación guardada vuelve a quien la dejó. Así nunca queda dinero atrapado al terminar.
 
 ---
+
+### 4.7 Historial mínimo para los primeros turnos (con M2)
+
+Quien cobra primero recibe la bolsa antes de terminar de pagar: en la práctica, el grupo le presta. Por eso MoneyFellows le da los primeros turnos a quien tiene mejor historial. Aquí es opcional y viene apagado.
+
+- **Opciones:** `primeros_con_historial = k` y `puntaje_primeros = p`. Los turnos `0..k` solo los toma quien tenga al menos `p` puntos en el historial de M2 (`HistorialClient::puntaje`, el mismo que usa `puede_unirse`). La web ofrece los niveles de M2: Bronce 100, Plata 300 y Oro 600.
+- **Dónde aplica:** solo donde cada quien elige su turno (`Eleccion` y `PrecioPorTurno`). En sorteo y subasta el turno no se elige, y en llegada no tiene sentido. Al crear se valida: `k < n` (al menos un turno queda para cualquiera), los dos valores van juntos (`k > 0` ⇔ `p > 0`) y la tanda necesita el historial conectado (`HistorialNoConfigurado`, error 20 de M2).
+- **Cuándo se revisa:**
+  - `unirse_en_turno` a un turno protegido: si el puntaje no alcanza, falla con **`TurnoExigeHistorial` (40)**.
+  - `unirse` sin elegir: da el primer turno libre **que no pide historial**. Los protegidos solo se toman eligiéndolos. Si ya solo quedan protegidos, falla con 40, y lo mismo devuelve `colateral_siguiente`.
+  - Intercambios: nadie llega por un intercambio a un turno protegido sin el puntaje. Se revisa al proponer y otra vez al aceptar, porque el puntaje pudo bajar en el medio.
+- **Falla cerrado:** si el historial no responde (por ejemplo, el admin lo desconectó), no se puede comprobar el puntaje y los turnos protegidos dan `HistorialNoConfigurado`. Los demás turnos siguen abiertos.
+- **No mueve dinero.** Solo decide quién puede tomar cada turno: la garantía, las primas y todo lo demás quedan igual.
+- **Web:**
+  - Al crear, la casilla "Los primeros turnos, solo para quien tenga buen historial" (turnos 1 a k y nivel) aparece solo en "Precio por turno" y "Elegir e intercambiar", y solo si hay historial conectado. La tabla marca esos turnos con su nivel.
+  - Quien crea y se une sin alcanzar el nivel queda en el primer turno abierto, y el texto lo dice ("cobrarás en la ronda 3").
+  - En la rejilla de turnos, los protegidos dicen "Pide Bronce" y se desactivan si tu puntaje no alcanza ("tienes 110").
+
+### 4.8 Ofertas selladas en la subasta (comprometer y revelar)
+
+En la subasta abierta, quien oferta al final ve las ofertas de los demás y puede ganarles por poco en el último segundo. Con ofertas selladas, nadie ve los montos hasta que se cierran las ofertas. Es opcional (`ofertas_selladas: bool` en `OpcionesTanda`, solo en la subasta) y la subasta abierta sigue siendo la de siempre.
+
+- **Primera mitad de cada ronda (sellar):** `ofertar_sellada(id, miembro, sello)`.
+  - `sello = sha256(descuento_bps en 4 bytes big-endian ‖ sal de 32 bytes al azar)`. El contrato guarda solo el sello, así que nadie ve el monto.
+  - Pueden sellar los mismos que pueden ofertar: sin turno, al día y antes de la última ronda. Cada quien puede cambiar su sello mientras dure esta mitad.
+  - **Anticopia:** un sello no se puede repetir en la ronda (`SelloRepetido`). Así nadie copia el sello de otro para revelar lo mismo después.
+- **Segunda mitad, hasta que vence la ronda (revelar):** `revelar_oferta(id, miembro, descuento_bps, sal)`.
+  - El contrato recalcula el sha256 y lo compara con el sello (`SelloInvalido` si no coincide o si no selló).
+  - La oferta tiene que estar dentro del máximo (`OfertaInvalida`) y quien la revela, al día (`NoPuedeOfertar`).
+  - Gana el mayor descuento. **En empate, desempata el orden de respaldo** (sorteado al llenarse), no quién reveló primero: así nadie tiene que apurarse.
+  - Revelar fuera de su mitad da `FaseEquivocada`.
+- **Al cerrar la ronda:** la misma resolución de la subasta abierta (§4.5). Las ofertas no reveladas no cuentan, y no hay multa: no se deja nada al sellar.
+- `ofertar` (abierta) no aplica en una subasta sellada (`ModoNoPermite`).
+- **La sal la guarda la web en el navegador de quien oferta.** Sin ella no se puede revelar: la pantalla lo dice antes de sellar. Las rondas tienen al menos 60 s; en la demo rápida de 1 minuto son 30 s para sellar y 30 s para revelar.
+- **Interfaz nueva:**
+  - funciones `ofertar_sellada` y `revelar_oferta`;
+  - `EstadoTurnos.sellos`: quiénes sellaron en la ronda en curso, sin montos;
+  - evento `sello` (id, ronda, miembro). Al revelar se emite el evento `oferta` de siempre;
+  - errores 41 `FaseEquivocada`, 42 `SelloInvalido` y 43 `SelloRepetido`.
 
 ## 5. Seguridad, dinero y presupuesto
 
@@ -259,6 +301,13 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 - `Rueda.tsx` y `ListaMiembros.tsx`: "turno por sortear" o "por subastar" y el orden final.
 - `historia.ts`: frases de los eventos nuevos. `contrato.ts`: mensajes 30–39. `e2e`: `mock.mjs` con `get_estado_turnos` y `cotizar_turno`, y un escenario por modo a 390 px.
 - `scripts/demo_turnos.sh MODO=sorteo|precio|subasta|intercambio` para mostrar cada modo desde la terminal.
+- **`#/estado`: "La web y el contrato coinciden"** (mejora aprobada por ORQ para la calidad del despliegue). Si `VITE_TANDA_ID` apunta a un contrato de otra versión, la web carga igual, y lo que cambió falla recién cuando alguien lo usa. El chequeo funciona así:
+  - Baja el WASM del contrato desplegado (`contract.Client.from`).
+  - Compara su interfaz con la del cliente generado que trae la web: cada función con sus argumentos y sus resultados, y cada tipo con sus campos o casos.
+  - No cuenta los comentarios (un cambio de texto no da error) ni los eventos.
+  - Si algo falta o cambió, es un error que nombra esas partes y dice qué hacer: desplegar el contrato de esta versión y actualizar `VITE_TANDA_ID`, o volver a desplegar la web del mismo commit. Si no se puede leer el contrato, queda en aviso.
+  - Es su propio `paso(...)` en `web/src/lib/estado.ts`, sin tocar los demás.
+  - Probado contra testnet real: el contrato de producción de hoy da error (27 partes) y un contrato desechable con su propia versión de la web da "Coinciden".
 
 ## 7. Pruebas (`contracts/tanda/src/test_turnos.rs`)
 
@@ -283,13 +332,13 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 | Funciones públicas y consultas | `contracts/tanda/src/turnos_acciones.rs` |
 | Tipos, errores 30–39 y eventos | bloques `// --- M3 ---` de `tipos.rs` y `eventos.rs` |
 | Flujo principal | `lib.rs`: `unirse` → `unirse_en(..., turno)`; regla 3 de `cerrar_ronda`. `consultas.rs`: `colateral_siguiente` |
-| Pruebas | `contracts/tanda/src/test_turnos.rs` (27) |
+| Pruebas | `contracts/tanda/src/test_turnos.rs` (35) |
 | Web | `web/src/lib/turnos.ts` (+ pruebas), `components/OpcionesTurnos.tsx`, `components/AccionesTurnos.tsx`, `historia.ts`, `contrato.ts`, `Rueda.tsx`, `ListaMiembros.tsx` |
 | Navegador | `web/e2e/mock.mjs` (`nuevoEstadoTurnos()`), escenarios "Turnos" en `run.mjs` |
 | Demo por terminal | `scripts/demo_turnos.sh` |
 
 ```bash
-cargo test -p tanda test_turnos -- --nocapture   # 27 pruebas de M3
+cargo test -p tanda test_turnos -- --nocapture   # 35 pruebas de M3
 bash scripts/verificar.sh                        # toda la Definición de Terminado
 MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después de desplegar_testnet.sh)
 ```
@@ -298,22 +347,26 @@ MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después 
 
 | Operación | Instrucciones | Lecturas | Escrituras |
 | --- | --- | --- | --- |
-| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 6,8 M | 46 | 22 |
-| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 5,3 M | 57 | 8 |
-| Subasta: último `unirse` (sortea el orden de respaldo) | 4,4 M | 46 | 11 |
-| Subasta: `ofertar` | 1,0 M | 8 | 2 |
-| Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11 | 20,7 M | 57 | 21 |
-| Precio por turno: último `unirse_en_turno` | 4,5 M | 46 | 11 |
-| Precio por turno: `cerrar_ronda` con prima | 4,2 M | 55 | 5 |
-| `proponer_intercambio` / `aceptar_intercambio` | 1,3 M / 1,6 M | 12 | 4 / 7 |
-| Subasta + deudas (M1): `cerrar_ronda` con casi nadie al día | 28,9 M | 57 | 30 |
-| **Subasta + deudas (M1) + historial (M2): `cerrar_ronda` con casi nadie al día** | **38,7 M** | **72** | **42** |
-| Subasta + historial (M2): `cerrar_ronda` con todos al día | 13,4 M | 61 | 23 |
+| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 7,0 M | 48 | 22 |
+| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 5,5 M | 59 | 8 |
+| Subasta: último `unirse` (sortea el orden de respaldo) | 4,6 M | 48 | 11 |
+| Subasta: `ofertar` | 1,1 M | 8 | 2 |
+| Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11 | 20,8 M | 59 | 21 |
+| Precio por turno: último `unirse_en_turno` | 4,9 M | 48 | 11 |
+| Precio por turno: `cerrar_ronda` con prima | 4,4 M | 57 | 5 |
+| `proponer_intercambio` / `aceptar_intercambio` | 1,4 M / 1,8 M | 12 / 13 | 4 / 7 |
+| Subasta + deudas (M1): `cerrar_ronda` con casi nadie al día | 29,1 M | 59 | 30 |
+| **Subasta + deudas (M1) + historial (M2): `cerrar_ronda` con casi nadie al día** | **39,0 M** | **74** | **42** |
+| Subasta + historial (M2): `cerrar_ronda` con todos al día | 13,6 M | 63 | 23 |
 | Subasta + historial (M2): `finalizar` con 12 que cumplieron | 19,8 M | 64 | **43** |
+| Precio por turno con historial mínimo en 11 turnos: último `unirse_en_turno` (pregunta el puntaje) | 5,7 M | 51 | 11 |
+| Ídem: `proponer_intercambio` / `aceptar_intercambio` entre turnos protegidos | 2,4 M / 2,8 M | 16 / 17 | 4 / 7 |
+| Subasta sellada de 12: `ofertar_sellada` (el sello 12 se compara con 11) / `revelar_oferta` con empate | 1,2 M / 1,3 M | 9 / 11 | 2 / 2 |
+| Subasta sellada de 12: `cerrar_ronda` | 10,8 M | 59 | 22 |
 
 Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al anotar a las 12 personas en el `finalizar`, igual que en cualquier tanda de 12 con historial.
 
-**Tamaño:** `tanda.wasm` pesa 73 171 bytes con M1 + M2 + M3 (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes).
+**Tamaño:** `tanda.wasm` pesa 80 034 bytes con M1 + M2 + M3, el historial mínimo para los primeros turnos y las ofertas selladas (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes). Con las ofertas selladas, al llenarse la tanda y en cada cierre se leen 2 entradas más (se revisa si existen las dos claves de las ofertas selladas para renovarlas, aunque la tanda no las use): el máximo de lecturas pasa de 72 a 74. Ninguna de las tres mejoras agrega escrituras.
 
 ### Cómo se combina con M1 (deudas) y M2 (historial)
 
@@ -344,3 +397,17 @@ Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al
 - `ofertar` ([tx](https://stellar.expert/explorer/testnet/tx/01a079ceef400ba360a4b27095844628d5f6e42bce267bffa0db4b1d224988e3)).
 
 Con esto quedan probadas la codificación de `OpcionesTanda` (el enum `modo`), las firmas anidadas (la compensación sale de quien firma) y la lectura de `get_estado_turnos` y `cotizar_turno`. Lo único que no se probó es la ventana de Freighter.
+
+**Con M1 + M2 + M3 juntos y el historial mínimo, también en testnet** (dom 4 oct, contratos desechables desplegados desde esta rama):
+- `MODO=precio bash scripts/demo_turnos.sh` corrió completa con el contrato combinado. El evento `opciones` ya trae los campos nuevos y se cobró la prima de 24 ([tx](https://stellar.expert/explorer/testnet/tx/9f8c281e075185e33499b5eb1ed5701b8394115d8f7f9322068cbed4b3447e7f)).
+- Tanda de precio por turno con el turno 1 para historial Bronce ([tx](https://stellar.expert/explorer/testnet/tx/4f0de718a1205f726e4c336717cf3bfc12eea42831e5d63f326c07c99276f378)):
+  - Beto, con 80 puntos, pidió el turno 1 y la simulación falló con `Error(Contract, #40)`.
+  - Al unirse sin elegir, quedó en el turno 2 ([tx](https://stellar.expert/explorer/testnet/tx/cd20e59bea2db9948c9202822d72e89bc4b6202944807c236bcc74de227426f5)).
+  - Ana sumó 20 puntos (100 en total) y tomó el turno 1, con 200 de garantía ([tx](https://stellar.expert/explorer/testnet/tx/27439dd9c1452b7a9339b0fed54acdb5fdb3cf19b7e72a98725862f91172340f)).
+
+**Ofertas selladas, en testnet** (dom 4 oct, contratos desechables con M1 + M2 + M3). Los sellos se calcularon aparte con Python:
+- En una subasta sellada de 3 personas y rondas de 60 s, Beto selló 10 % ([tx](https://stellar.expert/explorer/testnet/tx/7eec3b6a891336a6356b9b54484c49a76f769b6ffb7618025e28ca48c19f3b84)) y Carla 5 %.
+- Revelar antes de la mitad dio `#41`, y revelar con otra sal, `#42`.
+- En la segunda mitad revelaron los dos ([tx de Beto](https://stellar.expert/explorer/testnet/tx/66fab2b0f5c2177e9b9cab2c40dc821895ab7c691b6b0e2bfe9a7b13fdb1bff4)).
+- Al cerrar ganó Beto: recibió 30 de descuento y cada uno de los otros dos, 15 de dividendo ([tx](https://stellar.expert/explorer/testnet/tx/39947e5f3ce9a9ac74aa03b3b7fd7e34c8a5543754ffdcdd7be9c030c32044b3)).
+- **Con el código de la web** (WebCrypto y el cliente generado, firmando con una llave de prueba): sello ([tx](https://stellar.expert/explorer/testnet/tx/c72d6f3cb3c3f392085a665fc473f20f50f72156722e83ad372969188bbc620f)) y revelación de 12 % aceptada ([tx](https://stellar.expert/explorer/testnet/tx/2cc7cdf6c0977f6c63f4d298026ab74f8242de882381c4201ee0ff7317984c9e)).

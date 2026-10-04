@@ -463,6 +463,10 @@ impl Mundo {
             } else {
                 0
             },
+            // Opciones de M3 que vinieron después de estas pruebas: apagadas.
+            primeros_con_historial: 0,
+            puntaje_primeros: 0,
+            ofertas_selladas: false,
         }
     }
 
@@ -494,6 +498,9 @@ impl Mundo {
                 permitir_intercambio: true,
                 prima_max_bps: 0,
                 descuento_max_bps: 1_000,
+                primeros_con_historial: 0,
+                puntaje_primeros: 0,
+                ofertas_selladas: false,
             };
             let r = self.tanda.try_crear_tanda_avanzada(
                 &creador,

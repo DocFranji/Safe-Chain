@@ -11,7 +11,7 @@ use crate::*;
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
     token::StellarAssetClient,
-    Address, Map,
+    vec, Address, Bytes, BytesN, Env, Map, Vec,
 };
 use std::vec::Vec as SVec;
 
@@ -25,6 +25,37 @@ fn opciones(modo: ModoTurnos) -> OpcionesTanda {
         permitir_intercambio: false,
         prima_max_bps: 0,
         descuento_max_bps: 0,
+        primeros_con_historial: 0,
+        puntaje_primeros: 0,
+        ofertas_selladas: false,
+    }
+}
+
+/// Subasta con ofertas selladas (comprometer y revelar).
+fn sellada(descuento_max_bps: u32) -> OpcionesTanda {
+    OpcionesTanda {
+        ofertas_selladas: true,
+        ..subasta(descuento_max_bps)
+    }
+}
+
+/// sello = sha256(descuento_bps en 4 bytes big-endian ‖ sal), igual que `revelar_oferta` y la web.
+fn sello(env: &Env, descuento_bps: u32, sal: &BytesN<32>) -> BytesN<32> {
+    let mut d = Bytes::from_array(env, &descuento_bps.to_be_bytes());
+    d.append(&Bytes::from(sal.clone()));
+    env.crypto().sha256(&d).to_bytes()
+}
+
+fn sal(env: &Env, n: u8) -> BytesN<32> {
+    BytesN::from_array(env, &[n; 32])
+}
+
+/// Los primeros `k` turnos piden `puntaje` de historial (M2).
+fn primeros(o: OpcionesTanda, k: u32, puntaje: u32) -> OpcionesTanda {
+    OpcionesTanda {
+        primeros_con_historial: k,
+        puntaje_primeros: puntaje,
+        ..o
     }
 }
 
@@ -926,6 +957,498 @@ fn intercambio_pide_las_firmas_correctas() {
 }
 
 // ===========================================================================
+// Subasta con ofertas selladas (comprometer y revelar)
+// ===========================================================================
+
+/// El mismo vector que usa la web (`web/src/lib/turnos.test.ts`), calculado aparte con Python:
+/// sha256(800 en 4 bytes big-endian ‖ 32 bytes de 7).
+#[test]
+fn subasta_sellada_vector_de_prueba() {
+    let env = Env::default();
+    let h = sello(&env, 800, &sal(&env, 7));
+    let esperado: [u8; 32] = [
+        0xec, 0x61, 0x67, 0xdf, 0x08, 0xb2, 0x66, 0x99, 0x6e, 0x12, 0x47, 0x44, 0x0f, 0x69, 0xa0,
+        0x20, 0x76, 0x68, 0x7c, 0xea, 0x91, 0x11, 0x55, 0x30, 0x5c, 0x6f, 0xee, 0xc3, 0xc5, 0xba,
+        0x88, 0xd7,
+    ];
+    assert_eq!(h.to_array(), esperado);
+}
+
+/// 4 personas, máximo 30 %. Primera mitad: Beto y Carla sellan 10 %, Dani 5 %; nadie ve montos.
+/// Segunda mitad: revelan. Beto y Carla empatan: gana quien va antes en el orden de respaldo.
+/// El resto es la subasta de siempre (dividendos, garantía) y el dinero cuadra.
+#[test]
+fn subasta_sellada_gana_la_mayor_y_el_empate_lo_decide_el_respaldo() {
+    let c = setup();
+    let id = c.crear_con(4, 10_000, &sellada(3_000));
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    let env = &c.env;
+    c.tanda
+        .ofertar_sellada(&id, beto, &sello(env, 1_000, &sal(env, 1)));
+    c.tanda
+        .ofertar_sellada(&id, carla, &sello(env, 1_000, &sal(env, 2)));
+    c.tanda
+        .ofertar_sellada(&id, dani, &sello(env, 500, &sal(env, 3)));
+    let e = c.tanda.get_estado_turnos(&id);
+    assert_eq!(e.sellos.len(), 3);
+    assert_eq!((e.mejor_postor, e.mejor_oferta_bps), (None, 0));
+    // Todavía no se puede revelar.
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, beto, &1_000, &sal(env, 1)),
+        Err(Ok(Error::FaseEquivocada))
+    );
+
+    c.avanzar(PERIODO / 2);
+    // Ya no se puede sellar.
+    assert_eq!(
+        c.tanda
+            .try_ofertar_sellada(&id, ana, &sello(env, 900, &sal(env, 4))),
+        Err(Ok(Error::FaseEquivocada))
+    );
+    // Revelar con otra sal, u otro monto, no coincide con el sello.
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, beto, &1_000, &sal(env, 9)),
+        Err(Ok(Error::SelloInvalido))
+    );
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, beto, &1_500, &sal(env, 1)),
+        Err(Ok(Error::SelloInvalido))
+    );
+    // Ana no selló nada.
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, ana, &1_000, &sal(env, 1)),
+        Err(Ok(Error::SelloInvalido))
+    );
+    c.tanda.revelar_oferta(&id, dani, &500, &sal(env, 3));
+    c.tanda.revelar_oferta(&id, carla, &1_000, &sal(env, 2));
+    c.tanda.revelar_oferta(&id, beto, &1_000, &sal(env, 1));
+    // Revelada una vez, el sello ya no sirve.
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, beto, &1_000, &sal(env, 1)),
+        Err(Ok(Error::SelloInvalido))
+    );
+    let e = c.tanda.get_estado_turnos(&id);
+    assert_eq!(e.sellos.len(), 0);
+    let respaldo: SVec<Address> = e.respaldo.iter().collect();
+    let pos = |p: &Address| respaldo.iter().position(|x| x == p).unwrap();
+    let ganador = if pos(beto) < pos(carla) { beto } else { carla };
+    assert_eq!(e.mejor_postor, Some(ganador.clone()));
+    assert_eq!(e.mejor_oferta_bps, 1_000);
+
+    // La ronda se cierra como cualquier subasta.
+    c.pagan_todos(id, &gente);
+    c.avanzar(PERIODO / 2);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.turno(id, ganador), 0);
+    c.conservacion(&gente);
+    for _ in 1..4 {
+        c.pagan_todos(id, &gente);
+        c.cerrar(id);
+    }
+    c.al_final(id, &gente);
+}
+
+/// Sellos y nadie revela: la ronda la cobra el primero del orden de respaldo, como sin ofertas.
+#[test]
+fn subasta_sellada_sin_revelar_cobra_el_respaldo() {
+    let c = setup();
+    let id = c.crear_con(3, 10_000, &sellada(3_000));
+    let gente = c.personas(3);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    let env = &c.env;
+    for (i, p) in gente.iter().enumerate() {
+        c.tanda
+            .ofertar_sellada(&id, p, &sello(env, 1_000, &sal(env, i as u8)));
+    }
+    let primero = c.tanda.get_estado_turnos(&id).respaldo.get(0).unwrap();
+    c.pagan_todos(id, &gente);
+    c.cerrar(id);
+    assert_eq!(c.turno(id, &primero), 0);
+    for _ in 1..3 {
+        c.pagan_todos(id, &gente);
+        c.cerrar(id);
+    }
+    c.al_final(id, &gente);
+}
+
+#[test]
+fn subasta_sellada_errores() {
+    let c = setup();
+    let env = &c.env;
+    // Solo en la subasta.
+    for modo in [
+        ModoTurnos::Llegada,
+        ModoTurnos::Eleccion,
+        ModoTurnos::Sorteo,
+    ] {
+        let o = OpcionesTanda {
+            ofertas_selladas: true,
+            ..opciones(modo)
+        };
+        assert_eq!(
+            c.tanda.try_crear_tanda_avanzada(
+                &c.creador,
+                &c.token.address,
+                &CUOTA,
+                &3,
+                &PERIODO,
+                &1_000,
+                &10_000,
+                &o
+            ),
+            Err(Ok(Error::OpcionesInvalidas))
+        );
+    }
+    // 4 personas con garantía mínima (una cuota): quien no paga dos veces cae en mora.
+    let id = c.crear_con(4, 0, &sellada(3_000));
+    let abierta = c.crear_con(4, 0, &subasta(3_000));
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+        c.tanda.unirse(&abierta, p);
+    }
+    // Cada subasta con su forma de ofertar.
+    assert_eq!(
+        c.tanda.try_ofertar(&id, ana, &500),
+        Err(Ok(Error::ModoNoPermite))
+    );
+    assert_eq!(
+        c.tanda
+            .try_ofertar_sellada(&abierta, ana, &sello(env, 500, &sal(env, 1))),
+        Err(Ok(Error::ModoNoPermite))
+    );
+
+    // Ronda 1. Anticopia: Beto no puede usar el sello de Ana; Ana sí puede cambiar el suyo.
+    let de_ana = sello(env, 2_000, &sal(env, 1));
+    c.tanda.ofertar_sellada(&id, ana, &de_ana);
+    assert_eq!(
+        c.tanda.try_ofertar_sellada(&id, beto, &de_ana),
+        Err(Ok(Error::SelloRepetido))
+    );
+    c.tanda
+        .ofertar_sellada(&id, ana, &sello(env, 9_000, &sal(env, 1)));
+    c.tanda
+        .ofertar_sellada(&id, beto, &sello(env, 1_000, &sal(env, 2)));
+    c.avanzar(PERIODO / 2);
+    // Se puede sellar cualquier número, pero al revelar tiene que estar dentro del máximo.
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, ana, &9_000, &sal(env, 1)),
+        Err(Ok(Error::OfertaInvalida))
+    );
+    c.tanda.revelar_oferta(&id, beto, &1_000, &sal(env, 2));
+    // Carla no paga: su garantía la cubre.
+    for p in [ana, beto, dani] {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    c.avanzar(PERIODO / 2 + 1);
+    // Vencida la ronda, ya no se revela.
+    assert_eq!(
+        c.tanda.try_revelar_oferta(&id, ana, &9_000, &sal(env, 1)),
+        Err(Ok(Error::SinSubasta))
+    );
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.turno(id, beto), 0);
+
+    // Ronda 2: gana Ana; Carla vuelve a no pagar y cae en mora.
+    c.tanda
+        .ofertar_sellada(&id, ana, &sello(env, 500, &sal(env, 3)));
+    c.avanzar(PERIODO / 2);
+    c.tanda.revelar_oferta(&id, ana, &500, &sal(env, 3));
+    for p in [ana, beto, dani] {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    c.avanzar(PERIODO / 2 + 1);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.turno(id, ana), 1);
+    assert!(c.miembro(id, carla).moroso);
+
+    // Ronda 3: Carla, en mora, no puede sellar; Dani sí.
+    assert_eq!(
+        c.tanda
+            .try_ofertar_sellada(&id, carla, &sello(env, 500, &sal(env, 4))),
+        Err(Ok(Error::NoPuedeOfertar))
+    );
+    c.tanda
+        .ofertar_sellada(&id, dani, &sello(env, 500, &sal(env, 5)));
+    c.cerrar(id);
+    // Ronda 4, la última: no hay subasta.
+    assert_eq!(
+        c.tanda
+            .try_ofertar_sellada(&id, carla, &sello(env, 500, &sal(env, 6))),
+        Err(Ok(Error::SinSubasta))
+    );
+}
+
+/// Con rondas largas el calendario está anclado (M1): si una ronda se cierra muy tarde, la siguiente
+/// ya "empezó" antes. El tiempo para sellar se cuenta desde que de verdad empezó, así no desaparece.
+/// (Con rondas de hasta 3 días, como la demo, la ronda siguiente siempre empieza al cerrar.)
+#[test]
+fn subasta_sellada_cierre_tarde_no_quita_el_tiempo_de_sellar() {
+    const DIA: u64 = 86_400;
+    const SEMANA: u64 = 7 * DIA;
+    let c = setup();
+    let id = c.tanda.crear_tanda_avanzada(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &3,
+        &SEMANA,
+        &1_000,
+        &10_000,
+        &sellada(3_000),
+    );
+    let gente = c.personas(3);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    let t0 = c.tanda.get_tanda(&id).inicio_ronda;
+    assert_eq!(c.tanda.get_estado_turnos(&id).fin_sellado, t0 + SEMANA / 2);
+    c.pagan_todos(id, &gente);
+    // Se cierra 5 días tarde. M1 ancla la ronda 2: empieza 1 día después del vencimiento y vence
+    // dentro de 3 días. Su mitad "anclada" (4,5 días) ya pasó; la de verdad es dentro de 1,5 días.
+    c.avanzar(SEMANA + 5 * DIA);
+    c.tanda.cerrar_ronda(&id);
+    let t = c.tanda.get_tanda(&id);
+    let ahora = t0 + SEMANA + 5 * DIA;
+    assert_eq!(t.inicio_ronda, t0 + SEMANA + DIA);
+    assert!(t.inicio_ronda + SEMANA / 2 < ahora);
+    let fin = c.tanda.get_estado_turnos(&id).fin_sellado;
+    assert_eq!(fin, ahora + 3 * DIA / 2);
+    // Se puede sellar ahora y revelar después de `fin`.
+    let env = &c.env;
+    let quien = gente
+        .iter()
+        .find(|p| c.miembro(id, p).posicion == SIN_TURNO)
+        .unwrap()
+        .clone();
+    c.tanda
+        .ofertar_sellada(&id, &quien, &sello(env, 800, &sal(env, 8)));
+    c.avanzar(fin - ahora);
+    c.tanda.revelar_oferta(&id, &quien, &800, &sal(env, 8));
+    c.pagan_todos(id, &gente);
+    c.avanzar(3 * DIA);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.turno(id, &quien), 1);
+    c.pagan_todos(id, &gente);
+    c.avanzar(SEMANA);
+    c.tanda.cerrar_ronda(&id);
+    c.al_final(id, &gente);
+}
+
+// ===========================================================================
+// Historial mínimo para los primeros turnos (con el historial de M2)
+// ===========================================================================
+
+type Hist = historial::HistorialContractClient<'static>;
+
+/// Conecta a la tanda un historial nuevo (nativo), con la tanda como emisor autorizado.
+fn conectar_historial(c: &Ctx) -> Hist {
+    let dir = c.env.register(historial::HistorialContract, ());
+    let h = historial::HistorialContractClient::new(&c.env, &dir);
+    h.inicializar(&Address::generate(&c.env));
+    h.autorizar_emisor(&c.tanda_addr);
+    c.tanda.configurar_historial(&Some(dir));
+    h
+}
+
+/// `quien` suma 10 puntos por cuota, como si viniera de otras tandas (10 cuotas = Bronce).
+fn dar_puntos(c: &Ctx, h: &Hist, quien: &Address, cuotas: u32) {
+    let otra = Address::generate(&c.env);
+    h.autorizar_emisor(&otra);
+    let mut lote = Vec::new(&c.env);
+    for _ in 0..cuotas {
+        lote.push_back(historial::HechoMiembro {
+            miembro: quien.clone(),
+            hecho: historial::Hecho::CuotaATiempo,
+            monto: CUOTA,
+        });
+    }
+    h.registrar_lote(&otra, &1_000, &CUOTA, &lote);
+}
+
+/// `quien` queda en mora en otra tanda: pierde 100 puntos.
+fn quitar_puntos(c: &Ctx, h: &Hist, quien: &Address) {
+    let otra = Address::generate(&c.env);
+    h.autorizar_emisor(&otra);
+    let lote = vec![
+        &c.env,
+        historial::HechoMiembro {
+            miembro: quien.clone(),
+            hecho: historial::Hecho::Moroso,
+            monto: CUOTA,
+        },
+    ];
+    h.registrar_lote(&otra, &2_000, &CUOTA, &lote);
+}
+
+/// Precio por turno, 4 personas, los turnos 1 y 2 piden Bronce (100 puntos). Solo Ana lo tiene.
+/// Elegir un turno protegido pide el puntaje; `unirse` sin elegir salta los protegidos; cuando
+/// solo quedan protegidos, nadie sin historial entra. La tanda corre completa y el dinero cuadra.
+#[test]
+fn primeros_turnos_piden_historial() {
+    let c = setup();
+    let h = conectar_historial(&c);
+    let id = c.crear_con(4, 10_000, &primeros(precio(1_000), 2, 100));
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    dar_puntos(&c, &h, ana, 10);
+    assert_eq!(h.puntaje(ana), 100);
+
+    // Beto no tiene historial: los turnos 1 y 2 no son para él; el 4 sí.
+    for turno in [0, 1] {
+        assert_eq!(
+            c.tanda.try_unirse_en_turno(&id, beto, &turno),
+            Err(Ok(Error::TurnoExigeHistorial))
+        );
+    }
+    c.tanda.unirse_en_turno(&id, beto, &3);
+    c.tanda.unirse_en_turno(&id, ana, &0);
+    // Sin elegir, `unirse` da el primer turno libre que no pide historial: el 3.
+    assert_eq!(c.tanda.colateral_siguiente(&id), colateral_de(&c, id, 2));
+    c.tanda.unirse(&id, carla);
+    assert_eq!(c.turno(id, carla), 2);
+    // Solo queda el turno 2, que pide historial: Dani no entra (ni eligiéndolo ni sin elegir).
+    assert_eq!(
+        c.tanda.try_unirse(&id, dani),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    assert_eq!(
+        c.tanda.try_unirse_en_turno(&id, dani, &1),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    assert_eq!(
+        c.tanda.try_colateral_siguiente(&id),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    // Con historial, entra.
+    dar_puntos(&c, &h, dani, 10);
+    c.tanda.unirse_en_turno(&id, dani, &1);
+    assert_eq!(c.tanda.get_tanda(&id).estado, Estado::Activa);
+
+    // De aquí en adelante, una tanda de precio por turno como cualquier otra.
+    for _ in 0..4 {
+        c.pagan_todos(id, &gente);
+        c.cerrar(id);
+        c.conservacion(&gente);
+    }
+    c.al_final(id, &gente);
+}
+
+/// Colateral de entrada del turno `posicion` (sin descuentos).
+fn colateral_de(c: &Ctx, id: u32, posicion: u32) -> i128 {
+    let t = c.tanda.get_tanda(&id);
+    let restantes = (t.n_miembros - 1 - posicion) as i128;
+    (t.cuota * restantes * t.cobertura_bps as i128 / 10_000).max(t.cuota)
+}
+
+/// Elegir + intercambio, 4 personas, los turnos 1 y 2 piden Bronce. Nadie llega por un intercambio
+/// a un turno protegido sin el puntaje: se revisa al proponer y otra vez al aceptar.
+#[test]
+fn intercambio_no_salta_el_historial_minimo() {
+    let c = setup();
+    let h = conectar_historial(&c);
+    let id = c.crear_con(
+        4,
+        10_000,
+        &primeros(con_intercambio(opciones(ModoTurnos::Eleccion)), 2, 100),
+    );
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    dar_puntos(&c, &h, ana, 10);
+    dar_puntos(&c, &h, beto, 10);
+    for (p, turno) in [(ana, 0), (beto, 1), (carla, 2), (dani, 3)] {
+        c.tanda.unirse_en_turno(&id, p, &turno);
+    }
+    // Ronda 1 en curso. Carla (sin historial) no puede pasar al turno 2 de Beto, ni proponiéndolo
+    // ella ni aceptándolo como contraparte de Beto.
+    assert_eq!(
+        c.tanda.try_proponer_intercambio(&id, carla, beto, &0),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    assert_eq!(
+        c.tanda
+            .try_proponer_intercambio(&id, beto, carla, &(10 * U)),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    // Entre turnos que no piden historial, como siempre.
+    c.tanda.proponer_intercambio(&id, dani, carla, &0);
+    c.tanda.aceptar_intercambio(&id, carla, dani);
+    assert_eq!((c.turno(id, carla), c.turno(id, dani)), (3, 2));
+    // Dani consigue el historial y propone a Beto (con 10 de compensación guardada)...
+    dar_puntos(&c, &h, dani, 10);
+    c.tanda.proponer_intercambio(&id, dani, beto, &(10 * U));
+    // ...pero cae en mora en otra tanda antes de que Beto acepte: ya no le alcanza.
+    quitar_puntos(&c, &h, dani);
+    assert_eq!(
+        c.tanda.try_aceptar_intercambio(&id, beto, dani),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    // Beto la rechaza y Dani recupera su compensación.
+    let antes = c.saldo(dani);
+    c.tanda.cancelar_propuesta(&id, dani, beto);
+    assert_eq!(c.saldo(dani), antes + 10 * U);
+    assert_eq!((c.turno(id, beto), c.turno(id, dani)), (1, 2));
+    c.conservacion(&gente);
+}
+
+/// Las opciones del historial mínimo se validan al crear, y sin historial que responda no se puede
+/// comprobar el puntaje: falla cerrado (como el requisito de M2).
+#[test]
+fn historial_minimo_opciones_y_falla_cerrado() {
+    let c = setup();
+    let crear = |o: &OpcionesTanda| {
+        c.tanda.try_crear_tanda_avanzada(
+            &c.creador,
+            &c.token.address,
+            &CUOTA,
+            &3,
+            &PERIODO,
+            &1_000,
+            &10_000,
+            o,
+        )
+    };
+    // Sin historial conectado no se puede pedir.
+    assert_eq!(
+        crear(&primeros(precio(1_000), 1, 100)),
+        Err(Ok(Error::HistorialNoConfigurado))
+    );
+    let h = conectar_historial(&c);
+    let malas = [
+        primeros(opciones(ModoTurnos::Sorteo), 1, 100),
+        primeros(subasta(1_000), 1, 100),
+        primeros(opciones(ModoTurnos::Llegada), 1, 100),
+        // Al menos un turno tiene que quedar para cualquiera.
+        primeros(precio(1_000), 3, 100),
+        // Los dos valores van juntos.
+        primeros(precio(1_000), 1, 0),
+        primeros(precio(1_000), 0, 100),
+    ];
+    for o in malas {
+        assert_eq!(crear(&o), Err(Ok(Error::OpcionesInvalidas)), "{o:?}");
+    }
+    let id = c.crear_con(3, 10_000, &primeros(opciones(ModoTurnos::Eleccion), 1, 100));
+    assert_eq!(c.tanda.get_opciones(&id).puntaje_primeros, 100);
+    dar_puntos(&c, &h, &c.ana, 10);
+    // El admin desconecta el historial: el turno protegido ya no se puede comprobar.
+    c.tanda.configurar_historial(&None);
+    assert_eq!(
+        c.tanda.try_unirse_en_turno(&id, &c.ana, &0),
+        Err(Ok(Error::HistorialNoConfigurado))
+    );
+    // Los demás turnos siguen abiertos.
+    c.tanda.unirse_en_turno(&id, &c.beto, &1);
+    assert_eq!(c.turno(id, &c.beto), 1);
+}
+
+// ===========================================================================
 // Peor caso con los contratos compilados a WASM (costo real de la VM)
 // ===========================================================================
 
@@ -1010,6 +1533,66 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     c.cerrar(id);
     medir(&c, "precio: cerrar_ronda (prima)", &mut peor);
 
+    // Subasta sellada: los 12 sellan (cada sello nuevo se compara con los demás) y revelan la misma
+    // oferta (cada revelación desempata leyendo el orden de respaldo).
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    c.env.cost_estimate().budget().reset_unlimited();
+    let id = c.crear_con(12, 10_000, &sellada(5_000));
+    let gente = c.personas(12);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    let env = &c.env;
+    for (i, p) in gente.iter().enumerate() {
+        c.tanda
+            .ofertar_sellada(&id, p, &sello(env, 1_000, &sal(env, i as u8)));
+    }
+    medir(&c, "subasta sellada: sello 12 (compara con 11)", &mut peor);
+    c.avanzar(PERIODO / 2);
+    for (i, p) in gente.iter().enumerate() {
+        c.tanda.revelar_oferta(&id, p, &1_000, &sal(env, i as u8));
+    }
+    medir(&c, "subasta sellada: revelación 12 (empate)", &mut peor);
+    c.pagan_todos(id, &gente);
+    c.cerrar(id);
+    medir(&c, "subasta sellada: cerrar_ronda", &mut peor);
+
+    // Precio por turno con historial mínimo en 11 de los 12 turnos (M2 en WASM): cada unirse y cada
+    // intercambio a un turno protegido le pregunta el puntaje al historial.
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    c.env.cost_estimate().budget().reset_unlimited();
+    let h = conectar_historial_wasm(&c);
+    let id = c.crear_con(
+        12,
+        10_000,
+        &primeros(con_intercambio(precio(2_000)), 11, 100),
+    );
+    let gente = c.personas(12);
+    for p in &gente {
+        dar_puntos(&c, &h, p, 10);
+    }
+    for (i, p) in gente.iter().enumerate() {
+        c.tanda.unirse_en_turno(&id, p, &(11 - i as u32));
+    }
+    medir(
+        &c,
+        "precio + historial mínimo: último unirse_en_turno",
+        &mut peor,
+    );
+    c.tanda
+        .proponer_intercambio(&id, &gente[1], &gente[2], &(10 * U));
+    medir(
+        &c,
+        "precio + historial mínimo: proponer_intercambio",
+        &mut peor,
+    );
+    c.tanda.aceptar_intercambio(&id, &gente[2], &gente[1]);
+    medir(
+        &c,
+        "precio + historial mínimo: aceptar_intercambio",
+        &mut peor,
+    );
+
     // Lo más pesado combinado con M1: subasta con garantía mínima donde casi nadie paga (deudas en
     // cada ronda), con una oferta y dividendos en cada cierre. Se mide sin y con el historial de M2
     // conectado (en WASM), que suma sus escrituras a cada cierre.
@@ -1084,7 +1667,7 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
 }
 
 /// (M2) Conecta el historial compilado a WASM, como en testnet.
-fn conectar_historial_wasm(c: &Ctx) {
+fn conectar_historial_wasm(c: &Ctx) -> Hist {
     let ruta = std::format!(
         "{}/../../target/wasm32v1-none/release/historial.wasm",
         env!("CARGO_MANIFEST_DIR")
@@ -1095,6 +1678,7 @@ fn conectar_historial_wasm(c: &Ctx) {
     h.inicializar(&Address::generate(&c.env));
     h.autorizar_emisor(&c.tanda_addr);
     c.tanda.configurar_historial(&Some(dir));
+    h
 }
 
 // ===========================================================================

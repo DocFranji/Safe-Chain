@@ -102,10 +102,11 @@ export function nuevoEstado() {
 /** `Miembro.posicion` de quien todavía no tiene turno (u32::MAX en el contrato). */
 export const SIN_TURNO = 4_294_967_295
 const opcionesTurnos = (tag, o = {}) => ({
-  modo: { tag, values: undefined }, permitir_intercambio: false, prima_max_bps: 0, descuento_max_bps: 0, ...o,
+  modo: { tag, values: undefined }, permitir_intercambio: false, prima_max_bps: 0, descuento_max_bps: 0,
+  primeros_con_historial: 0, puntaje_primeros: 0, ofertas_selladas: false, ...o,
 })
 const estadoTurnos = (opciones, o = {}) => ({
-  opciones, mejor_postor: null, mejor_oferta_bps: 0, respaldo: [], propuestas: [], fondo_primas: 0n, ...o,
+  opciones, mejor_postor: null, mejor_oferta_bps: 0, respaldo: [], propuestas: [], fondo_primas: 0n, sellos: [], fin_sellado: 0n, ...o,
 })
 
 /**
@@ -146,6 +147,27 @@ export function nuevoEstadoTurnos() {
       propuestas: [{ de: CARLA, con: ME, compensacion: 10n * U }],
     }),
   }
+  return e
+}
+
+/**
+ * M3: la subasta de la tanda 9 con ofertas selladas. `sellar`: falta medio minuto para revelar y Beto
+ * ya selló. `revelar`: ya se revela; Beto reveló 5 % y "yo" y Carla sellamos sin revelar todavía.
+ */
+export function conSubastaSellada(e, fase) {
+  const t = e.tandas[9]
+  t.turnos.opciones = { ...t.turnos.opciones, ofertas_selladas: true }
+  if (fase === 'sellar') {
+    Object.assign(t.turnos, { fin_sellado: BigInt(ahora() + 30), sellos: [BETO], mejor_postor: null, mejor_oferta_bps: 0 })
+  } else {
+    Object.assign(t.turnos, { fin_sellado: BigInt(ahora() - 10), sellos: [ME, CARLA], mejor_postor: BETO, mejor_oferta_bps: 500 })
+  }
+  return e
+}
+
+/** M2 + M3: los primeros `k` turnos de la tanda `id` piden `puntaje` de historial. */
+export function conPrimerosConHistorial(e, id, k, puntaje) {
+  e.tandas[id].turnos.opciones = { ...e.tandas[id].turnos.opciones, primeros_con_historial: k, puntaje_primeros: puntaje }
   return e
 }
 
@@ -459,9 +481,16 @@ export function respuestaRpc(est, cuerpo) {
     case 'getLatestLedger':
       return ok({ id: 'a', protocolVersion: 25, sequence: 1000 })
     case 'getLedgerEntries': {
+      const lk = xdr.LedgerKey.fromXDR(params.keys[0], 'base64')
+      // (M3) El código del contrato (lo baja `contract.Client.from` en #/estado): un WASM con su spec.
+      if (lk.type === 'contractCode') {
+        const codigo = xdr.LedgerEntryData.contractCode(
+          new xdr.ContractCodeEntry({ ext: xdr.ContractCodeEntryExt.v0(), hash: HASH_WASM, code: wasmConSpec(est) }),
+        )
+        return ok({ entries: [{ key: params.keys[0], xdr: codigo.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: 100000 }], latestLedger: 1000 })
+      }
       // Instancia de un contrato: la de la tanda guarda sus bóvedas (DataKey::Boveda y, desde M1,
       // ClaveM1::BovedaRapida); la de cada bóveda, su configuración (M1, para #/estado).
-      const lk = xdr.LedgerKey.fromXDR(params.keys[0], 'base64')
       // (Cualquier otra clave recibe la instancia de la tanda, como antes.)
       const contrato = lk.type === 'contractData' ? Address.fromScAddress(lk.contractData.contract).toString() : TANDA_ID
       const clave = (nombre) => xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(nombre)])
@@ -480,7 +509,9 @@ export function respuestaRpc(est, cuerpo) {
       } else {
         return ok({ entries: [], latestLedger: 1000 })
       }
-      const instancia = new xdr.ScContractInstance({ executable: xdr.ContractExecutable.contractExecutableStellarAsset(), storage })
+      // (M3) La tanda corre un WASM (su código lo pide #/estado con HASH_WASM); las bóvedas, como antes.
+      const executable = contrato === TANDA_ID ? xdr.ContractExecutable.contractExecutableWasm(HASH_WASM) : xdr.ContractExecutable.contractExecutableStellarAsset()
+      const instancia = new xdr.ScContractInstance({ executable, storage })
       const dato = xdr.LedgerEntryData.contractData(new xdr.ContractDataEntry({
         ext: xdr.ExtensionPoint.v0(),
         contract: new Address(contrato).toScAddress(),
@@ -493,6 +524,33 @@ export function respuestaRpc(est, cuerpo) {
     default:
       return { jsonrpc: '2.0', id, error: { code: -32601, message: `mock: método no soportado ${method}` } }
   }
+}
+
+// --- M3: el WASM del contrato, para comparar la web con el contrato desplegado (#/estado) ---------
+const HASH_WASM = Buffer.alloc(32, 0xab)
+const leb128 = (n) => {
+  const b = []
+  do {
+    let x = n & 0x7f
+    n >>>= 7
+    if (n) x |= 0x80
+    b.push(x)
+  } while (n)
+  return Buffer.from(b)
+}
+/**
+ * WASM mínimo con solo la sección `contractspecv0` (la interfaz del contrato), armada con el mismo spec
+ * del cliente generado. `est.interfazSin`: nombres de funciones o tipos que le faltan (contrato viejo).
+ */
+function wasmConSpec(est) {
+  const quitar = new Set(est.interfazSin ?? [])
+  const entradas = spec.entries.filter((e) => {
+    const v = e.value
+    return !quitar.has(v && v.name ? v.name.toString() : '')
+  })
+  const nombre = Buffer.from('contractspecv0')
+  const datos = Buffer.concat([leb128(nombre.length), nombre, ...entradas.map((e) => Buffer.from(e.toXdr()))])
+  return Buffer.concat([Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00]), leb128(datos.length), datos])
 }
 
 export function cuentaHorizon(est, g) {

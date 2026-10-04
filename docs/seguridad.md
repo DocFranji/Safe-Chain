@@ -73,7 +73,7 @@ termina repartido como rendimiento.
 | --- | --- |
 | `inicializar`, `configurar_boveda_rapida`, `configurar_historial` | admin (`inicializar`, una sola vez) |
 | `crear_tanda`, `crear_tanda_avanzada`, `cancelar` (solo abierta), `configurar_requisitos` (solo abierta y vacía) | creador |
-| `unirse`, `unirse_en_turno`, `pagar_cuota`, `ofertar` | el miembro |
+| `unirse`, `unirse_en_turno`, `pagar_cuota`, `ofertar`, `ofertar_sellada`, `revelar_oferta` | el miembro |
 | `pagar_deuda` | quien paga (puede ser otra persona) |
 | `proponer_intercambio` / `aceptar_intercambio` | quien propone / quien acepta |
 | `cancelar_propuesta` | quien propuso o a quien se le propuso |
@@ -84,7 +84,8 @@ termina repartido como rendimiento.
 ## 4. Supuestos de confianza
 - **Admin de la tanda:** elige la bóveda principal, la rápida y el historial para las tandas **nuevas**. Cada tanda guarda su bóveda al crearse, y cambiarla nunca mueve dinero de tandas que ya existen.
 - **Bóveda:** la simulada nunca promete más de lo que tiene (tope de solvencia) y su precio nunca baja. Con Blend (M4), el riesgo de la bóveda es el de Blend.
-- **Historial:** un historial que falla no traba ninguna operación (todas las llamadas usan `try_`). La excepción es unirse a una tanda que pide puntaje mínimo: ahí falla cerrado. Un historial malicioso podría gastar el presupuesto de la transacción; por eso solo lo configura el admin.
+- **Historial:** un historial que falla no traba ninguna operación (todas las llamadas usan `try_`). Las excepciones son unirse a una tanda que pide puntaje mínimo y tomar un turno que pide historial (también por intercambio): ahí falla cerrado. Un historial malicioso podría gastar el presupuesto de la transacción; por eso solo lo configura el admin.
+- **Ofertas selladas:** el sello esconde el monto, no quién selló. La sal la guarda el navegador de quien sella: si la pierde, no puede revelar y su oferta no cuenta, pero no pierde dinero, porque sellar no deposita nada.
 - **Token:** `crear_tanda` acepta cualquier dirección de token. Una tanda con un token que no corresponde a su bóveda no llega a arrancar, porque el depósito en la bóveda falla al unirse. Con M4, el registro de bóveda por token lo rechaza antes, con el error 55.
 
 ## 5. Antes de pensar en dinero real (fuera del alcance del hackathon)
