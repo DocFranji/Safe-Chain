@@ -8,6 +8,7 @@ import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from './BotonesEntrar'
 import { AccionesTurnos } from './AccionesTurnos'
 import { PagarDeuda } from './PagarDeuda'
+import { CerrarRonda } from './CerrarRonda'
 import { NotaHistorial } from './NotaHistorial'
 import { useGarantiaConHistorial } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
@@ -163,24 +164,15 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
             <PagarDeuda id={id} datos={datos} yo={yo} saldo={saldo} alCambiar={alCambiar} />
 
             {estado === 'Activa' && vencida && (
-              <>
-                <button
-                  className="boton secundario"
-                  disabled={ocupado}
-                  onClick={() =>
-                    ejecutar(
-                      (c) => c.cerrar_ronda({ id }),
-                      `Listo: la ronda se cerró y ${beneficiario ? nombreDe(beneficiario.direccion) : 'el beneficiario'} recibió la bolsa.`,
-                    )
-                  }
-                >
-                  Cerrar la ronda y pagarle a {beneficiario ? nombreDe(beneficiario.direccion) : 'quien le toca'}
-                </button>
-                <p className="explica">
-                  Cualquier persona puede cerrar la ronda. A quien no pagó, su garantía le cubre la cuota, así que la
-                  bolsa se entrega completa.
-                </p>
-              </>
+              <CerrarRonda
+                miembros={miembros}
+                pagaron={pagaron}
+                cuota={tanda.cuota}
+                beneficiario={beneficiario}
+                yo={yo}
+                ocupado={ocupado}
+                cerrar={(textoListo) => ejecutar((c) => c.cerrar_ronda({ id }), textoListo)}
+              />
             )}
 
             {estado === 'Activa' && !vencida && pagaron.length === tanda.n_miembros && (

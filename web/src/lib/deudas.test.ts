@@ -1,6 +1,6 @@
 // Mismos casos que contracts/tanda/src/test_deudas.rs.
 import { describe, expect, it } from 'vitest'
-import { bolsaQueRecupera, errorMontoDeuda, garantiaPendiente, saldoSuDeuda } from './deudas'
+import { bolsaQueRecupera, errorMontoDeuda, faltantesAlCerrar, garantiaPendiente, saldoSuDeuda } from './deudas'
 
 const U = 10_000_000n
 const BETO = 'GBETO'
@@ -59,5 +59,28 @@ describe('garantiaPendiente (igual que moroso_salda_a_mitad_de_tanda_y_repone_su
     expect(garantiaPendiente({ ...t, cobertura_bps: 10_000 }, 0n)).toBe(200n * U)
     expect(garantiaPendiente({ ...t, cobertura_bps: 10_000 }, 150n * U)).toBe(50n * U)
     expect(garantiaPendiente({ ...t, estado: 'PorLiquidar' }, 0n)).toBe(0n)
+  })
+})
+
+describe('faltantesAlCerrar (como cerrar_ronda)', () => {
+  const cuota = 100n * U
+  it('quien pagó o tiene garantía suficiente no deja faltante', () => {
+    const miembros = [
+      { direccion: 'A', colateral: 0n },
+      { direccion: BETO, colateral: 100n * U },
+      { direccion: CARLA, colateral: 300n * U },
+    ]
+    expect(faltantesAlCerrar(miembros, ['A'], cuota)).toEqual([])
+  })
+
+  it('si la garantía no alcanza, falta la diferencia (o la cuota entera si no le queda nada)', () => {
+    const miembros = [
+      { direccion: BETO, colateral: 40n * U },
+      { direccion: CARLA, colateral: 0n },
+    ]
+    expect(faltantesAlCerrar(miembros, [], cuota)).toEqual([
+      { direccion: BETO, falta: 60n * U },
+      { direccion: CARLA, falta: 100n * U },
+    ])
   })
 })
