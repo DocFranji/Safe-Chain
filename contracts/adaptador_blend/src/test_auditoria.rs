@@ -203,21 +203,27 @@ fn retiro_recortado_por_blend_se_detecta() {
     assert_eq!(c.token.balance(&t), 0);
 }
 
-/// HALLAZGO 1 (en la TANDA, no en el adaptador). El adaptador lleva la cuenta por dueño, y el
-/// dueño es el CONTRATO de la tanda: todas sus tandas comparten una sola cuenta. Dentro del
-/// contrato, `cerrar_ronda` resta `quemadas` de `t.shares_boveda` sin revisar que alcancen.
-/// Si se consume todo el colateral de una tanda y el b_rate no subió lo suficiente (reserva sin
-/// préstamos, o una pérdida en Blend), la tanda gasta bTokens de OTRA tanda del mismo contrato,
-/// queda con participaciones negativas y la otra tanda ya no puede finalizar.
+/// HALLAZGO 1 (en la TANDA, no en el adaptador), ARREGLADO por M1 con `sacar_de_boveda`.
+/// El adaptador lleva la cuenta por dueño, y el dueño es el CONTRATO de la tanda: todas sus tandas
+/// comparten una sola cuenta. Antes, `cerrar_ronda` restaba `quemadas` de `t.shares_boveda` sin
+/// revisar que alcanzaran: si se consumía todo el colateral de una tanda y el b_rate no subía lo
+/// suficiente (reserva sin préstamos, o una pérdida en Blend), la tanda gastaba bTokens de OTRA
+/// tanda (terminaba con -3) y la otra ya no podía finalizar.
 ///
-/// Esta prueba muestra el comportamiento ACTUAL. Con el arreglo propuesto en docs/blend.md
-/// (tope de `t.shares_boveda` al cubrir), la tanda B debe poder finalizar.
+/// Ahora una tanda nunca baja de 0 participaciones y las dos terminan, sin crear ni perder dinero.
 #[test]
-fn hallazgo_una_tanda_puede_gastar_btokens_de_otra() {
+fn arreglado_una_tanda_nunca_gasta_btokens_de_otra() {
     let c = setup_sin_interes();
     let ct = tanda_con_blend(&c, 6);
     let cuota = 10 * U + 1; // un monto "raro": cuota / b_rate no es exacto
-                            // Tanda B (la víctima): 3 miembros que pagan todo.
+    let total = || {
+        ct.miembros.iter().map(|m| c.token.balance(m)).sum::<i128>()
+            + c.token.balance(&ct.tanda.address)
+            + c.token.balance(&c.pool)
+            + c.token.balance(&c.adaptador.address)
+    };
+    let inicial = total();
+    // Tanda B: 3 miembros que pagan todo.
     let b = ct.crear_y_llenar_con(cuota, &ct.miembros[3..6]);
     // Tanda A: 3 miembros que no pagan nada; su colateral se gasta completo.
     let a = ct.crear_y_llenar_con(cuota, &ct.miembros[0..3]);
@@ -226,18 +232,16 @@ fn hallazgo_una_tanda_puede_gastar_btokens_de_otra() {
         c.avanzar(120);
         ct.tanda.cerrar_ronda(&a);
         ct.tanda.cerrar_ronda(&b);
+        assert!(ct.tanda.get_tanda(&a).shares_boveda >= 0);
     }
-    let sa = ct.tanda.get_tanda(&a).shares_boveda;
-    let sb = ct.tanda.get_tanda(&b).shares_boveda;
-    std::println!("shares A = {sa}, shares B = {sb}");
-    assert!(sa < 0, "A gastó bTokens que no eran suyos");
     ct.tanda.finalizar(&a);
-    assert_eq!(
-        error_contrato(ct.tanda.try_finalizar(&b)),
-        ErrorAdaptador::SharesInsuficientes as u32,
-        "B quedó trabada para siempre"
-    );
-    assert_eq!(ct.tanda.get_tanda(&b).estado, Estado::PorLiquidar);
+    ct.tanda.finalizar(&b);
+    assert_eq!(ct.tanda.get_tanda(&a).estado, Estado::Finalizada);
+    assert_eq!(ct.tanda.get_tanda(&b).estado, Estado::Finalizada);
+    // El adaptador no le debe nada a nadie: el contrato de la tanda quedó en 0 participaciones.
+    assert_eq!(c.adaptador.shares_de(&ct.tanda.address), 0);
+    assert!(c.btokens_adaptador() >= 0);
+    assert_eq!(total(), inicial, "no se crea ni se pierde dinero");
 }
 
 /// Con interés normal (b_rate que sube), el rendimiento cubre el redondeo y el caso de arriba
@@ -376,36 +380,51 @@ fn reserva_deshabilitada_o_tope_lleno_bloquean_unirse() {
     );
 }
 
-/// HALLAZGO 2. Blend v2 puede BAJAR el b_rate si hay deuda incobrable que el backstop no cubre
-/// (`User::default_liabilities`). Entonces la garantía vale menos que lo anotado en la tanda y
-/// `cerrar_ronda` no logra cubrir con colateral: la ronda queda trabada hasta que los morosos
-/// paguen. (Si hubiera otra tanda en el mismo contrato, en vez de fallar gastaría sus bTokens:
-/// el hallazgo 1.)
+/// HALLAZGO 2, ARREGLADO por M1 con `sacar_de_boveda`. Blend v2 puede BAJAR el b_rate si hay
+/// deuda incobrable que el backstop no cubre (`User::default_liabilities`): la garantía vale menos
+/// que lo anotado en la tanda. Antes, `cerrar_ronda` fallaba y la ronda quedaba trabada hasta que
+/// los morosos pagaran. Ahora cubre con lo que de verdad queda en la bóveda, la tanda sigue y
+/// termina, y la pérdida la asume la bóveda (no se anota como deuda de nadie).
 #[test]
-fn hallazgo_perdida_en_blend_traba_cerrar_ronda() {
+fn arreglado_perdida_en_blend_se_cubre_con_lo_que_hay() {
     let c = setup_sin_interes();
     let ct = tanda_con_blend(&c, 3);
     let cuota = 10 * U;
     let id = ct.crear_y_llenar(cuota); // 40 de colateral anotado (20 + 10 + 10)
                                        // Blend presta la mitad de lo depositado y ese préstamo se vuelve incobrable:
                                        // los depositantes pierden la mitad. El colateral anotado (40) vale ~20 en Blend.
+    let deudor = Address::generate(&c.env);
     let mitad = c.pool().liquidez() / 2;
-    c.pool().prestar(&Address::generate(&c.env), &mitad);
+    c.pool().prestar(&deudor, &mitad);
     c.pool().incobrable(&mitad);
-    assert!(c.adaptador.valor(&ct.tanda.get_tanda(&id).shares_boveda) < 21 * U);
+    let valor = c.adaptador.valor(&ct.tanda.get_tanda(&id).shares_boveda);
+    assert!(valor < 21 * U);
+    let total = || {
+        ct.miembros.iter().map(|m| c.token.balance(m)).sum::<i128>()
+            + c.token.balance(&ct.tanda.address)
+            + c.token.balance(&c.pool)
+            + c.token.balance(&c.adaptador.address)
+            + c.token.balance(&deudor)
+    };
+    let inicial = total();
 
     // Nadie paga la ronda 0: hay que cubrir 3 cuotas (30) con algo que vale ~20.
     c.avanzar(120);
-    assert!(ct.tanda.try_cerrar_ronda(&id).is_err());
-    assert_eq!(
-        ct.tanda.get_tanda(&id).ronda_actual,
-        0,
-        "la ronda sigue abierta"
-    );
-    // Solo se destraba si los morosos pagan (tarde).
-    ct.todos_pagan(id, &ct.miembros);
     ct.tanda.cerrar_ronda(&id);
-    assert_eq!(ct.tanda.get_tanda(&id).ronda_actual, 1);
+    assert_eq!(ct.tanda.get_tanda(&id).ronda_actual, 1, "la ronda avanzó");
+    assert_eq!(
+        ct.tanda.get_tanda(&id).shares_boveda,
+        0,
+        "se usó todo lo que había"
+    );
+    for _ in 1..3 {
+        c.avanzar(120);
+        ct.tanda.cerrar_ronda(&id);
+    }
+    ct.tanda.finalizar(&id);
+    assert_eq!(ct.tanda.get_tanda(&id).estado, Estado::Finalizada);
+    assert_eq!(c.adaptador.shares_de(&ct.tanda.address), 0);
+    assert_eq!(total(), inicial, "no se crea ni se pierde dinero");
 }
 
 // ===========================================================================
