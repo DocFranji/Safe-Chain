@@ -84,24 +84,25 @@ const estadoTurnos = (opciones, o = {}) => ({
 
 /**
  * Las 5 tandas de siempre más una de cada modo de turnos (M3), en otro estado para no cambiar
- * los escenarios de siempre: 6 sorteo abierta, 7 precio por turno abierta, 8 subasta en curso
- * (ME aún sin turno, Beto ofertó 5 %), 9 elegir + intercambio en curso (Carla le propone a ME).
+ * los escenarios de siempre: 7 sorteo abierta, 8 precio por turno abierta, 9 subasta en curso
+ * (ME aún sin turno, Beto ofertó 5 %), 10 elegir + intercambio en curso (Carla le propone a ME).
+ * (La 6 queda libre para otras misiones: M1 la usa para su tanda con deudas.)
  */
 export function nuevoEstadoTurnos() {
   const e = nuevoEstado()
-  e.tandas[6] = {
+  e.tandas[7] = {
     tanda: tanda({ creador: ANA, shares_boveda: 100n * U }),
     miembros: [[ANA, miembro(SIN_TURNO)]],
     pagaron: [],
     turnos: estadoTurnos(opcionesTurnos('Sorteo')),
   }
-  e.tandas[7] = {
+  e.tandas[8] = {
     tanda: tanda({ creador: ANA, shares_boveda: 100n * U }),
     miembros: [[ANA, miembro(1)]],
     pagaron: [],
     turnos: estadoTurnos(opcionesTurnos('PrecioPorTurno', { prima_max_bps: 800 })),
   }
-  e.tandas[8] = {
+  e.tandas[9] = {
     tanda: tanda({ creador: BETO, estado: est('Activa'), inicio_ronda: BigInt(ahora() - 30), shares_boveda: 300n * U }),
     miembros: [[ME, miembro(SIN_TURNO)], [BETO, miembro(SIN_TURNO)], [CARLA, miembro(SIN_TURNO)]],
     pagaron: [BETO],
@@ -109,7 +110,7 @@ export function nuevoEstadoTurnos() {
       mejor_postor: BETO, mejor_oferta_bps: 500, respaldo: [CARLA, ME, BETO],
     }),
   }
-  e.tandas[9] = {
+  e.tandas[10] = {
     tanda: tanda({ creador: CARLA, estado: est('Activa'), inicio_ronda: BigInt(ahora() - 30), shares_boveda: 400n * U }),
     miembros: [[ANA, miembro(0, { colateral: 200n * U, colateral_inicial: 200n * U })], [ME, miembro(1)], [CARLA, miembro(2)]],
     pagaron: [],
@@ -262,7 +263,7 @@ const HISTORIAS = {
     ['creada', { creador: CARLA, cuota: 100n * U, n_miembros: 3 }],
     ['cancelada', {}],
   ],
-  8: [
+  9: [
     ['creada', { creador: BETO, cuota: 100n * U, n_miembros: 3 }],
     ['unido', { miembro: ME, posicion: SIN_TURNO, colateral: 100n * U }],
     ['unido', { miembro: BETO, posicion: SIN_TURNO, colateral: 100n * U }],
@@ -271,7 +272,7 @@ const HISTORIAS = {
     ['pago', { miembro: BETO, ronda: 0, tarde: false }],
     ['oferta', { miembro: BETO, ronda: 0, descuento_bps: 500, descuento: 15n * U }],
   ],
-  9: [
+  10: [
     ['creada', { creador: CARLA, cuota: 100n * U, n_miembros: 3 }],
     ['inter_prop', { de: CARLA, con: ME, compensacion: 10n * U }],
   ],
