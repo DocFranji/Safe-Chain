@@ -93,3 +93,15 @@ echo "== Final: devolver colateral + rendimiento, repartir multas =="
 T --source admin -- finalizar --id "$ID"
 T --source admin -- get_miembros --id "$ID"
 for p in ana beto carla; do echo "   saldo $p: $(saldo "$p")  (empezó con 10000000000)"; done
+
+# Historial crediticio (misión M2): cada cuota quedó escrita en el contrato de historial.
+if [ -n "${HISTORIAL:-}" ]; then
+  echo "== Historial crediticio: lo que cada uno se ganó (o perdió) en esta tanda =="
+  for p in ana beto carla; do
+    dir="$(stellar keys address "$p")"
+    nivel=$(stellar contract invoke --id "$HISTORIAL" $NET --source admin -- nivel --dir "$dir")
+    case "$nivel" in 0) nivel=Nuevo ;; 1) nivel=Bronce ;; 2) nivel=Plata ;; 3) nivel=Oro ;; esac
+    echo "   $p: puntaje $(stellar contract invoke --id "$HISTORIAL" $NET --source admin -- puntaje --dir "$dir"), nivel $nivel"
+    echo "      página pública: $WEB/#/historial/$dir"
+  done
+fi

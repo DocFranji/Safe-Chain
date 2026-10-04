@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Despliega todo en testnet: token TUSD, bóvedas simuladas y contrato de la tanda.
+# Despliega todo en testnet: token TUSD, bóvedas simuladas, contrato de la tanda e historial crediticio.
 # Crea 5 cuentas de prueba (admin, emisor, ana, beto, carla) con XLM de Friendbot.
 # Al final guarda las direcciones en scripts/.contratos para que demo.sh las use.
 #
@@ -65,11 +65,25 @@ if [ -n "$BOVEDA_RAPIDA" ]; then
   stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "\"$BOVEDA_RAPIDA\""
 fi
 
+echo "== 8. Historial crediticio (misión M2, docs/historial.md) =="
+# Contrato aparte: guarda lo que cada dirección hizo en las tandas. Solo escriben los contratos de
+# tanda autorizados (autorizar_emisor). Sin historial (SIN_HISTORIAL=1) la tanda funciona como antes.
+HISTORIAL=""
+if [ "${SIN_HISTORIAL:-0}" != "1" ]; then
+  HISTORIAL=$(stellar contract deploy --wasm target/wasm32v1-none/release/historial.wasm --source admin $NET)
+  echo "   HISTORIAL=$HISTORIAL"
+  stellar contract invoke --id "$HISTORIAL" --source admin $NET -- inicializar --admin "$(stellar keys address admin)"
+  stellar contract invoke --id "$HISTORIAL" --source admin $NET -- autorizar_emisor --emisor "$TANDA"
+  # Argumento opcional: va como JSON (entre comillas), igual que configurar_boveda_rapida.
+  stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_historial --historial "\"$HISTORIAL\""
+fi
+
 cat > scripts/.contratos <<EOF
 TOKEN=$TOKEN
 BOVEDA=$BOVEDA
 BOVEDA_RAPIDA=$BOVEDA_RAPIDA
 TANDA=$TANDA
+HISTORIAL=$HISTORIAL
 EOF
 echo "Listo. Direcciones guardadas en scripts/.contratos"
 
@@ -81,6 +95,7 @@ if [ -d web ]; then
   cat > web/.env.local <<ENV
 VITE_TANDA_ID=$TANDA
 VITE_TOKEN_ID=$TOKEN
+VITE_HISTORIAL_ID=$HISTORIAL
 VITE_NOMBRES='$NOMBRES'
 ENV
   echo "   web/.env.local actualizado (reinicia 'npm run dev' si estaba corriendo)"
@@ -89,5 +104,6 @@ echo
 echo "Si la web está en Vercel: Settings -> Environment Variables, pongan estas y vuelvan a desplegar:"
 echo "   VITE_TANDA_ID=$TANDA"
 echo "   VITE_TOKEN_ID=$TOKEN"
+echo "   VITE_HISTORIAL_ID=$HISTORIAL"
 echo "   VITE_NOMBRES=$NOMBRES"
 echo "   FAUCET_ISSUER_SECRET=<la llave del emisor: stellar keys show emisor>"
