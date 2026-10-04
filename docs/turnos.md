@@ -283,29 +283,51 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 | Funciones públicas y consultas | `contracts/tanda/src/turnos_acciones.rs` |
 | Tipos, errores 30–39 y eventos | bloques `// --- M3 ---` de `tipos.rs` y `eventos.rs` |
 | Flujo principal | `lib.rs`: `unirse` → `unirse_en(..., turno)`; regla 3 de `cerrar_ronda`. `consultas.rs`: `colateral_siguiente` |
-| Pruebas | `contracts/tanda/src/test_turnos.rs` (22) |
+| Pruebas | `contracts/tanda/src/test_turnos.rs` (27) |
 | Web | `web/src/lib/turnos.ts` (+ pruebas), `components/OpcionesTurnos.tsx`, `components/AccionesTurnos.tsx`, `historia.ts`, `contrato.ts`, `Rueda.tsx`, `ListaMiembros.tsx` |
 | Navegador | `web/e2e/mock.mjs` (`nuevoEstadoTurnos()`), escenarios "Turnos" en `run.mjs` |
 | Demo por terminal | `scripts/demo_turnos.sh` |
 
 ```bash
-cargo test -p tanda test_turnos -- --nocapture   # 22 pruebas de M3 (imprime el costo del peor caso)
+cargo test -p tanda test_turnos -- --nocapture   # 27 pruebas de M3
 bash scripts/verificar.sh                        # toda la Definición de Terminado
 MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después de desplegar_testnet.sh)
 ```
 
-**Peor caso con 12 miembros, WASM real** (`stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso_turnos -- --nocapture`). Límites de mainnet, más estrictos que los de testnet: 100 M instrucciones, 100 lecturas y 50 escrituras.
+**Peor caso con 12 miembros, WASM real**, ya con M1 (deudas) y M2 (historial) dentro (`stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso_turnos -- --nocapture`). Límites de mainnet, más estrictos que los de testnet: 100 M instrucciones, 100 lecturas y 50 escrituras.
 
 | Operación | Instrucciones | Lecturas | Escrituras |
 | --- | --- | --- | --- |
-| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 4,7 M | 28 | 21 |
-| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 3,2 M | 28 | 7 |
-| Subasta: `ofertar` | 0,9 M | 8 | 2 |
-| **Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11** | **13,4 M** | **40** | **20** |
-| Precio por turno: `cerrar_ronda` con prima | 2,3 M | 24 | 5 |
-| `proponer_intercambio` / `aceptar_intercambio` | 1,2 M / 1,5 M | 12 | 4 / 7 |
+| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 6,8 M | 46 | 22 |
+| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 5,3 M | 57 | 8 |
+| Subasta: último `unirse` (sortea el orden de respaldo) | 4,4 M | 46 | 11 |
+| Subasta: `ofertar` | 1,0 M | 8 | 2 |
+| Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11 | 20,7 M | 57 | 21 |
+| Precio por turno: último `unirse_en_turno` | 4,5 M | 46 | 11 |
+| Precio por turno: `cerrar_ronda` con prima | 4,2 M | 55 | 5 |
+| `proponer_intercambio` / `aceptar_intercambio` | 1,3 M / 1,6 M | 12 | 4 / 7 |
+| Subasta + deudas (M1): `cerrar_ronda` con casi nadie al día | 28,9 M | 57 | 30 |
+| **Subasta + deudas (M1) + historial (M2): `cerrar_ronda` con casi nadie al día** | **38,7 M** | **72** | **42** |
+| Subasta + historial (M2): `cerrar_ronda` con todos al día | 13,4 M | 61 | 23 |
+| Subasta + historial (M2): `finalizar` con 12 que cumplieron | 19,8 M | 64 | **43** |
 
-**Tamaño:** `tanda.wasm` pasa de 29 KB a 53 KB (límite de la red: 128 KB). En el ensayo de integración con M1, el contrato combinado pesó 65 KB.
+Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al anotar a las 12 personas en el `finalizar`, igual que en cualquier tanda de 12 con historial.
+
+**Tamaño:** `tanda.wasm` pesa 73 171 bytes con M1 + M2 + M3 (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes).
+
+### Cómo se combina con M1 (deudas) y M2 (historial)
+
+- **M1:**
+  - `deudas::anotar_ronda` recibe solo la bolsa retenida por mora (`if mb.moroso { bolsa } else { 0 }`).
+  - Las claves de M3 viven lo mismo que la tanda (`renovar_para_tanda`) y se renuevan todas al llenarse y en cada cierre.
+  - Lo que M3 aparta como garantía va a la bóveda de la tanda (`boveda_de`).
+  - Al recuperar una bolsa retenida, M1 repone la garantía con las cuotas que faltan desde la ronda actual, no desde el turno. Esa regla sirve en todos los modos.
+- **M2:** el descuento de garantía por historial (`ganchos::ajustar_colateral`) vale igual en todos los modos:
+  - Al unirse: en sorteo y subasta se deja una cuota, que es el piso del descuento, así que ahí no cambia nada.
+  - Al cobrar, en `completar_garantia`: se aparta lo que falta para la garantía del turno **con el descuento de ese momento**. Si el historial mejoró durante la tanda, se aparta menos; si empeoró, se aparta la diferencia; y nada se devuelve antes del final.
+  - En `cotizar_turno` y en `colateral_para_miembro`, que usa `colateral_base_siguiente` (ACORDADO con M2): la web muestra la garantía real de entrada en cada modo.
+  - El puntaje mínimo de la tanda (`puede_unirse`) se exige tanto en `unirse` como en `unirse_en_turno`.
+  - **Web:** la nota del historial (`NotaHistorial`) también sale donde se elige turno. Al elegir una casilla, la explicación dice "(con el descuento de tu historial)" cuando la cotización es menor que la garantía normal.
 
 **Validado en testnet** (sáb 3 oct, contratos desechables desplegados con `desplegar_testnet.sh` desde esta rama y `MODO=todos bash scripts/demo_turnos.sh`). Los cuatro modos corrieron de punta a punta, incluidos los pasos en los que el azar podría haber chocado con el *footprint*:
 
