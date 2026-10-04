@@ -80,6 +80,28 @@ WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.s
 
 Si preguntan por la garantía en el sorteo o la subasta: "Como el turno no se sabe al unirse, todos dejan una cuota. A quien cobra primero se le aparta de su bolsa el resto de su garantía, y lo recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado."
 
+## Demo de Blend (opcional): rendimiento real en USDC
+
+Las tandas en **USDC de prueba de Blend** guardan su garantía en el pool real de **Blend** (el protocolo de
+préstamos de Stellar) y ganan intereses de verdad. Viven en el mismo contrato y el mismo lobby que las de TUSD:
+al crear una tanda se elige la moneda. (Misión M4, `docs/blend.md`.)
+
+En otra terminal (unos 8 minutos; Ana, Beto y Carla ya recibieron USDC en el despliegue):
+
+```bash
+PRINCIPAL=1 bash scripts/demo_blend.sh     # tanda en USDC en el contrato principal; imprime el id
+```
+
+| Momento | Qué se ve | Qué decir |
+| --- | --- | --- |
+| Se unen | En la página de la tanda: "Esta garantía está depositada en Blend… el rendimiento es real" y "Ver la garantía en Blend" | "La garantía no se queda quieta: está en Blend, prestada a otros usuarios de Stellar, ganando intereses." |
+| Cada ronda | El guion imprime "rendimiento real: +0,0000039 USDC", "+0,0000077"… | "Es poquito porque son minutos, pero es de verdad. En una tanda de meses son intereses de un préstamo real." |
+| Ana no paga | Su garantía **sale de Blend** y cubre su cuota | "Ni siquiera hay que avisarle a Blend: el contrato retira lo justo y Beto cobra completo." |
+| Liquidez | "Blend tiene 28 453 USDC libres para retirar" (también en `#/estado`) | "Si un día Blend estuviera prestado al 100 %, cerrar la ronda esperaría unos minutos. Nadie pierde dinero." |
+
+Para que el jurado cree una tanda en USDC: en la barra de su cuenta, **"Recibir USDC de prueba"** (una firma; Blend
+le envía 1 000 USDC), y en `#/crear` elige **USDC**.
+
 ## Que el jurado lo pruebe (solo Freighter)
 
 Quien llegue por el enlace de la web verá primero la landing de Rounda; con **Abrir la app** entra al lobby (`#/tandas`) y ahí está la guía **"Pruébalo en 4 pasos"**: instalar Freighter, ponerla en Testnet, conectar y conseguir TUSD. Si ya tienen Freighter, son dos clics.
@@ -107,12 +129,15 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 | Freighter da problemas | La demo proyectada **no usa billetera**: sigue igual. Solo se afecta la parte de que el jurado pruebe |
 | La pantalla va lenta | Recarga la página. El RPC público tiene límites de uso; no abras la demo en muchas pestañas |
 | Fondos de la bóveda bajos | `stellar contract invoke --id $TOKEN --source emisor --network testnet -- mint --to $BOVEDA --amount 100000000000` (10 000 TUSD; para la rápida, `--to $BOVEDA_RAPIDA`). Si se agotan, la bóveda no falla: solo deja de dar rendimiento |
+| Una tanda en USDC no cierra la ronda o no finaliza ("Blend no tiene liquidez") | No se perdió nada: reintenta en unos minutos (cualquiera puede). Mira la liquidez en `#/estado`. Para la demo, usa una tanda en TUSD |
+| "Recibir USDC de prueba" falla | El faucet de Blend da USDC **una vez por cuenta**. Si es otra cosa, el servicio de Blend puede estar caído: usa las cuentas de Ana, Beto y Carla (ya tienen USDC) |
 | Todo falló | Muestra la grabación del ensayo |
 
 ## Qué decir si preguntan
 
 - **¿Es dinero real?** No. Es testnet con TUSD de prueba.
-- **¿Y el rendimiento?** La bóveda es simulada (misma interfaz que tendría un adaptador a Blend, que está planeado). En la tanda de la demo (rondas de 1 minuto) el tiempo corre más rápido para que se note; una tanda real de semanas o meses rinde 5 % anual, al ritmo de la vida real.
+- **¿Y el rendimiento?** Depende de la moneda. En **USDC** es **real**: la garantía está en Blend, el protocolo de préstamos de Stellar, y gana los intereses que pagan sus prestatarios (en testnet, ~2 % anual en USDC; en minutos es muy poco, y se cuenta así). En **TUSD** la bóveda es simulada: en la tanda de la demo (rondas de 1 minuto) el tiempo corre más rápido para que se note; una tanda de semanas o meses rinde 5 % anual, al ritmo de la vida real.
+- **¿Y si Blend se queda sin liquidez o se congela?** Si todo está prestado, cerrar una ronda con impagos o finalizar espera a que vuelva la liquidez (cualquiera reintenta); no se pierde dinero. Si Blend congela el pool, no se pueden crear tandas nuevas en USDC, pero las que están en curso terminan bien. Lo revisamos en `docs/blend.md`.
 - **¿Funciona para una tanda de verdad, de meses?** Sí: rondas de hasta 3 meses y tandas de hasta un año o más, con fechas de pago fijas. El contrato renueva solo sus datos en la red para que nada se archive a mitad de la tanda.
 - **¿Y si alguien queda en mora?** Puede pagar su deuda cuando quiera (o un familiar por él). El dinero le llega a quien cobró de menos y la persona vuelve a estar al día.
 - **¿Qué pasa si alguien no paga?** Su garantía cubre su cuota. Si no alcanza, queda en mora y su parte se reparte entre quienes cumplieron.

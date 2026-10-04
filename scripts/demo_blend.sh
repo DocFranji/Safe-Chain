@@ -8,17 +8,26 @@
 #   MIEMBROS="ana beto carla"   las tres cuentas que participan (necesitan saldo del activo)
 #   CUOTA=100000000         cuota en unidades de 7 decimales (10 XLM o 10 USDC)
 #   PERIODO=120             segundos por ronda
-# Requiere: ACTIVO=<el mismo> bash scripts/desplegar_blend.sh
-# Para USDC, cada miembro necesita USDC de prueba: ver "Conseguir USDC de prueba" en docs/blend.md.
+#   PRINCIPAL=1             usa el contrato PRINCIPAL (scripts/desplegar_testnet.sh): una tanda en USDC en el
+#                           mismo contrato que las de TUSD, con la bóveda de Blend registrada por token (M4).
+# Requiere: ACTIVO=<el mismo> bash scripts/desplegar_blend.sh   (o, con PRINCIPAL=1, desplegar_testnet.sh)
+# Para USDC, cada miembro necesita USDC de prueba: el guion se los pide al faucet de Blend si les falta.
 set -euo pipefail
 ACTIVO="${ACTIVO:-xlm}"
-case "$ACTIVO" in
-  xlm)  ARCHIVO=scripts/.contratos_blend; SIMBOLO=XLM ;;
-  usdc) ARCHIVO=scripts/.contratos_blend_usdc; SIMBOLO=USDC ;;
-  *) echo "ACTIVO debe ser xlm o usdc"; exit 1 ;;
-esac
-source "$ARCHIVO"
-TOKEN="${TOKEN:-${XLM:-}}" # compatibilidad con archivos de la versión anterior
+if [ "${PRINCIPAL:-0}" = "1" ]; then
+  source scripts/.contratos
+  [ -n "${ADAPTADOR_USDC:-}" ] || { echo "El contrato principal no tiene bóveda de Blend (¿SIN_BLEND=1?)"; exit 1; }
+  ACTIVO=usdc; SIMBOLO=USDC
+  TANDA_BLEND=$TANDA; TOKEN=$USDC; ADAPTADOR=$ADAPTADOR_USDC; POOL=$POOL_BLEND
+else
+  case "$ACTIVO" in
+    xlm)  ARCHIVO=scripts/.contratos_blend; SIMBOLO=XLM ;;
+    usdc) ARCHIVO=scripts/.contratos_blend_usdc; SIMBOLO=USDC ;;
+    *) echo "ACTIVO debe ser xlm o usdc"; exit 1 ;;
+  esac
+  source "$ARCHIVO"
+  TOKEN="${TOKEN:-${XLM:-}}" # compatibilidad con archivos de la versión anterior
+fi
 ADMIN="${ADMIN:-admin}"
 read -r ANA BETO CARLA <<<"${MIEMBROS:-ana beto carla}"
 CUOTA="${CUOTA:-100000000}"
@@ -38,6 +47,9 @@ rendimiento() {
   echo "   Colateral en Blend: $(fmt "$colateral") $SIMBOLO · vale hoy $(fmt "$valor") $SIMBOLO · rendimiento real: +$(fmt $((valor - colateral))) $SIMBOLO"
 }
 
+if [ "$ACTIVO" = usdc ]; then
+  for p in $ANA $BETO $CARLA; do SECRETO="$(stellar keys show "$p")" node scripts/usdc_blend.mjs; done
+fi
 for p in $ANA $BETO $CARLA; do echo "   saldo inicial $p: $(fmt "$(saldo "$p")") $SIMBOLO"; done
 
 echo "== Crear tanda: 3 miembros, cuota $(fmt "$CUOTA") $SIMBOLO, rondas de $PERIODO s, multa 10%, cobertura 100% =="

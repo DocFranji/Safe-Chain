@@ -369,7 +369,7 @@ bolsa += entregado;
 | **(b) Una bóveda por token (recomiendo)** | Un contrato; el admin registra token → bóveda; cada tanda guarda su bóveda al crearse | Un lobby, una web; encaja con `elegir_boveda` de M1 | Toca `elegir_boveda` (M1) y la web (símbolo, trustline, faucet por token) |
 | (c) Todo en XLM con Blend | Sin TUSD | Onboarding simple (Friendbot) | Ahorrar en un activo volátil suena mal para el producto |
 
-**Recomendación: (b) con TUSD + USDC de Blend.**
+**✅ DECIDIDO por @DocFranji (sáb 3): (b) con TUSD + USDC de Blend.** Implementado en la fase 2 (sección 9).
 - Al crear: "TUSD · rendimiento simulado (rápido, para probar)" o "USDC · rendimiento real en Blend".
 - Las dos son "dólares": la historia del producto no cambia. En el pitch: "en mainnet sería el USDC
   del pool de Blend".
@@ -398,7 +398,9 @@ bolsa += entregado;
 | 1220 | Blend | `ExceededSupplyCap` | Blend alcanzó su límite de depósitos para este activo. |
 | 1223 | Blend | `ReserveDisabled` | Blend no está aceptando depósitos de este activo. |
 
-## 7. Plan B (si Blend no queda sólido el domingo a las 20:00)
+## 7. Plan B (si Blend no queda sólido para el paso a producción)
+
+La entrega se movió al lunes 12 de octubre; la integración de M4 está prevista para el miércoles 7–jueves 8.
 
 - La demo usa la versión simulada (TUSD) y **Blend no entra a `main`**.
 - Blend se muestra con transacciones reales: `bash scripts/desplegar_blend.sh` y
@@ -414,3 +416,56 @@ stellar keys generate admin --network testnet --fund
 bash scripts/desplegar_blend.sh && bash scripts/demo_blend.sh                  # XLM
 ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_blend.sh   # USDC (ver sección 4)
 ```
+
+## 9. Fase 2: bóveda por token, integrada sobre M1 + M2 + M3
+
+### Contrato de la tanda (`contracts/tanda/src/bovedas_token.rs`)
+
+- `registrar_boveda(token, Option<bóveda>)` (solo el admin) y `get_boveda_token(token)`.
+- `almacenamiento::elegir_boveda` (M1) consulta primero `ClaveM4::BovedaToken(t.token)`; si no hay registro,
+  sigue la regla de M1 (bóveda rápida para rondas de hasta 10 minutos, principal para el resto).
+- Cada tanda guarda su bóveda **al crearse** (`fijar_boveda`, M1): cambiar o quitar un registro solo afecta a
+  las tandas nuevas y nunca mueve dinero de las que ya existen.
+- Errores: 55 `TokenSinBoveda` (crear una tanda en un token sin bóveda cuando la bóveda general dice guardar
+  otro) y 56 `BovedaDeOtroToken` (registrar una bóveda que guarda otro token). Ambos usan la lectura `token()`
+  que tiene el adaptador; la bóveda simulada no la tiene, así que para TUSD no cambia nada.
+- Evento `bov_token`. Las pruebas (`test_blend.rs` y `test_auditoria.rs`) cubren dos monedas a la vez con
+  conservación por moneda, permisos, solo tandas nuevas, los errores 55 y 56, el adaptador real registrado
+  para USDC con la tanda completa y el peor caso de 12 miembros en la bóveda registrada.
+
+### Adaptador
+
+- TTL con la política de M1 (`max_ttl()`, a lo más una vez al día) y `renovar(dueño)` con la misma firma que la
+  bóveda simulada: la tanda de M1 la llama en cada ronda.
+- Lecturas `pool()` y `token()` (la web detecta así que la bóveda es Blend).
+
+### Web
+
+| Pieza | Archivo | Qué hace |
+| --- | --- | --- |
+| Moneda de cada tanda | `lib/monedas.ts`, `hooks/useMoneda.ts` | La página de la tanda y "Crear" ponen la moneda en un contexto; los componentes usan `useSimbolo()`. Toda una tanda en USDC dice USDC |
+| Elegir moneda al crear | `components/OpcionesMoneda.tsx` | TUSD (simulado, rápido) o USDC (real en Blend). Solo aparece si el contrato tiene USDC registrado (`get_boveda_token`) |
+| USDC en la cuenta | `components/CuentaUsdc.tsx`, `lib/usdc.ts`, `api/faucet-blend.ts` | Saldo en USDC y "Recibir USDC de prueba": una firma (Freighter o Google), la función de Vercel revisa la transacción del faucet de Blend antes de dártela |
+| Rendimiento real | `components/Rendimiento.tsx` | "El rendimiento es real", con decimales finos (`+0,0000039 USDC`) y enlace a la garantía en stellar.expert |
+| Liquidez (DECIDIDO: A + indicador) | `components/LiquidezBlend.tsx`, `lib/blend.ts`, `lib/estado.ts` | "Blend tiene 28 453 USDC libres para retirar" en la tanda y en `#/estado`; avisa si no alcanzaría para la garantía de la tanda |
+| Errores | `lib/contrato.ts` | Mensajes de 55, 56, 50–53 y de Blend (1206, 1207, 1220, 1223) |
+| Saldo por moneda | `hooks/useMoneda.ts` (`useSaldoEn`) | "Te faltan X" usa el saldo en la moneda de la tanda (USDC desde Horizon) |
+
+Pruebas de navegador (`web/e2e`): el mock simula la bóveda registrada, el adaptador, el pool (con la reserva
+real de testnet), el USDC en Horizon y el faucet. Cubren la barra de cuenta, la tanda en USDC sin ningún "TUSD"
+fuera de la barra, la tarjeta del lobby, "Crear" con USDC, poca liquidez, un contrato sin USDC y 390 px.
+
+### Despliegue
+
+`bash scripts/desplegar_testnet.sh` hace todo (paso 9, salvo `SIN_BLEND=1`):
+
+1. despliega el adaptador de Blend para el USDC de prueba de Blend (pool TestnetV2);
+2. lo registra en la tanda: `registrar_boveda --token $USDC --boveda "\"$ADAPTADOR_USDC\""`;
+3. pide USDC de prueba para Ana, Beto y Carla al faucet de Blend (`scripts/usdc_blend.mjs`, necesita `web/node_modules`).
+
+No hace falta ninguna variable nueva en Vercel: `VITE_USDC_ID` tiene por defecto el USDC de testnet y la web
+pregunta al contrato si acepta USDC. `/api/faucet-blend` no usa secretos.
+
+Demo en vivo: `PRINCIPAL=1 bash scripts/demo_blend.sh` (tanda en USDC en el contrato principal).
+
+<!-- VALIDACION-FASE2 -->
