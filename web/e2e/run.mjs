@@ -628,7 +628,7 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Turnos/demo proyectada: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
-for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm3-07-subasta-movil'], ['#/tanda/8', 'm3-08-precio-movil']]) {
+for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm3-07-subasta-movil'], ['#/tanda/8', 'm3-08-precio-movil'], ['#/tanda/10', 'm3-11-intercambio-movil']]) {
   const est = nuevoEstadoTurnos()
   const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 800 } })
   await page.goto(BASE + ruta)
