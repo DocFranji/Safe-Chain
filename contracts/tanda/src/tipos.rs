@@ -1,5 +1,5 @@
 //! Datos que el contrato guarda en la blockchain y sus códigos de error.
-use soroban_sdk::{contracterror, contracttype, Address};
+use soroban_sdk::{contracterror, contracttype, Address, Vec};
 
 // ---------------------------------------------------------------------------
 // Tipos guardados en la blockchain
@@ -93,4 +93,47 @@ pub enum Error {
     NoVerificado = 11,
     NoAutorizado = 12,
     NoInicializado = 13,
+    // --- M1: pagar deudas (14–19). Sin comentarios `///`: el SDK de JS usaría ese texto como
+    // mensaje en vez del nombre, y la web traduce por nombre o por código (contrato.ts). ---
+    SinDeuda = 14,      // esa persona no tiene deuda en esta tanda
+    PagoExcesivo = 15,  // el monto es mayor que la deuda
+    MontoInvalido = 16, // el monto debe ser mayor que cero
+}
+
+// ---------------------------------------------------------------------------
+// --- M1: tiempos reales y pago de deudas ---
+// ---------------------------------------------------------------------------
+
+/// Una parte de la deuda de un moroso: lo que su garantía no alcanzó a cubrir en la ronda `ronda`
+/// y a quién se le debe (`acreedor`: quien cobró esa ronda y recibió de menos).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Faltante {
+    pub ronda: u32,
+    pub acreedor: Address,
+    pub monto: i128,
+}
+
+/// La deuda de un miembro, ronda por ronda (`get_deuda`).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Deuda {
+    /// Lo que todavía debe, del faltante más viejo al más nuevo. Suman `Miembro.deuda`.
+    pub faltantes: Vec<Faltante>,
+    /// Su bolsa, si se retuvo porque era moroso cuando le tocaba cobrar. La recupera al saldar.
+    pub bolsa_retenida: i128,
+    /// Cuánto se ha pagado de su deuda hasta ahora (por el miembro o por otras personas).
+    pub pagado: i128,
+}
+
+/// Claves de almacenamiento de M1. Enum propio para no tocar `DataKey`.
+#[contracttype]
+#[derive(Clone)]
+pub enum ClaveM1 {
+    /// (instancia) Bóveda rápida, acelerada, para tandas de prueba con rondas cortas. Opcional.
+    BovedaRapida,
+    /// Bóveda donde guarda su garantía la tanda `id`. Se elige al crearla y no cambia.
+    BovedaDe(u32),
+    /// Deuda del miembro en la tanda `id` (solo existe si alguna vez debió algo).
+    DeudaDe(u32, Address),
 }

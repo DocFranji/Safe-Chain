@@ -1,6 +1,24 @@
 import {Address} from '@stellar/stellar-sdk';
 
     /**
+ * La deuda de un miembro, ronda por ronda (`get_deuda`).
+ */
+export interface Deuda {
+  /**
+   * Su bolsa, si se retuvo porque era moroso cuando le tocaba cobrar. La recupera al saldar.
+   */
+  bolsa_retenida: bigint;
+  /**
+   * Lo que todavía debe, del faltante más viejo al más nuevo. Suman `Miembro.deuda`.
+   */
+  faltantes: Array<Faltante>;
+  /**
+   * Cuánto se ha pagado de su deuda hasta ahora (por el miembro o por otras personas).
+   */
+  pagado: bigint;
+}
+
+/**
  * Error Enum: Error
  */
 export const Error = {
@@ -16,7 +34,10 @@ export const Error = {
   10 : { message: "MiembroMoroso" },
   11 : { message: "NoVerificado" },
   12 : { message: "NoAutorizado" },
-  13 : { message: "NoInicializado" }
+  13 : { message: "NoInicializado" },
+  14 : { message: "SinDeuda" },
+  15 : { message: "PagoExcesivo" },
+  16 : { message: "MontoInvalido" }
 }
 
 /**
@@ -90,6 +111,16 @@ export interface Miembro {
 }
 
 /**
+ * Una parte de la deuda de un moroso: lo que su garantía no alcanzó a cubrir en la ronda `ronda`
+ * y a quién se le debe (`acreedor`: quien cobró esa ronda y recibió de menos).
+ */
+export interface Faltante {
+  acreedor: string;
+  monto: bigint;
+  ronda: number;
+}
+
+/**
  * Event: EvPago
  */
 export interface EvPagoEvent {
@@ -99,6 +130,22 @@ export interface EvPagoEvent {
     miembro?: string;
     ronda?: number;
     tarde?: boolean;
+  };
+}
+
+/**
+ * Una parte de ese pago llegó a quien cobró de menos en la ronda `ronda`.
+ * Si su bolsa estaba retenida (también era moroso), `retenida` es `true` y el monto se sumó a esa bolsa.
+ */
+export interface EvAbonoEvent {
+  name: "EvAbono";
+  data: {
+    id: number;
+    deudor?: string;
+    acreedor?: string;
+    ronda?: number;
+    monto?: bigint;
+    retenida?: boolean;
   };
 }
 
@@ -215,5 +262,44 @@ export interface EvFinalizadaEvent {
     sin_repartir?: bigint;
   };
 }
-    export type ContractEvent = EvPagoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent;
+
+/**
+ * Alguien pagó (toda o una parte) la deuda de `miembro`. Puede ser el miembro u otra persona.
+ */
+export interface EvDeudaPagadaEvent {
+  name: "EvDeudaPagada";
+  data: {
+    id: number;
+    miembro?: string;
+    pagador?: string;
+    monto?: bigint;
+    deuda_restante?: bigint;
+  };
+}
+
+/**
+ * El admin cambió la bóveda rápida (solo afecta a las tandas que se creen después).
+ */
+export interface EvBovedaRapidaEvent {
+  name: "EvBovedaRapida";
+  data: {
+    boveda?: string | null;
+  };
+}
+
+/**
+ * Un moroso saldó su deuda y recuperó su bolsa retenida: recibió `monto`; se descontaron `multas`
+ * (al fondo de premios) y `garantia` (repone su garantía para las cuotas que aún debe).
+ */
+export interface EvBolsaRecuperadaEvent {
+  name: "EvBolsaRecuperada";
+  data: {
+    id: number;
+    miembro?: string;
+    monto?: bigint;
+    multas?: bigint;
+    garantia?: bigint;
+  };
+}
+    export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent | EvDeudaPagadaEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent;
     

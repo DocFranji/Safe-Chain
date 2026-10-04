@@ -9,6 +9,8 @@ export const PASS = 'Test SDF Network ; September 2015'
 export const TANDA_ID = 'CDLSK5Z65A645XS5X6IMJAUOYBLXZFLP7SNM3DB62LFQKFUKNDCKKEGV'
 export const TOKEN_ID = 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ5'
 export const BOVEDA_ID = StrKey.encodeContract(Buffer.alloc(32, 7))
+/** M1: bóveda "real" (sin acelerar) para tandas de días, semanas o meses. La de arriba es la rápida. */
+export const BOVEDA_REAL = StrKey.encodeContract(Buffer.alloc(32, 8))
 export const ANA = 'GADMQOSHB74SMBATS6IF67ZKS2KJPQC4FOM6NDGGWADEUT253XCATVPD'
 export const BETO = 'GBPDH2E2EX5D7DO76YRIX477LPJWNPB7MJZRTEDJWBKZMS5KTLLRU2LO'
 export const CARLA = 'GDPIB76VVYNDJINI6BRYGVOKTPOTERZABL43OB7DIOCLTXSKEUMJWNUN'
@@ -73,6 +75,34 @@ export function nuevoEstado() {
 }
 
 const addr = (a) => nativeToScVal(a, { type: 'address' })
+
+/**
+ * M1: agrega la tanda 6, MENSUAL y en curso (ronda 3 de 4, le toca a Carla). "Yo" (turno 4) quedé en mora:
+ * debo 100 TUSD de la ronda 2, que se le deben a Beto. Carla ya saldó su deuda. Usa la bóveda real.
+ * No está en `nuevoEstado()` para no cambiar los escenarios que cuentan tandas.
+ */
+export function conTandaMorosa(e) {
+  const mes = 2_592_000
+  e.tandas[6] = {
+    boveda: BOVEDA_REAL,
+    tanda: tanda({
+      creador: BETO, estado: est('Activa'), n_miembros: 4, ronda_actual: 2, cobertura_bps: 0, periodo_seg: BigInt(mes),
+      inicio_ronda: BigInt(ahora() - 5 * 86_400), shares_boveda: 200n * U,
+    }),
+    miembros: [
+      [ANA, miembro(0, { cobro: true })],
+      [BETO, miembro(1, { cobro: true })],
+      [CARLA, miembro(2, { colateral: 0n, atrasos: 2, multas_pendientes: 10n * U })],
+      [ME, miembro(3, { colateral: 0n, atrasos: 2, moroso: true, deuda: 100n * U, multas_pendientes: 10n * U })],
+    ],
+    pagaron: [ANA],
+    deudas: [
+      [CARLA, { faltantes: [], bolsa_retenida: 0n, pagado: 50n * U }],
+      [ME, { faltantes: [{ ronda: 1, acreedor: BETO, monto: 100n * U }], bolsa_retenida: 0n, pagado: 0n }],
+    ],
+  }
+  return e
+}
 const i128 = (n) => nativeToScVal(BigInt(n), { type: 'i128' })
 const u32 = (n) => nativeToScVal(n, { type: 'u32' })
 const u64 = (n) => nativeToScVal(BigInt(n), { type: 'u64' })
@@ -106,12 +136,23 @@ function valorSim(est, contrato, fn, args) {
       if (t.miembros.length >= t.tanda.n_miembros) return { error: erroresContrato(6) }
       return i128(colateralPara(t.tanda, t.miembros.length))
     }
+    // --- M1 ---
+    if (fn === 'get_boveda') return addr(t.boveda ?? BOVEDA_ID)
+    if (fn === 'get_deudas') {
+      return xdr.ScVal.scvVec((t.deudas ?? []).map(([a, d]) => xdr.ScVal.scvVec([addr(a), spec.nativeToUdt(d, 'Deuda')])))
+    }
+    if (fn === 'get_deuda') {
+      const d = (t.deudas ?? []).find(([a]) => a === nativos[1])?.[1] ?? { faltantes: [], bolsa_retenida: 0n, pagado: 0n }
+      return spec.nativeToUdt(d, 'Deuda')
+    }
   }
   if (contrato === TOKEN_ID) {
     if (fn === 'balance') return i128(est.cuentas[nativos[0]]?.saldo ?? 0n)
     if (fn === 'name') return nativeToScVal(`TUSD:${EMISOR}`, { type: 'string' })
   }
-  if (contrato === BOVEDA_ID && fn === 'valor') return i128((BigInt(nativos[0]) * 103n) / 100n)
+  if ((contrato === BOVEDA_ID || contrato === BOVEDA_REAL) && fn === 'valor') return i128((BigInt(nativos[0]) * 103n) / 100n)
+  if (contrato === BOVEDA_ID && fn === 'acelerador') return u32(52_560)
+  if (contrato === BOVEDA_REAL && fn === 'acelerador') return u32(1)
   return { error: { error: `mock: no sé responder ${contrato}.${fn}`, latestLedger: 1000 } }
 }
 
@@ -145,6 +186,9 @@ const TIPOS = {
   liquidado: { miembro: ['symbol', 'address'], monto: ['symbol', 'i128'] },
   finalizada: { rendimiento: ['symbol', 'i128'], fondo_premios: ['symbol', 'i128'], retenido: ['symbol', 'i128'], sin_repartir: ['symbol', 'i128'] },
   cancelada: {},
+  // M1
+  deuda_pag: { miembro: ['symbol', 'address'], pagador: ['symbol', 'address'], monto: ['symbol', 'i128'], deuda_restante: ['symbol', 'i128'] },
+  abono: { deudor: ['symbol', 'address'], acreedor: ['symbol', 'address'], ronda: ['symbol', 'u32'], monto: ['symbol', 'i128'], retenida: ['symbol', 'bool'] },
 }
 
 // Historias por tanda: [evento, datos]
@@ -191,6 +235,15 @@ const HISTORIAS = {
   4: [
     ['creada', { creador: CARLA, cuota: 100n * U, n_miembros: 3 }],
     ['cancelada', {}],
+  ],
+  // M1: tanda mensual donde "yo" quedé en mora y Carla ya saldó su deuda (ver conTandaMorosa).
+  6: [
+    ['creada', { creador: BETO, cuota: 100n * U, n_miembros: 4 }],
+    ['moroso', { miembro: CARLA, deuda: 50n * U }],
+    ['moroso', { miembro: ME, deuda: 100n * U }],
+    ['ronda', { ronda: 1, beneficiario: BETO, monto_pagado: 250n * U }],
+    ['deuda_pag', { miembro: CARLA, pagador: CARLA, monto: 50n * U, deuda_restante: 0n }],
+    ['abono', { deudor: CARLA, acreedor: BETO, ronda: 1, monto: 50n * U, retenida: false }],
   ],
 }
 

@@ -80,6 +80,12 @@ describe('validarParametros (mismos límites que crear_tanda)', () => {
 
   it('acepta justo los límites', () => {
     expect(validarParametros({ ...ok, nMiembros: 12, periodoSeg: 60, penalidadBps: 5_000, coberturaBps: 0 })).toEqual({})
+    expect(validarParametros({ ...ok, periodoSeg: 90 * 86_400 })).toEqual({})
+  })
+
+  it('la ronda más larga es de 3 meses (90 días), como en el contrato', () => {
+    expect(validarParametros({ ...ok, periodoSeg: 90 * 86_400 + 1 }).periodoSeg).toMatch(/3 meses/)
+    expect(validarParametros({ ...ok, periodoSeg: aSegundos(4, 'meses') ?? 0 }).periodoSeg).toBeDefined()
   })
 })
 
@@ -103,6 +109,8 @@ describe('duraciones', () => {
     expect(aSegundos(2, 'minutos')).toBe(120)
     expect(aSegundos(1, 'horas')).toBe(3_600)
     expect(aSegundos(7, 'dias')).toBe(604_800)
+    expect(aSegundos(2, 'semanas')).toBe(1_209_600)
+    expect(aSegundos(1, 'meses')).toBe(2_592_000) // 1 mes = 30 días
     expect(aSegundos(0, 'dias')).toBeNull()
     expect(aSegundos(1.5, 'horas')).toBeNull()
   })

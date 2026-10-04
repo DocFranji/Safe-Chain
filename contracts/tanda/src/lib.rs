@@ -40,6 +40,7 @@ mod turnos;
 // agregar código no choque en este archivo.
 mod deudas; // M1
 mod requisitos; // M2
+mod tiempos; // M1
 mod turnos_acciones; // M3
 
 #[cfg(test)]
@@ -71,6 +72,9 @@ const MIN_MIEMBROS: u32 = 3;
 /// presupuesto de cómputo que Stellar permite por transacción.
 const MAX_MIEMBROS: u32 = 12;
 const MIN_PERIODO_SEG: u64 = 60;
+/// (M1) Ronda más larga: 90 días (3 meses). Así una ronda cabe holgada en la vida máxima de un dato
+/// en la red (~180 días) y los datos de la tanda se renuevan al menos una vez por ronda.
+const MAX_PERIODO_SEG: u64 = 90 * 86_400;
 const MAX_PENALIDAD_BPS: u32 = 5_000;
 const MAX_COBERTURA_BPS: u32 = 10_000;
 
@@ -151,7 +155,7 @@ impl TandaContract {
         }
         if cuota <= 0
             || !(MIN_MIEMBROS..=MAX_MIEMBROS).contains(&n_miembros)
-            || periodo_seg < MIN_PERIODO_SEG
+            || !(MIN_PERIODO_SEG..=MAX_PERIODO_SEG).contains(&periodo_seg)
             || penalidad_bps > MAX_PENALIDAD_BPS
             || cobertura_bps > MAX_COBERTURA_BPS
         {
@@ -178,6 +182,7 @@ impl TandaContract {
             fondo_premios: 0,
             retenido: 0,
         };
+        fijar_boveda(&env, id, &tanda)?; // M1: cada tanda guarda su bóveda al crearse
         guardar_tanda(&env, id, &tanda);
         guardar_miembros(&env, id, &Vec::new(&env));
 
@@ -230,7 +235,7 @@ impl TandaContract {
         tok.transfer(&miembro, &yo, &colateral);
 
         // 2) El contrato le da permiso a la bóveda por ese monto y deposita.
-        let boveda = direccion_boveda(&env)?;
+        let boveda = boveda_de(&env, id, &t)?;
         tok.approve(&yo, &boveda, &colateral, &(env.ledger().sequence() + 100));
         let shares = BovedaClient::new(&env, &boveda).depositar(&yo, &colateral);
         t.shares_boveda += shares;
@@ -302,7 +307,10 @@ impl TandaContract {
             guardar_miembro(&env, id, &miembro, &m);
         }
         env.storage().persistent().set(&clave_pago, &true);
-        extender(&env, &clave_pago);
+        // M1: el pago vive hasta que se cierre la ronda. `pagar_cuota` solo toca lo de quien paga (la
+        // tanda y su registro se renuevan con el piso al leerse); todo lo demás lo renueva
+        // `cerrar_ronda` (vía `guardar_tanda`), que pasa al menos una vez por ronda.
+        renovar(&env, &clave_pago, vida_ronda(&env, &t));
         ganchos::al_pagar(&env, &t, id, &miembro, t.ronda_actual, tarde);
 
         EvPago {
@@ -329,10 +337,12 @@ impl TandaContract {
         }
 
         let yo = env.current_contract_address();
-        let boveda = BovedaClient::new(&env, &direccion_boveda(&env)?);
+        let boveda = BovedaClient::new(&env, &boveda_de(&env, id, &t)?);
         let miembros = cargar_miembros(&env, id);
         let ronda = t.ronda_actual;
         let mut bolsa: i128 = 0;
+        // M1: lo que cada moroso no alcanzó a cubrir esta ronda (se le debe a quien cobra).
+        let mut faltantes: Vec<(Address, i128)> = Vec::new(&env);
 
         for dir in miembros.iter() {
             if env
@@ -353,6 +363,7 @@ impl TandaContract {
             } else {
                 // Regla 2: no alcanza. Entra lo que queda y el miembro queda moroso.
                 m.deuda += t.cuota - m.colateral;
+                faltantes.push_back((dir.clone(), t.cuota - m.colateral)); // M1
                 if !m.moroso {
                     m.moroso = true;
                     ganchos::al_quedar_moroso(&env, &t, id, &dir, m.deuda);
@@ -367,9 +378,9 @@ impl TandaContract {
             };
             if cubierto > 0 {
                 m.colateral -= cubierto;
-                let quemadas = boveda.retirar_monto(&yo, &cubierto);
-                t.shares_boveda -= quemadas;
-                bolsa += cubierto;
+                // Nunca gasta participaciones de otra tanda: si la bóveda vale menos de lo anotado,
+                // entra lo que de verdad salió (M4/M1, ver `sacar_de_boveda`).
+                bolsa += sacar_de_boveda(&env, &boveda, &mut t, cubierto);
                 ganchos::al_cubrir(&env, &t, id, &dir, ronda, cubierto);
                 EvCubierto {
                     id,
@@ -397,6 +408,16 @@ impl TandaContract {
             ganchos::al_cobrar(&env, &t, id, &beneficiario, ronda, bolsa);
             bolsa
         };
+        // M1: anota a quién le debe cada moroso (y la bolsa retenida) para `pagar_deuda`.
+        deudas::anotar_ronda(
+            &env,
+            &t,
+            id,
+            ronda,
+            &beneficiario,
+            &faltantes,
+            bolsa - monto_pagado,
+        );
         EvRonda {
             id,
             ronda,
@@ -405,10 +426,11 @@ impl TandaContract {
         }
         .publish(&env);
 
-        // La siguiente ronda empieza AHORA (no desde el vencimiento anterior), para que
-        // nadie quede "tarde" por culpa de un cierre atrasado.
+        // M1: calendario anclado. La siguiente ronda vence un periodo después de la anterior, aunque
+        // el cierre llegue tarde; si llegó tardísimo, igual deja al menos min(periodo, 3 días) para
+        // pagar, así nadie queda "tarde" por culpa de un cierre atrasado (ver `tiempos.rs`).
         t.ronda_actual += 1;
-        t.inicio_ronda = ahora;
+        t.inicio_ronda = tiempos::inicio_siguiente(&t, ahora);
         if t.ronda_actual == t.n_miembros {
             t.estado = Estado::PorLiquidar;
         }
@@ -430,7 +452,7 @@ impl TandaContract {
 
         // 1) Retirar todo de la bóveda.
         let total = if t.shares_boveda > 0 {
-            BovedaClient::new(&env, &direccion_boveda(&env)?).retirar(&yo, &t.shares_boveda)
+            BovedaClient::new(&env, &boveda_de(&env, id, &t)?).retirar(&yo, &t.shares_boveda)
         } else {
             0
         };
@@ -565,7 +587,7 @@ impl TandaContract {
         let yo = env.current_contract_address();
         let miembros = cargar_miembros(&env, id);
         let total = if t.shares_boveda > 0 {
-            BovedaClient::new(&env, &direccion_boveda(&env)?).retirar(&yo, &t.shares_boveda)
+            BovedaClient::new(&env, &boveda_de(&env, id, &t)?).retirar(&yo, &t.shares_boveda)
         } else {
             0
         };

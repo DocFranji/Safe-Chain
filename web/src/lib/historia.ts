@@ -131,6 +131,53 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
         }
       case 'EvCancelada':
         return { ...base, tipo: 'alerta', titulo: 'La tanda se canceló', detalle: 'Se devolvieron las garantías' }
+      // --- M1: pagar deudas ---
+      case 'EvDeudaPagada': {
+        const restante = ev.data.deuda_restante ?? 0n
+        const tercero =
+          ev.data.pagador !== undefined && ev.data.pagador !== ev.data.miembro ? `La pagó ${quien(ev.data.pagador)}` : null
+        return restante === 0n
+          ? {
+              ...base,
+              tipo: 'clave',
+              titulo: `${quien(ev.data.miembro)} pagó ${dinero(ev.data.monto)} y saldó su deuda`,
+              detalle: [tercero, 'vuelve a estar al día'].filter(Boolean).join(' · '),
+            }
+          : {
+              ...base,
+              tipo: 'pago',
+              titulo: `${quien(ev.data.miembro)} pagó ${dinero(ev.data.monto)} de su deuda`,
+              detalle: [tercero, `le faltan ${dinero(restante)}`].filter(Boolean).join(' · '),
+            }
+      }
+      case 'EvAbono':
+        return ev.data.retenida
+          ? {
+              ...base,
+              tipo: 'info',
+              titulo: `${dinero(ev.data.monto)} se sumaron a la bolsa retenida de ${quien(ev.data.acreedor)}`,
+              detalle: `Deuda de ${quien(ev.data.deudor)} · ${ronda(ev.data.ronda) || 'ronda'}`,
+            }
+          : {
+              ...base,
+              tipo: 'clave',
+              titulo: `${quien(ev.data.acreedor)} recibió los ${dinero(ev.data.monto)} que le faltaban`,
+              detalle: `${ronda(ev.data.ronda) || 'Una ronda'}: lo pagó ${quien(ev.data.deudor)}`,
+            }
+      case 'EvBolsaRecuperada': {
+        const partes = [
+          (ev.data.multas ?? 0n) > 0n ? `se descontaron ${dinero(ev.data.multas)} de multas` : null,
+          (ev.data.garantia ?? 0n) > 0n ? `${dinero(ev.data.garantia)} quedan como su garantía para las cuotas que le faltan` : null,
+        ].filter(Boolean)
+        return {
+          ...base,
+          tipo: 'ok',
+          titulo: `${quien(ev.data.miembro)} recuperó su bolsa: ${dinero(ev.data.monto)}`,
+          detalle: partes.length ? partes.join(' · ').replace(/^./, (l) => l.toUpperCase()) : undefined,
+        }
+      }
+      case 'EvBovedaRapida':
+        return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de las tandas de prueba' }
     }
   })
 }
