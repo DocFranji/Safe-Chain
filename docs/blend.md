@@ -386,17 +386,18 @@ bolsa += entregado;
 
 **Códigos de error de M4:**
 
-| Código | Contrato | Nombre | Mensaje propuesto para la web |
+| Código | Contrato | Nombre | Mensaje en la web (`web/src/lib/contrato.ts`) |
 | --- | --- | --- | --- |
 | 50 | adaptador | `MontoInvalido` | El monto debe ser mayor que cero. |
-| 51 | adaptador | `SharesInsuficientes` | La bóveda no tiene suficiente saldo de esta tanda. |
-| 52 | adaptador | `ReservaNoEncontrada` | Blend no tiene una reserva para este activo. |
-| 53 | adaptador | `QuemaInesperada` | Blend respondió algo inesperado; no se movió dinero. |
-| 55 | tanda | `TokenSinBoveda` (propuesto) | Ese activo todavía no se puede usar en tandas. |
+| 51 | adaptador | `SharesInsuficientes` | La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar. |
+| 52 | adaptador | `ReservaNoEncontrada` | Blend no tiene una reserva para esta moneda. |
+| 53 | adaptador | `QuemaInesperada` | Blend respondió algo inesperado y no se movió dinero. Intenta de nuevo en un momento. |
+| 55 | tanda | `TokenSinBoveda` | Esa moneda todavía no se puede usar en tandas. |
+| 56 | tanda | `BovedaDeOtroToken` | Esa bóveda guarda otra moneda: no se puede usar para esta. |
 | 1206 | Blend | `InvalidPoolStatus` | Blend no está aceptando depósitos ahora. Prueba más tarde. |
-| 1207 | Blend | `InvalidUtilRate` | Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta en unos minutos. |
-| 1220 | Blend | `ExceededSupplyCap` | Blend alcanzó su límite de depósitos para este activo. |
-| 1223 | Blend | `ReserveDisabled` | Blend no está aceptando depósitos de este activo. |
+| 1207 | Blend | `InvalidUtilRate` | Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta de nuevo en unos minutos. |
+| 1220 | Blend | `ExceededSupplyCap` | Blend alcanzó su límite de depósitos para esta moneda. |
+| 1223 | Blend | `ReserveDisabled` | Blend no está aceptando depósitos de esta moneda. |
 
 ## 7. Plan B (si Blend no queda sólido para el paso a producción)
 
@@ -411,7 +412,7 @@ La entrega se movió al lunes 12 de octubre; la integración de M4 está previst
 ## 8. Cómo reproducir
 
 ```bash
-cargo test -p adaptador_blend                     # 20 pruebas (6 originales + 14 de auditoría)
+cargo test -p adaptador_blend                     # 21 pruebas (6 originales + 15 de auditoría)
 stellar keys generate admin --network testnet --fund
 bash scripts/desplegar_blend.sh && bash scripts/demo_blend.sh                  # XLM
 ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_blend.sh   # USDC (ver sección 4)
@@ -468,4 +469,39 @@ pregunta al contrato si acepta USDC. `/api/faucet-blend` no usa secretos.
 
 Demo en vivo: `PRINCIPAL=1 bash scripts/demo_blend.sh` (tanda en USDC en el contrato principal).
 
-<!-- VALIDACION-FASE2 -->
+### Validación en testnet (4 de octubre)
+
+Con el código de esta rama (M1 + M2 + M3 + M4), en contratos de prueba desechables (no son los de producción):
+
+1. `bash scripts/desplegar_testnet.sh` terminó bien, paso 9 incluido.
+2. `PRINCIPAL=1 ADMIN=admin MIEMBROS="ana beto carla" bash scripts/demo_blend.sh` terminó bien: una tanda en
+   USDC de 3 miembros, completa, en el contrato principal.
+
+| Qué | Transacción o valor |
+| --- | --- |
+| Tanda (contrato principal) | [`CDVATPBS…LZD6`](https://stellar.expert/explorer/testnet/contract/CDVATPBSBYEDV5QLOPXXFVAYZGYHGQ2ZCYUAQQF4BVKQPEIMDYYELZD6) |
+| Adaptador de Blend para USDC | [`CA4C2IYP…DR7A`](https://stellar.expert/explorer/testnet/contract/CA4C2IYP2JTPTWD2OQTYZVZ4NO6BCTGQO6ZI4VXCHDJGAFVAT7FUDR7A) ([despliegue](https://stellar.expert/explorer/testnet/tx/02aa22928ce0873472f9d9e38a65ada9b748e3c91b67dd3c319f8fd1f3e67031)) |
+| `registrar_boveda(USDC, adaptador)` | [`55aae1e7…d699`](https://stellar.expert/explorer/testnet/tx/55aae1e7c9fef6a9ffb4bf065c9ff0f172692a4dc5909a697e1f507df976d699) (evento `bov_token`) |
+| USDC de prueba para Ana, Beto y Carla | [`abb3967e…784b`](https://stellar.expert/explorer/testnet/tx/abb3967ebbb4549de02a72f12723dbb37d97403f91d1ce4328a4bf09981f784b), [`1b9dce79…31be`](https://stellar.expert/explorer/testnet/tx/1b9dce799026e2bf67978e89c241e9e701ca5eb1007ced85a35df872450031be), [`956b5db8…aa74`](https://stellar.expert/explorer/testnet/tx/956b5db8579143f241bafb5cd7ae68b608a7229ab3d60805900f749bff87aa74) |
+| Crear la tanda en USDC | [`5710296f…aae1`](https://stellar.expert/explorer/testnet/tx/5710296f3df513acd96afd9662c4fa9d2b3881213ccf9e813ad2c91ce0d6aae1) |
+| Ana se une (su garantía entra a Blend) | [`c8c921c8…2309`](https://stellar.expert/explorer/testnet/tx/c8c921c82ee12ccc3317c26e98c129d2934b719d27a857e85065b10940cc2309) |
+| Cerrar ronda 2 (sale garantía de Blend) | [`94107890…35c4`](https://stellar.expert/explorer/testnet/tx/941078905aca5c3a144bd20d90925df2d64cbb352d41dab034cde71221de35c4) |
+| Cerrar ronda 3 | [`afe6b875…e462`](https://stellar.expert/explorer/testnet/tx/afe6b87526b31334cb30c6183fd3bd240913ada73291510c606acffc1a4fe462) |
+| Finalizar (devuelve garantías con rendimiento) | [`11591510…1171`](https://stellar.expert/explorer/testnet/tx/1159151003470b5bf47a94111b7d38c7b407474e213ffe95d037feec407a1171) |
+
+**Rendimiento real:** `+0,0000040`, `+0,0000077` y `+0,0000108` USDC acumulados al cerrar cada ronda
+(108 unidades en total, en minutos). Saldos finales: Ana 1 000 USDC, Beto 999,0000051, Carla 1 001,0000057
+(cada quien según su turno, igual que con TUSD).
+
+**Lecturas después de la demo:** `get_boveda(1)` = el adaptador; `get_boveda_token(USDC)` = el adaptador;
+`get_boveda_token(TUSD)` = nada (TUSD sigue la regla de M1); `pool()` y `token()` del adaptador correctos;
+`shares_de(tanda)` = 0 después de finalizar (no queda nada de la tanda en Blend).
+
+**Tamaños:** `tanda.wasm` 74 806 bytes; `adaptador_blend.wasm` 10 756 bytes. El peor caso de 12 miembros en la
+bóveda registrada usa como máximo ~10,1 M de instrucciones en `cerrar_ronda` y ~4,9 M en `finalizar` (prueba
+`peor_caso_12_miembros_en_la_boveda_registrada`, con el adaptador real sobre el pool simulado).
+
+**Qué no se probó en testnet:** el error 1207 de verdad (no se puede dejar sin liquidez el pool de Blend a
+voluntad; está cubierto en las pruebas con el pool simulado y en las de navegador con poca liquidez) y el
+faucet de USDC desde la web desplegada en Vercel (se probó la misma transacción desde el script y la función
+con pruebas unitarias; se valida en el preview de Vercel de `integracion`).
