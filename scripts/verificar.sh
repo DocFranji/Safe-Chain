@@ -22,6 +22,22 @@ PUERTO=${PUERTO:-4173}
 resumen=()
 fallo=0
 
+# `desplegar_testnet.sh` escribe web/.env.local con los contratos que desplegó. Con ese archivo, la web
+# compila apuntando a otros contratos y las pruebas de navegador (que simulan los de siempre) fallan.
+# Se aparta mientras se verifica y vuelve a su lugar al terminar, pase lo que pase.
+apartado=""
+devolver_env_local() {
+  if [ -n "$apartado" ] && [ -f "$apartado" ]; then
+    mv "$apartado" web/.env.local
+  fi
+}
+if [ -f web/.env.local ]; then
+  apartado="$LOG/env.local"
+  mv web/.env.local "$apartado"
+  echo "(aparté web/.env.local mientras verifico; vuelve a su lugar al terminar)"
+fi
+trap devolver_env_local EXIT
+
 paso() {
   local nombre=$1
   shift
@@ -130,6 +146,7 @@ fi
 echo
 echo "================ Resumen ($(git rev-parse --abbrev-ref HEAD) @ $(git rev-parse --short HEAD)) ================"
 for r in "${resumen[@]}"; do echo "$r"; done
+devolver_env_local
 rm -rf "$LOG"
 if [ "$fallo" = 1 ]; then
   echo "Resultado: FALLA"
