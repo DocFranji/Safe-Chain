@@ -3,6 +3,7 @@
 import { FAUCET_URL, SIMBOLO } from '../config'
 import { leerTotal } from './lectura'
 import { activoToken, direccionBoveda, saldoToken, servidor } from './rpc'
+import { chequeoBlend } from './blend'
 
 export type Nivel = 'ok' | 'aviso' | 'error'
 
@@ -136,5 +137,10 @@ export function ejecutarChequeos(formatoMonto: (v: bigint) => string): Promise<C
       },
       { nivel: 'aviso', solucion: 'Revisa tu conexión o que la función esté desplegada.' },
     ),
+    // M4: tandas en USDC con rendimiento real en Blend (liquidez libre del pool).
+    paso('blend', 'Blend (tandas en USDC)', chequeoBlend, {
+      nivel: 'aviso',
+      solucion: 'Si Blend no responde, las tandas en USDC no se pueden crear ni cerrar por ahora; las de TUSD funcionan igual.',
+    }),
   ])
 }

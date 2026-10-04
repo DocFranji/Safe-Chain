@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alcanzaLiquidez, liquidezDeReserva, textoLiquidez } from './blend'
+import { alcanzaLiquidez, evaluarLiquidez, liquidezDeReserva, textoLiquidez } from './blend'
 
 // Reserva USDC real del pool TestnetV2 de Blend (get_reserve en el ledger 5 010 415, 4 oct 2026).
 const USDC_TESTNET = {
@@ -46,5 +46,16 @@ describe('textoLiquidez y alcanzaLiquidez', () => {
   it('un retiro necesita que quede algo libre después (Blend no deja llegar al 100 %)', () => {
     expect(alcanzaLiquidez(l, 400_000_000n)).toBe(true)
     expect(alcanzaLiquidez(l, l.libre)).toBe(false)
+  })
+})
+
+describe('evaluarLiquidez (#/estado)', () => {
+  const con = (libre: bigint) => ({ depositado: libre * 4n, prestado: libre * 3n, libre, utilizacion: 75 })
+  it('verde con liquidez de sobra, amarillo si hay poca, rojo si no hay nada', () => {
+    expect(evaluarLiquidez(con(28_453n * 10_000_000n), 'USDC').nivel).toBe('ok')
+    expect(evaluarLiquidez(con(500n * 10_000_000n), 'USDC').nivel).toBe('aviso')
+    const sin = evaluarLiquidez({ depositado: 100n, prestado: 100n, libre: 0n, utilizacion: 100 }, 'USDC')
+    expect(sin.nivel).toBe('error')
+    expect(sin.solucion).toMatch(/sin perder dinero/)
   })
 })

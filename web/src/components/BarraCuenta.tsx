@@ -8,6 +8,7 @@ import { ErrorAmigable, aceptarTusd, activarConFriendbot, pedirFaucet } from '..
 import { traducirError } from '../lib/contrato'
 import { monto } from '../lib/formato'
 import { FAUCET_URL, SIMBOLO } from '../config'
+import { CuentaUsdc } from './CuentaUsdc'
 
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
 
@@ -103,6 +104,7 @@ export function BarraCuenta({ billetera, cuenta }: { billetera: Billetera; cuent
   return (
     <div className="barra-cuenta" role="region" aria-label="Tu cuenta">
       <div className="barra-cuenta-fila">{cuerpo}</div>
+      {estado.existe && <CuentaUsdc direccion={direccion} conGoogle={conGoogle} /> /* M4: USDC de Blend */}
       {aviso && (
         <p className={`aviso ${aviso.tipo}`} role="status" aria-live="polite">
           {aviso.texto}

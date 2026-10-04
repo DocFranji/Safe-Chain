@@ -5,7 +5,9 @@
 // `contrato.ts` (MENSAJES), con los de la tanda.
 // La lógica es pura (se prueba sin red); `leerLiquidezBlend` es la única que consulta la red.
 import { Address } from '@stellar/stellar-sdk'
+import { TANDA_ID } from '../config'
 import { monto } from './formato'
+import { USDC } from './monedas'
 import { simular } from './rpc'
 
 /** El b_rate y el d_rate de Blend v2 usan 12 decimales. */
@@ -54,4 +56,66 @@ export function alcanzaLiquidez(l: LiquidezBlend, necesario: bigint): boolean {
 export async function leerLiquidezBlend(pool: string, token: string): Promise<LiquidezBlend> {
   const r = (await simular(pool, 'get_reserve', [new Address(token).toScVal()])) as ReservaBlend
   return liquidezDeReserva(r)
+}
+
+export type InfoBlend = { pool: string; token: string }
+
+const infos = new Map<string, Promise<InfoBlend | null>>()
+
+/**
+ * ¿Esta bóveda es el adaptador de Blend? Solo él responde `pool()` y `token()`; la bóveda simulada no.
+ * Devuelve el pool y el token (para leer la liquidez y enlazar a stellar.expert) o null.
+ */
+export function infoBlend(boveda: string): Promise<InfoBlend | null> {
+  let i = infos.get(boveda)
+  if (!i) {
+    i = Promise.all([simular(boveda, 'pool'), simular(boveda, 'token')])
+      .then(([pool, token]) => ({ pool: String(pool), token: String(token) }))
+      .catch(() => null)
+    infos.set(boveda, i)
+  }
+  return i
+}
+
+type Evaluacion = { nivel: 'ok' | 'aviso' | 'error'; detalle: string; solucion?: string }
+
+/** Para #/estado: hay de sobra si alcanza para devolver la garantía de varias tandas grandes. */
+export const LIQUIDEZ_AVISO = 10_000n * 10_000_000n
+
+export function evaluarLiquidez(l: LiquidezBlend, simbolo: string): Evaluacion {
+  const detalle = textoLiquidez(l, simbolo)
+  if (l.libre === 0n) {
+    return {
+      nivel: 'error',
+      detalle,
+      solucion:
+        'Blend está prestado al 100 %: cerrar rondas con impagos y finalizar fallarán (sin perder dinero) hasta que vuelva la liquidez. Usa tandas en TUSD para la demo.',
+    }
+  }
+  if (l.libre < LIQUIDEZ_AVISO) {
+    return {
+      nivel: 'aviso',
+      detalle,
+      solucion: 'Hay poca liquidez libre: alcanza para tandas chicas. Si un retiro falla, se reintenta más tarde.',
+    }
+  }
+  return { nivel: 'ok', detalle }
+}
+
+/** Para #/estado: ¿el contrato acepta tandas en USDC y cuánta liquidez libre tiene Blend? */
+export async function chequeoBlend(): Promise<Evaluacion> {
+  if (!USDC) return { nivel: 'ok', detalle: 'Desactivado en esta versión (VITE_USDC_ID vacío): solo tandas en TUSD.' }
+  const boveda = (await simular(TANDA_ID, 'get_boveda_token', [new Address(USDC.token).toScVal()]).catch(() => null)) as
+    | string
+    | null
+  if (!boveda) {
+    return {
+      nivel: 'aviso',
+      detalle: 'El contrato de la tanda no tiene una bóveda de Blend para USDC: solo se pueden crear tandas en TUSD.',
+      solucion: 'Para activarlo: ACTIVO=usdc bash scripts/desplegar_blend.sh y registrar el adaptador (docs/blend.md).',
+    }
+  }
+  const info = await infoBlend(boveda)
+  if (!info) return { nivel: 'error', detalle: 'La bóveda registrada para USDC no responde como el adaptador de Blend.' }
+  return evaluarLiquidez(await leerLiquidezBlend(info.pool, info.token), USDC.simbolo)
 }

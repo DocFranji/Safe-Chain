@@ -46,3 +46,15 @@ export const EXPLORADOR = 'https://stellar.expert/explorer/testnet'
  * No es secreto (viaja al navegador). Si está vacío, la web funciona como antes: solo con Freighter.
  */
 export const PRIVY_APP_ID: string = import.meta.env.VITE_PRIVY_APP_ID ?? ''
+
+// --- M4: USDC de prueba de Blend (rendimiento real; docs/blend.md) ---
+
+/**
+ * Contrato (SAC) del USDC de prueba de Blend en testnet. La web solo ofrece USDC si además el contrato de
+ * la tanda tiene una bóveda registrada para él (`get_boveda_token`). Vacío (VITE_USDC_ID=) = sin USDC.
+ */
+export const USDC_ID: string = import.meta.env.VITE_USDC_ID ?? 'CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU'
+/** Cuenta que emite el USDC de prueba de Blend (para leer el saldo en Horizon). */
+export const USDC_EMISOR = 'GATALTGTWIOT6BUDBCZM3Q4OQ4BO2COLOAZ7IYSKPLC2PMSOPPGF5V56'
+/** Función de Vercel que pide USDC al faucet público de Blend (web/api/faucet-blend.ts). Vacío = sin botón. */
+export const FAUCET_BLEND_URL: string | null = (import.meta.env.VITE_FAUCET_BLEND_URL ?? '/api/faucet-blend') || null

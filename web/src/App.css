@@ -1477,3 +1477,24 @@ td .dir {
   display: block;
   color: var(--pago-texto);
 }
+
+/* --- M4: USDC de Blend (barra de cuenta) e indicador de liquidez --- */
+.cuenta-usdc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--linea);
+}
+.cuenta-usdc p {
+  margin: 0;
+}
+.cuenta-usdc .aviso {
+  flex-basis: 100%;
+}
+.liquidez-blend.alerta {
+  color: var(--alerta-texto);
+}

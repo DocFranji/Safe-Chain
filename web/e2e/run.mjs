@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, nuevoEstado, conTandaMorosa, conTandaExigente, historial } from './mock.mjs'
+import { ME, ANA, CARLA, nuevoEstado, conTandaMorosa, conTandaExigente, conTandaUsdc, historial, ADAPTADOR_USDC } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -389,7 +389,8 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForSelector('.estado-resumen', { timeout: 20000 })
   const t = await texto(page)
   check('Estado: todo en verde -> "Todo listo para la demo"', /Todo listo para la demo/.test(t), t.slice(0, 500))
-  check('Estado: 7 puntos revisados (5 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 7, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado: 8 puntos revisados (6 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 8, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado (M4): muestra la liquidez libre de Blend', /Blend tiene 28[\s.\u00a0\u202f]?453(,\d+)? USDC libres para retirar \(78 % prestado\)/.test(t), t.slice(0, 900))
   check('Estado: muestra el saldo de la bóveda', /La bóveda tiene 10[\s.\u00a0]?000 TUSD/.test(t))
   check('Estado: da los enlaces de la demo', /#\/demo/.test(t))
   await shot(page, '14-estado-ok')
@@ -620,6 +621,91 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForSelector('.nota-historial', { timeout: 15000 }).catch(() => {})
   check('Móvil (390px): unirse con descuento no se desborda', !(await desborde()))
   await shot(page, 'm2-05-unirse-390')
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M4: USDC de Blend (rendimiento real)
+{
+  // La barra de cuenta invita a recibir USDC de prueba de Blend; si el faucet dice que ya los recibió, lo explica.
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.cuenta-usdc', { timeout: 15000 }).catch(() => {})
+  let t = await texto(page)
+  check('M4: la barra invita a recibir USDC de prueba de Blend', /rendimiento real en Blend/.test(t) && (await page.getByRole('button', { name: 'Recibir USDC de prueba' }).count()) === 1, t.slice(0, 400))
+  await page.getByRole('button', { name: 'Recibir USDC de prueba' }).click()
+  await page.waitForSelector('.cuenta-usdc .aviso.error', { timeout: 15000 }).catch(() => {})
+  check('M4: si ya recibió USDC, lo explica', /ya recibió sus dólares de prueba de Blend/.test(await texto(page)))
+  check('M4: barra USDC sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Con USDC en la cuenta, la barra muestra el saldo en USDC.
+  const est = nuevoEstado()
+  est.cuentas[ME].usdc = 500n * 10_000_000n
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.cuenta-usdc', { timeout: 15000 }).catch(() => {})
+  check('M4: la barra muestra el saldo en USDC', /En USDC:\s*500 USDC/.test(await texto(page)))
+  await page.close()
+}
+{
+  // Tanda en USDC: el rendimiento es real (Blend), con la liquidez a la vista y el enlace a la garantía en Blend.
+  const est = conTandaUsdc(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
+  const t = await texto(page)
+  check('M4: tanda USDC dice que el rendimiento es real (Blend)', /el rendimiento es real/.test(t), t.slice(0, 600))
+  check('M4: tanda USDC muestra el rendimiento en USDC', /Ganado hasta ahora\s*\+0,0000039 USDC/.test(t) && /Garantía en la bóveda\s*400 USDC/.test(t))
+  check('M4: tanda USDC muestra la liquidez libre de Blend', /Blend tiene 28[\s.\u00a0\u202f]?453(,\d+)? USDC libres/.test(t))
+  check('M4: enlace a la garantía en Blend (stellar.expert)', (await page.locator(`a[href$="/contract/${ADAPTADOR_USDC}"]`).count()) === 1)
+  check('M4: tanda USDC no dice "bóveda simulada"', !/bóveda simulada/.test(t))
+  await shot(page, 'm4-01-tanda-usdc')
+  check('M4: tanda USDC sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Si Blend está prestado casi por completo, la tanda lo advierte (sin alarmar: el dinero está seguro).
+  const est = conTandaUsdc(nuevoEstado())
+  est.reservaUsdc = { ...est.reservaUsdc, d_supply: 1_214_280_000_000n } // quedan ~301 USDC libres; la garantía es 400
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
+  check('M4: poca liquidez -> avisa que se reintenta y que el dinero está seguro', /no alcanzaría para devolver toda la garantía/.test(await texto(page)) && /Tu dinero está seguro/.test(await texto(page)))
+  await page.goto(BASE + '#/estado')
+  await page.waitForSelector('.estado-resumen', { timeout: 20000 })
+  check('M4: #/estado avisa la poca liquidez de Blend', /poca liquidez libre/.test(await texto(page)))
+  await page.close()
+}
+{
+  // Contrato sin bóveda de Blend para USDC (por ejemplo, el de producción de hoy): nada de USDC y #/estado lo explica.
+  const est = nuevoEstado()
+  est.usdcRegistrado = false
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(800)
+  check('M4: sin USDC registrado, la barra no ofrece USDC', (await page.locator('.cuenta-usdc').count()) === 0)
+  await page.goto(BASE + '#/estado')
+  await page.waitForSelector('.estado-resumen', { timeout: 20000 })
+  check('M4: sin USDC registrado, #/estado lo explica', /solo se pueden crear tandas en TUSD/.test(await texto(page)))
+  check('M4: sin USDC, sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // 390 px
+  const est = conTandaUsdc(nuevoEstado())
+  const { page } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
+  const desborde = async () => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+  check('Móvil (390px): tanda USDC con Blend no se desborda', !(await desborde()))
+  await shot(page, 'm4-02-tanda-usdc-390')
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.cuenta-usdc', { timeout: 15000 }).catch(() => {})
+  check('Móvil (390px): la barra con USDC no se desborda', !(await desborde()))
+  await shot(page, 'm4-03-barra-usdc-390')
   await page.close()
 }
 
