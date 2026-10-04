@@ -1,5 +1,5 @@
 target/
-scripts/.contratos
+scripts/.contratos*
 .stellar/
 web/node_modules/
 **/test_snapshots/
