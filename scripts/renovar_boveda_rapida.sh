@@ -26,7 +26,8 @@ NUEVA=$(stellar contract deploy --wasm target/wasm32v1-none/release/boveda_simul
   --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR_RAPIDA:-52560}")
 echo "   BOVEDA_RAPIDA=$NUEVA"
 stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$NUEVA" --amount 100000000000
-stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "$NUEVA"
+# (La CLI recibe los argumentos opcionales como JSON: por eso la dirección va entre comillas.)
+stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "\"$NUEVA\""
 
 # Guardar la nueva dirección (la anterior queda en el historial de la terminal; sus tandas siguen bien).
 if grep -q '^BOVEDA_RAPIDA=' scripts/.contratos; then

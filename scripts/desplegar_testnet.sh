@@ -61,7 +61,8 @@ stellar contract invoke --id "$TANDA" --source admin $NET -- inicializar \
   --admin "$(stellar keys address admin)" --boveda "$BOVEDA"
 if [ -n "$BOVEDA_RAPIDA" ]; then
   # Las tandas con rondas de hasta 10 minutos usan la bóveda rápida (cada tanda guarda la suya al crearse).
-  stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "$BOVEDA_RAPIDA"
+  # (La CLI recibe los argumentos opcionales como JSON: por eso la dirección va entre comillas.)
+  stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "\"$BOVEDA_RAPIDA\""
 fi
 
 cat > scripts/.contratos <<EOF
