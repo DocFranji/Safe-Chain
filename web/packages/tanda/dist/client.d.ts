@@ -71,6 +71,21 @@ export interface Client {
         verificado: boolean;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
+     * La bóveda registrada para `token`, o `None` si ese token sigue la regla general.
+     */
+    get_boveda_token(args: {
+        token: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<string | null>>;
+    /**
+     * (Solo el admin) Bóveda para las tandas nuevas en `token`. `None` quita el registro y el token
+     * vuelve a la regla general. Si la bóveda dice qué token guarda (el adaptador de Blend lo dice),
+     * tiene que ser `token`.
+     */
+    registrar_boveda(args: {
+        token: string | Address;
+        boveda: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
      * La deuda de `miembro` en la tanda `id`: a quién le debe (por ronda), su bolsa retenida si la
      * tiene, y cuánto ha pagado. Si nunca debió nada, todo vacío.
      */
@@ -157,6 +172,8 @@ export declare class Client extends ContractClient {
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
         marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_boveda_token: (json: string) => AssembledTransaction<string | null>;
+        registrar_boveda: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
         get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
         pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
@@ -178,6 +195,8 @@ export declare class Client extends ContractClient {
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
         marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_boveda_token: (json: string) => AssembledTransaction<string | null>;
+        registrar_boveda: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
         get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
         pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
@@ -258,6 +277,12 @@ export declare class Client extends ContractClient {
      */
     evFinalizadaEventFilter(topicValues?: {
         id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvBovedaToken" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBovedaTokenEventFilter(topicValues?: {
+        token?: string | Address;
     }): string[];
     /**
      * Build a topics filter row for the "EvDeudaPagada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.

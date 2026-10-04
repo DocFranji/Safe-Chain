@@ -512,3 +512,105 @@ fn ttl_al_maximo_y_renovar_sin_firma() {
     assert_eq!(c.adaptador.pool(), c.pool);
     assert_eq!(c.adaptador.token(), c.token.address);
 }
+
+// ===========================================================================
+// Bóveda por token (fase 2): el adaptador registrado para su token en la tanda
+// ===========================================================================
+
+/// La tanda registra el adaptador de Blend para su token (USDC → Blend). Como el adaptador dice qué
+/// token guarda (`token()`), la tanda no deja registrarlo para otro token (56) ni crear tandas en un
+/// token sin bóveda cuando la bóveda general es de otro (55). La tanda en el token registrado
+/// funciona de punta a punta con rendimiento y el dinero cuadra.
+#[test]
+fn adaptador_registrado_por_token_en_la_tanda() {
+    let c = setup(); // "XLM": el adaptador de este contexto es la bóveda general de la tanda
+    let ct = tanda_con_blend(&c, 3);
+
+    // Segunda moneda ("USDC") con su propio pool y su propio adaptador.
+    let usdc = c
+        .env
+        .register_stellar_asset_contract_v2(Address::generate(&c.env));
+    let usdc_sac = soroban_sdk::token::StellarAssetClient::new(&c.env, &usdc.address());
+    let usdc_tok = soroban_sdk::token::TokenClient::new(&c.env, &usdc.address());
+    let pool2 = c
+        .env
+        .register(PoolSimulado, (usdc.address(), 1_057_090_226_439i128, SUBE));
+    usdc_sac.mint(&pool2, &FONDOS_POOL);
+    let ad2 = c
+        .env
+        .register(AdaptadorBlend, (pool2.clone(), usdc.address()));
+    for m in &ct.miembros {
+        usdc_sac.mint(m, &(1_000 * U));
+    }
+
+    assert_eq!(
+        ct.tanda
+            .try_registrar_boveda(&usdc.address(), &Some(c.adaptador.address.clone())),
+        Err(Ok(ErrorTanda::BovedaDeOtroToken))
+    );
+    let otra_moneda = Address::generate(&c.env);
+    assert_eq!(
+        ct.tanda.try_crear_tanda(
+            &Address::generate(&c.env),
+            &otra_moneda,
+            &(10 * U),
+            &3,
+            &120,
+            &1000,
+            &10_000
+        ),
+        Err(Ok(ErrorTanda::TokenSinBoveda))
+    );
+
+    ct.tanda
+        .registrar_boveda(&usdc.address(), &Some(ad2.clone()));
+    let total = || {
+        ct.miembros
+            .iter()
+            .map(|m| usdc_tok.balance(m))
+            .sum::<i128>()
+            + usdc_tok.balance(&ct.tanda.address)
+            + usdc_tok.balance(&pool2)
+            + usdc_tok.balance(&ad2)
+    };
+    let inicial = total();
+    let id = ct.tanda.crear_tanda(
+        &Address::generate(&c.env),
+        &usdc.address(),
+        &(10 * U),
+        &3,
+        &120,
+        &1000,
+        &10_000,
+    );
+    assert_eq!(ct.tanda.get_boveda(&id), ad2);
+    for m in &ct.miembros {
+        ct.tanda.unirse(&id, m);
+    }
+    assert!(AdaptadorBlendClient::new(&c.env, &ad2).shares_de(&ct.tanda.address) > 0);
+    assert_eq!(
+        c.adaptador.shares_de(&ct.tanda.address),
+        0,
+        "nada fue al adaptador de XLM"
+    );
+    // El primero no paga la ronda 1: su garantía sale de Blend (USDC).
+    for r in 0..3 {
+        for (i, m) in ct.miembros.iter().enumerate() {
+            if !(r == 1 && i == 0) {
+                ct.tanda.pagar_cuota(&id, m);
+            }
+        }
+        c.avanzar(120);
+        ct.tanda.cerrar_ronda(&id);
+    }
+    ct.tanda.finalizar(&id);
+    assert_eq!(ct.tanda.get_tanda(&id).estado, Estado::Finalizada);
+    assert_eq!(
+        AdaptadorBlendClient::new(&c.env, &ad2).shares_de(&ct.tanda.address),
+        0
+    );
+    assert_eq!(total(), inicial, "no se crea ni se pierde dinero");
+    // Los dos que cumplieron ganaron rendimiento real (pool simulado) además de su premio.
+    assert!(usdc_tok.balance(&ct.miembros[1]) > 1_000 * U);
+    assert!(usdc_tok.balance(&ct.miembros[2]) > 1_000 * U);
+}

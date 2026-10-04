@@ -140,3 +140,11 @@ describe('narrar: pagar deudas (M1)', () => {
     expect(rec.detalle).toBe('Se descontaron 10 TUSD de multas · 100 TUSD quedan como su garantía para las cuotas que le faltan')
   })
 })
+
+// --- M4: bóveda por token ---
+describe('narrar: bóveda por token (M4)', () => {
+  it('cuenta el cambio de bóveda de una moneda como información', () => {
+    const [h] = narrar([ev({ name: 'EvBovedaToken', data: { token: 'CUSDC', boveda: 'CBLEND' } })], f)
+    expect(h).toMatchObject({ tipo: 'info', titulo: 'Se cambió la bóveda de una moneda para las tandas nuevas' })
+  })
+})

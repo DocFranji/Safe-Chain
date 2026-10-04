@@ -98,6 +98,9 @@ pub enum Error {
     SinDeuda = 14,      // esa persona no tiene deuda en esta tanda
     PagoExcesivo = 15,  // el monto es mayor que la deuda
     MontoInvalido = 16, // el monto debe ser mayor que cero
+    // --- M4: bóveda por token (50–59; el adaptador de Blend usa 50–53 con sus propios nombres) ---
+    TokenSinBoveda = 55,    // no hay bóveda para el token de esta tanda
+    BovedaDeOtroToken = 56, // la bóveda que se quiere registrar guarda otro token
 }
 
 // ---------------------------------------------------------------------------
@@ -136,4 +139,15 @@ pub enum ClaveM1 {
     BovedaDe(u32),
     /// Deuda del miembro en la tanda `id` (solo existe si alguna vez debió algo).
     DeudaDe(u32, Address),
+}
+
+// --- M4: bóveda por token ---
+
+/// Claves de la misión M4 (enum propio para no tocar `DataKey`).
+#[contracttype]
+#[derive(Clone)]
+pub enum ClaveM4 {
+    /// (instancia) Bóveda para las tandas nuevas en ese token. Por ejemplo, USDC de Blend → adaptador
+    /// de Blend (rendimiento real). Los tokens sin bóveda propia siguen la regla de M1.
+    BovedaToken(Address),
 }

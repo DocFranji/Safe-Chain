@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alcanzaLiquidez, liquidezDeReserva, MENSAJES_BLEND, textoLiquidez } from './blend'
+import { alcanzaLiquidez, liquidezDeReserva, textoLiquidez } from './blend'
 
 // Reserva USDC real del pool TestnetV2 de Blend (get_reserve en el ledger 5 010 415, 4 oct 2026).
 const USDC_TESTNET = {
@@ -46,13 +46,5 @@ describe('textoLiquidez y alcanzaLiquidez', () => {
   it('un retiro necesita que quede algo libre después (Blend no deja llegar al 100 %)', () => {
     expect(alcanzaLiquidez(l, 400_000_000n)).toBe(true)
     expect(alcanzaLiquidez(l, l.libre)).toBe(false)
-  })
-})
-
-describe('MENSAJES_BLEND', () => {
-  it('tiene mensaje para los errores del adaptador y los de Blend que pueden llegar', () => {
-    for (const codigo of [50, 51, 52, 53, 1206, 1207, 1220, 1223]) {
-      expect(MENSAJES_BLEND[codigo]).toBeTruthy()
-    }
   })
 })

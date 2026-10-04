@@ -178,6 +178,9 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
       }
       case 'EvBovedaRapida':
         return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de las tandas de prueba' }
+      // M4: bóveda por token (evento del admin; no lleva número de tanda)
+      case 'EvBovedaToken':
+        return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de una moneda para las tandas nuevas' }
     }
   })
 }

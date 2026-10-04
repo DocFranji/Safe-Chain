@@ -38,6 +38,7 @@ mod turnos;
 
 // Archivos reservados por misión (ver agentes/PROTOCOLO.md). Empiezan vacíos para que
 // agregar código no choque en este archivo.
+mod bovedas_token; // M4
 mod deudas; // M1
 mod requisitos; // M2
 mod tiempos; // M1

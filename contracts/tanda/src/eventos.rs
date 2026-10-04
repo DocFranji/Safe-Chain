@@ -150,3 +150,14 @@ pub struct EvBolsaRecuperada {
 pub struct EvBovedaRapida {
     pub boveda: Option<Address>,
 }
+
+// --- M4: bóveda por token ---
+
+/// El admin registró (o quitó) la bóveda de un token. Solo afecta a las tandas que se creen después.
+#[contractevent(topics = ["bov_token"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvBovedaToken {
+    #[topic]
+    pub token: Address,
+    pub boveda: Option<Address>,
+}

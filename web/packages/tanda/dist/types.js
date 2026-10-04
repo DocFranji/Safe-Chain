@@ -17,5 +17,7 @@ export const Error = {
     13: { message: "NoInicializado" },
     14: { message: "SinDeuda" },
     15: { message: "PagoExcesivo" },
-    16: { message: "MontoInvalido" }
+    16: { message: "MontoInvalido" },
+    55: { message: "TokenSinBoveda" },
+    56: { message: "BovedaDeOtroToken" }
 };

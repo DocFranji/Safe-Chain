@@ -1,7 +1,8 @@
 // Blend: lo que la web necesita saber de la bóveda con rendimiento real (ver docs/blend.md).
 // - Liquidez libre del pool: cuánto se puede retirar hoy. Si no alcanza, cerrar una ronda con impagos o
 //   finalizar fallan con el error 1207 y se reintentan después; el dinero no se pierde.
-// - Mensajes en español para los errores del adaptador (50–53) y los de Blend que llegan tal cual.
+// Los mensajes de los errores del adaptador (50–53) y de Blend (1206, 1207, 1220, 1223) están en
+// `contrato.ts` (MENSAJES), con los de la tanda.
 // La lógica es pura (se prueba sin red); `leerLiquidezBlend` es la única que consulta la red.
 import { Address } from '@stellar/stellar-sdk'
 import { monto } from './formato'
@@ -53,19 +54,4 @@ export function alcanzaLiquidez(l: LiquidezBlend, necesario: bigint): boolean {
 export async function leerLiquidezBlend(pool: string, token: string): Promise<LiquidezBlend> {
   const r = (await simular(pool, 'get_reserve', [new Address(token).toScVal()])) as ReservaBlend
   return liquidezDeReserva(r)
-}
-
-/**
- * Errores que no son de la tanda pero llegan al firmar una operación de una tanda con Blend:
- * los del adaptador (50–53, rango de M4) y los de Blend v2 (`pool/src/errors.rs`).
- */
-export const MENSAJES_BLEND: Record<number, string> = {
-  50: 'El monto debe ser mayor que cero.',
-  51: 'La bóveda no tiene suficiente saldo de esta tanda.',
-  52: 'Blend no tiene una reserva para este activo.',
-  53: 'Blend respondió algo inesperado; no se movió dinero.',
-  1206: 'Blend no está aceptando depósitos ahora. Prueba más tarde.',
-  1207: 'Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta de nuevo en unos minutos.',
-  1220: 'Blend alcanzó su límite de depósitos para este activo.',
-  1223: 'Blend no está aceptando depósitos de este activo.',
 }
