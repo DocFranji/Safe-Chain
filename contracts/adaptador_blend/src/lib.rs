@@ -15,17 +15,25 @@
 //!   Llevamos la cuenta de cuántos bTokens le pertenecen a cada dueño, para que varias
 //!   tandas puedan compartir el adaptador sin mezclar su dinero.
 //!
-//! Probado en testnet a mano (1 oct 2026) contra el pool `TestnetV2`:
-//! supply (request_type 0) y withdraw (request_type 1) funcionan con XLM.
+//! ## Regla de oro (ver docs/blend.md)
+//! La suma de las participaciones de todos los dueños nunca supera los bTokens que el
+//! adaptador tiene en Blend. Por eso cada operación MIDE los bTokens que Blend acuñó o quemó
+//! (posiciones antes y después) en vez de suponerlos, y se revierte si Blend quemó más de lo
+//! que le corresponde al dueño.
+//!
+//! Probado en testnet contra el pool `TestnetV2` (1 y 3 oct 2026): supply (request_type 0)
+//! y withdraw (request_type 1) funcionan con XLM y con el USDC de prueba de Blend.
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, vec, Address, Env, IntoVal, Map,
-    Symbol, Val, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token, vec, Address,
+    Env, IntoVal, Map, Symbol, Val, Vec,
 };
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_auditoria;
 
 /// El b_rate de Blend v2 usa 12 decimales.
 pub const SCALAR_12: i128 = 1_000_000_000_000;
@@ -51,15 +59,22 @@ enum Clave {
     Pool,
     Token,
     Shares(Address),
+    /// Índice de la reserva del token dentro del pool. Blend nunca lo cambia.
+    Indice,
 }
 
+/// Códigos en el rango de M4 (50–59; ver agentes/PROTOCOLO.md §6.1) para que la web los
+/// distinga de los de la tanda: los errores del adaptador llegan tal cual a quien firma.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum ErrorAdaptador {
-    MontoInvalido = 1,
-    SharesInsuficientes = 2,
-    ReservaNoEncontrada = 3,
+    MontoInvalido = 50,
+    SharesInsuficientes = 51,
+    ReservaNoEncontrada = 52,
+    /// Blend quemó más bTokens de los que el dueño tenía derecho a gastar (no debería pasar
+    /// nunca; si pasa, se revierte todo para no tocar el dinero de otra tanda).
+    QuemaInesperada = 53,
 }
 
 #[contract]
@@ -69,10 +84,16 @@ pub struct AdaptadorBlend;
 impl AdaptadorBlend {
     /// - `pool`: el pool de Blend (en testnet: TestnetV2).
     /// - `token`: el activo que se deposita. Debe ser una reserva del pool (por ejemplo XLM)
-    ///   y el MISMO token que usa la tanda.
+    ///   y el MISMO token que usa la tanda. Si no lo es, el despliegue falla.
     pub fn __constructor(env: Env, pool: Address, token: Address) {
-        env.storage().instance().set(&Clave::Pool, &pool);
-        env.storage().instance().set(&Clave::Token, &token);
+        let s = env.storage().instance();
+        s.set(&Clave::Pool, &pool);
+        s.set(&Clave::Token, &token);
+        let indice = match Self::reserva(&env) {
+            Ok((indice, _)) => indice,
+            Err(e) => panic_with_error!(&env, e),
+        };
+        s.set(&Clave::Indice, &indice);
     }
 
     /// Recibe `monto` de `desde` (que antes hizo `approve` a este adaptador) y lo deposita
@@ -92,9 +113,8 @@ impl AdaptadorBlend {
         // 2) Darle permiso al pool y pedirle que los "jale" (submit_with_allowance).
         //    Así el pool mueve los tokens con su propia autorización.
         t.approve(&yo, &pool, &monto, &(env.ledger().sequence() + 100));
-        let antes = Self::btokens_propios(&env)?;
-        Self::submit(&env, "submit_with_allowance", &yo, SUPPLY, monto);
-        let despues = Self::btokens_propios(&env)?;
+        let antes = Self::btokens_propios(&env);
+        let despues = Self::submit(&env, "submit_with_allowance", &yo, SUPPLY, monto);
 
         let recibidas = despues - antes;
         Self::sumar_shares(&env, &desde, recibidas)?;
@@ -110,11 +130,16 @@ impl AdaptadorBlend {
         // Le quitamos las participaciones completas antes de mover dinero.
         Self::sumar_shares(&env, &hacia, -shares)?;
         // Monto = shares × b_rate, redondeado hacia ABAJO. Blend quema
-        // redondeando hacia ARRIBA, así que nunca se gasta más de `shares` bTokens:
-        // ninguna tanda puede tocar bTokens de otra.
+        // redondeando hacia ARRIBA, así que nunca se gasta más de `shares` bTokens.
         let monto = shares * Self::b_rate(&env)? / SCALAR_12;
         if monto > 0 {
-            Self::submit(&env, "submit", &hacia, WITHDRAW, monto);
+            let antes = Self::btokens_propios(&env);
+            let despues = Self::submit(&env, "submit", &hacia, WITHDRAW, monto);
+            // Defensa: si Blend usara otro b_rate que el que leímos, podría quemar bTokens
+            // de otra tanda. Lo medimos y, si pasa, se revierte todo.
+            if antes - despues > shares {
+                return Err(ErrorAdaptador::QuemaInesperada);
+            }
         }
         Ok(monto)
     }
@@ -125,16 +150,22 @@ impl AdaptadorBlend {
         if monto <= 0 {
             return Err(ErrorAdaptador::MontoInvalido);
         }
-        let antes = Self::btokens_propios(&env)?;
-        Self::submit(&env, "submit", &hacia, WITHDRAW, monto);
-        let despues = Self::btokens_propios(&env)?;
+        let antes = Self::btokens_propios(&env);
+        let despues = Self::submit(&env, "submit", &hacia, WITHDRAW, monto);
+        // Blend NO falla si se pide más de lo que hay: recorta el retiro a todos los bTokens del
+        // adaptador y entrega menos. Solo puede pasar si quedó en cero; en ese caso comprobamos
+        // que lo entregado alcanzó para `monto` (si no, se revierte todo).
+        if despues == 0 && antes * Self::b_rate(&env)? / SCALAR_12 < monto {
+            return Err(ErrorAdaptador::SharesInsuficientes);
+        }
         let quemadas = antes - despues;
         // Si `hacia` no tenía suficientes, esto falla y se revierte TODA la transacción.
         Self::sumar_shares(&env, &hacia, -quemadas)?;
         Ok(quemadas)
     }
 
-    /// Cuántos tokens valen hoy `shares` bTokens.
+    /// Cuántos tokens valen hoy `shares` bTokens. `get_reserve` de Blend v2 calcula el
+    /// interés hasta el ledger actual, así que el valor no está desactualizado.
     pub fn valor(env: Env, shares: i128) -> Result<i128, ErrorAdaptador> {
         Ok(shares * Self::b_rate(&env)? / SCALAR_12)
     }
@@ -156,9 +187,15 @@ impl AdaptadorBlend {
         env.storage().instance().get(&Clave::Token).unwrap()
     }
 
+    fn indice(env: &Env) -> u32 {
+        env.storage().instance().get(&Clave::Indice).unwrap()
+    }
+
     /// Llama a `submit` o `submit_with_allowance` del pool con un solo pedido.
     /// from = spender = el adaptador; `to` = quien recibe (en retiros, la tanda).
-    fn submit(env: &Env, funcion: &str, to: &Address, tipo: u32, monto: i128) {
+    /// Devuelve los bTokens que el adaptador tiene en la reserva DESPUÉS del pedido
+    /// (Blend devuelve las posiciones nuevas: nos ahorra otra consulta).
+    fn submit(env: &Env, funcion: &str, to: &Address, tipo: u32, monto: i128) -> i128 {
         let yo = env.current_contract_address();
         let pedidos: Vec<Request> = vec![
             env,
@@ -175,8 +212,9 @@ impl AdaptadorBlend {
             to.clone().into_val(env),
             pedidos.into_val(env),
         ];
-        // Blend devuelve las posiciones nuevas; no las necesitamos aquí.
-        let _: Val = env.invoke_contract(&Self::pool(env), &Symbol::new(env, funcion), args);
+        let pos: Map<Symbol, Val> =
+            env.invoke_contract(&Self::pool(env), &Symbol::new(env, funcion), args);
+        Self::supply_de(env, &pos)
     }
 
     /// Lee la reserva del pool como un mapa genérico (campo por campo), así no
@@ -209,16 +247,20 @@ impl AdaptadorBlend {
     }
 
     /// bTokens que el adaptador tiene en Blend para nuestra reserva.
-    fn btokens_propios(env: &Env) -> Result<i128, ErrorAdaptador> {
-        let indice = Self::reserva(env)?.0;
+    fn btokens_propios(env: &Env) -> i128 {
         let args: Vec<Val> = vec![env, env.current_contract_address().into_val(env)];
         let pos: Map<Symbol, Val> =
             env.invoke_contract(&Self::pool(env), &Symbol::new(env, "get_positions"), args);
+        Self::supply_de(env, &pos)
+    }
+
+    /// Del struct `Positions` de Blend, los bTokens depositados (sin usar como garantía).
+    fn supply_de(env: &Env, pos: &Map<Symbol, Val>) -> i128 {
         let supply: Map<u32, i128> = match pos.get(Symbol::new(env, "supply")) {
             Some(v) => v.into_val(env),
             None => Map::new(env),
         };
-        Ok(supply.get(indice).unwrap_or(0))
+        supply.get(Self::indice(env)).unwrap_or(0)
     }
 
     fn sumar_shares(env: &Env, duenio: &Address, delta: i128) -> Result<(), ErrorAdaptador> {

@@ -1,13 +1,21 @@
-//! Pruebas del adaptador contra un pool de Blend SIMULADO que imita a Blend v2:
-//! - b_rate con 12 decimales que sube con el tiempo,
+//! Pruebas del adaptador contra un pool de Blend SIMULADO que imita a Blend v2
+//! (código de referencia: blend-capital/blend-contracts-v2, `pool/src/pool/actions.rs` y
+//! `reserve.rs`):
+//! - b_rate con 12 decimales que sube con el tiempo (y que BAJA si hay deuda incobrable),
 //! - supply redondea los bTokens hacia ABAJO, withdraw los quema redondeando hacia ARRIBA,
+//! - withdraw de más NO falla: se recorta a los bTokens del usuario,
+//! - withdraw falla si deja la reserva al 100 % de utilización (error 1207),
+//! - supply falla si el pool está congelado (1206), la reserva deshabilitada (1223),
+//!   se pasa del tope (1220) o acuñaría 0 bTokens (1216),
 //! - get_reserve devuelve la estructura completa con los mismos campos que vimos en testnet.
+//!
+//! Las pruebas de la auditoría (docs/blend.md) están en `test_auditoria.rs`.
 #![cfg(test)]
 extern crate std;
 
 use super::*;
 use soroban_sdk::{
-    contract, contractimpl, contracttype,
+    contract, contracterror, contractimpl, contracttype, panic_with_error,
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env, Map, Vec,
@@ -65,6 +73,19 @@ pub struct Positions {
     pub supply: Map<u32, i128>,
 }
 
+/// Los mismos códigos que `PoolError` de Blend v2 (`pool/src/errors.rs`).
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum ErrorPool {
+    InvalidPoolStatus = 1206,
+    InvalidUtilRate = 1207,
+    InvalidBTokenMintAmount = 1216,
+    InvalidBTokenBurnAmount = 1217,
+    ExceededSupplyCap = 1220,
+    ReserveDisabled = 1223,
+}
+
 #[contracttype]
 #[derive(Clone)]
 enum K {
@@ -73,6 +94,17 @@ enum K {
     Sube,
     T0,
     Pos(Address),
+    BSupply,
+    /// Tokens prestados (pasivos de la reserva).
+    Deuda,
+    /// Estado del pool: 0-1 activo, 2-3 "on ice", 4-5 congelado, 6 configuración.
+    Estado,
+    Habilitada,
+    Tope,
+    /// Lo que el b_rate perdió por deuda incobrable (se resta).
+    Perdida,
+    /// SOLO para la prueba de defensa: b_rate extra que usa `submit` y no `get_reserve`.
+    Desfase,
 }
 
 #[contract]
@@ -87,23 +119,93 @@ impl PoolSimulado {
         s.set(&K::B0, &b_rate_inicial);
         s.set(&K::Sube, &sube_por_seg);
         s.set(&K::T0, &env.ledger().timestamp());
+        s.set(&K::Estado, &1u32);
+        s.set(&K::Habilitada, &true);
+        s.set(&K::Tope, &i128::MAX);
+    }
+
+    fn leer<T: soroban_sdk::TryFromVal<Env, Val>>(env: &Env, k: &K, defecto: T) -> T {
+        env.storage().instance().get(k).unwrap_or(defecto)
     }
 
     fn rate(env: &Env) -> i128 {
-        let s = env.storage().instance();
-        let b0: i128 = s.get(&K::B0).unwrap();
-        let sube: i128 = s.get(&K::Sube).unwrap();
-        let t0: u64 = s.get(&K::T0).unwrap();
-        b0 + sube * (env.ledger().timestamp() - t0) as i128
+        let b0: i128 = Self::leer(env, &K::B0, 0);
+        let sube: i128 = Self::leer(env, &K::Sube, 0);
+        let t0: u64 = Self::leer(env, &K::T0, 0);
+        let perdida: i128 = Self::leer(env, &K::Perdida, 0);
+        b0 + sube * (env.ledger().timestamp() - t0) as i128 - perdida
     }
 
+    fn total_supply(b_supply: i128, rate: i128) -> i128 {
+        b_supply * rate / SCALAR_12
+    }
+
+    // --- Palancas para las pruebas (no existen en Blend) ---
+
+    /// Un prestatario (`hacia`) se lleva `monto` del pool: baja la liquidez libre.
+    pub fn prestar(env: Env, hacia: Address, monto: i128) {
+        let asset: Address = Self::leer(&env, &K::Asset, env.current_contract_address());
+        token::Client::new(&env, &asset).transfer(&env.current_contract_address(), &hacia, &monto);
+        let d: i128 = Self::leer(&env, &K::Deuda, 0);
+        env.storage().instance().set(&K::Deuda, &(d + monto));
+    }
+
+    /// Un prestatario devuelve `monto` (los tokens salen de `desde`).
+    pub fn devolver(env: Env, desde: Address, monto: i128) {
+        desde.require_auth();
+        let asset: Address = Self::leer(&env, &K::Asset, env.current_contract_address());
+        token::Client::new(&env, &asset).transfer(&desde, env.current_contract_address(), &monto);
+        let d: i128 = Self::leer(&env, &K::Deuda, 0);
+        env.storage().instance().set(&K::Deuda, &(d - monto));
+    }
+
+    /// Deuda incobrable: se perdona `monto` de deuda y los depositantes pierden
+    /// (el b_rate baja, como `default_liabilities` de Blend v2).
+    pub fn incobrable(env: Env, monto: i128) {
+        let s = env.storage().instance();
+        let d: i128 = Self::leer(&env, &K::Deuda, 0);
+        let bs: i128 = Self::leer(&env, &K::BSupply, 0);
+        let p: i128 = Self::leer(&env, &K::Perdida, 0);
+        s.set(&K::Deuda, &(d - monto));
+        s.set(&K::Perdida, &(p + (monto * SCALAR_12 + bs - 1) / bs));
+    }
+
+    pub fn set_estado(env: Env, estado: u32) {
+        env.storage().instance().set(&K::Estado, &estado);
+    }
+
+    pub fn set_habilitada(env: Env, habilitada: bool) {
+        env.storage().instance().set(&K::Habilitada, &habilitada);
+    }
+
+    pub fn set_tope(env: Env, tope: i128) {
+        env.storage().instance().set(&K::Tope, &tope);
+    }
+
+    pub fn set_desfase(env: Env, desfase: i128) {
+        env.storage().instance().set(&K::Desfase, &desfase);
+    }
+
+    /// Tokens que se pueden retirar hoy sin llegar al 100 % de utilización.
+    pub fn liquidez(env: Env) -> i128 {
+        let bs: i128 = Self::leer(&env, &K::BSupply, 0);
+        let d: i128 = Self::leer(&env, &K::Deuda, 0);
+        Self::total_supply(bs, Self::rate(&env)) - d
+    }
+
+    // --- La interfaz de Blend v2 que usa el adaptador ---
+
     pub fn get_reserve(env: Env, asset: Address) -> Reserve {
+        let bs: i128 = Self::leer(&env, &K::BSupply, 0);
+        let d: i128 = Self::leer(&env, &K::Deuda, 0);
+        let rate = Self::rate(&env);
+        let supply = Self::total_supply(bs, rate);
         Reserve {
             asset,
             config: ReserveConfig {
                 c_factor: 9_000_000,
                 decimals: 7,
-                enabled: true,
+                enabled: Self::leer(&env, &K::Habilitada, true),
                 index: 0,
                 l_factor: 9_000_000,
                 max_util: 9_500_000,
@@ -112,15 +214,19 @@ impl PoolSimulado {
                 r_three: 10_000_000,
                 r_two: 2_000_000,
                 reactivity: 50,
-                supply_cap: i128::MAX,
-                util: 5_000_000,
+                supply_cap: Self::leer(&env, &K::Tope, i128::MAX),
+                util: if supply > 0 {
+                    (d * 10_000_000 / supply) as u32
+                } else {
+                    0
+                },
             },
             data: ReserveData {
-                b_rate: Self::rate(&env),
-                b_supply: 0,
+                b_rate: rate,
+                b_supply: bs,
                 backstop_credit: 0,
                 d_rate: SCALAR_12,
-                d_supply: 0,
+                d_supply: d,
                 ir_mod: 100_000_000,
                 last_time: env.ledger().timestamp(),
             },
@@ -167,36 +273,71 @@ impl PoolSimulado {
         requests: Vec<Request>,
         allowance: bool,
     ) -> Positions {
-        from.require_auth();
+        spender.require_auth();
         if spender != from {
-            spender.require_auth();
+            from.require_auth();
         }
-        let asset: Address = env.storage().instance().get(&K::Asset).unwrap();
+        let s = env.storage().instance();
+        let asset: Address = Self::leer(&env, &K::Asset, env.current_contract_address());
         let tok = token::Client::new(&env, &asset);
         let yo = env.current_contract_address();
         let mut pos = Self::get_positions(env.clone(), from.clone());
-        let rate = Self::rate(&env);
+        let desfase: i128 = Self::leer(&env, &K::Desfase, 0);
+        let rate = Self::rate(&env) + desfase;
+        let estado: u32 = Self::leer(&env, &K::Estado, 1);
         for r in requests.iter() {
             assert_eq!(r.address, asset, "reserva desconocida");
             let actual = pos.supply.get(0).unwrap_or(0);
+            let mut bs: i128 = Self::leer(&env, &K::BSupply, 0);
             match r.request_type {
                 SUPPLY => {
+                    if estado > 3 {
+                        panic_with_error!(&env, ErrorPool::InvalidPoolStatus);
+                    }
+                    if !Self::leer(&env, &K::Habilitada, true) {
+                        panic_with_error!(&env, ErrorPool::ReserveDisabled);
+                    }
+                    let bt = r.amount * SCALAR_12 / rate; // hacia abajo
+                    if bt <= 0 {
+                        panic_with_error!(&env, ErrorPool::InvalidBTokenMintAmount);
+                    }
+                    pos.supply.set(0, actual + bt);
+                    bs += bt;
+                    if Self::total_supply(bs, rate) > Self::leer(&env, &K::Tope, i128::MAX) {
+                        panic_with_error!(&env, ErrorPool::ExceededSupplyCap);
+                    }
                     if allowance {
                         tok.transfer_from(&yo, &spender, &yo, &r.amount);
                     } else {
                         tok.transfer(&spender, &yo, &r.amount);
                     }
-                    let bt = r.amount * SCALAR_12 / rate; // hacia abajo
-                    pos.supply.set(0, actual + bt);
                 }
                 WITHDRAW => {
-                    let bt = (r.amount * SCALAR_12 + rate - 1) / rate; // hacia arriba
-                    assert!(bt <= actual, "bTokens insuficientes");
-                    pos.supply.set(0, actual - bt);
-                    tok.transfer(&yo, &to, &r.amount);
+                    let mut bt = (r.amount * SCALAR_12 + rate - 1) / rate; // hacia arriba
+                    let mut sale = r.amount;
+                    if bt > actual {
+                        // Blend recorta al saldo del usuario en vez de fallar.
+                        bt = actual;
+                        sale = actual * rate / SCALAR_12;
+                    }
+                    if bt <= 0 {
+                        panic_with_error!(&env, ErrorPool::InvalidBTokenBurnAmount);
+                    }
+                    if actual - bt == 0 {
+                        pos.supply.remove(0);
+                    } else {
+                        pos.supply.set(0, actual - bt);
+                    }
+                    bs -= bt;
+                    let deuda: i128 = Self::leer(&env, &K::Deuda, 0);
+                    if deuda > 0 && deuda >= Self::total_supply(bs, rate) {
+                        panic_with_error!(&env, ErrorPool::InvalidUtilRate);
+                    }
+                    tok.transfer(&yo, &to, &sale);
                 }
                 _ => panic!("tipo no soportado en el simulador"),
             }
+            s.set(&K::BSupply, &bs);
         }
         env.storage().persistent().set(&K::Pos(from), &pos);
         pos
@@ -207,20 +348,20 @@ impl PoolSimulado {
 // Preparación
 // ---------------------------------------------------------------------------
 
-const U: i128 = 10_000_000; // 1 XLM
-const B_RATE_INICIAL: i128 = 2_194_332_011_155; // el real de TestnetV2 al 1 oct 2026
-const SUBE: i128 = 50_000_000; // ~ +0.00005 por segundo: rendimiento visible en pruebas
-const FONDOS_POOL: i128 = 100_000 * U;
+pub(crate) const U: i128 = 10_000_000; // 1 XLM
+pub(crate) const B_RATE_INICIAL: i128 = 2_194_332_011_155; // el real de TestnetV2 al 1 oct 2026
+pub(crate) const SUBE: i128 = 50_000_000; // ~ +0.00005 por segundo: rendimiento visible en pruebas
+pub(crate) const FONDOS_POOL: i128 = 100_000 * U;
 
-struct Ctx {
-    env: Env,
-    token: TokenClient<'static>,
-    sac: StellarAssetClient<'static>,
-    pool: Address,
-    adaptador: AdaptadorBlendClient<'static>,
+pub(crate) struct Ctx {
+    pub(crate) env: Env,
+    pub(crate) token: TokenClient<'static>,
+    pub(crate) sac: StellarAssetClient<'static>,
+    pub(crate) pool: Address,
+    pub(crate) adaptador: AdaptadorBlendClient<'static>,
 }
 
-fn setup() -> Ctx {
+pub(crate) fn setup() -> Ctx {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().with_mut(|l| {
@@ -244,13 +385,16 @@ fn setup() -> Ctx {
 }
 
 impl Ctx {
-    fn avanzar(&self, s: u64) {
+    pub(crate) fn avanzar(&self, s: u64) {
         self.env.ledger().with_mut(|l| {
             l.timestamp += s;
             l.sequence_number += 1;
         });
     }
-    fn btokens_adaptador(&self) -> i128 {
+    pub(crate) fn pool(&self) -> PoolSimuladoClient<'static> {
+        PoolSimuladoClient::new(&self.env, &self.pool)
+    }
+    pub(crate) fn btokens_adaptador(&self) -> i128 {
         PoolSimuladoClient::new(&self.env, &self.pool)
             .get_positions(&self.adaptador.address)
             .supply
@@ -258,7 +402,7 @@ impl Ctx {
             .unwrap_or(0)
     }
     /// Quien deposita en el adaptador: le damos tokens y el permiso, como hace la tanda.
-    fn depositar(&self, quien: &Address, monto: i128) -> i128 {
+    pub(crate) fn depositar(&self, quien: &Address, monto: i128) -> i128 {
         self.sac.mint(quien, &monto);
         self.token
             .approve(quien, &self.adaptador.address, &monto, &1000);
