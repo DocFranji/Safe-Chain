@@ -5,7 +5,10 @@ extern crate std;
 
 use crate::test::*;
 use crate::*;
-use soroban_sdk::{testutils::Address as _, Address, InvokeError};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, InvokeError,
+};
 use tanda::{Error as ErrorTanda, Estado, TandaContract, TandaContractClient};
 
 /// Un contrato de tanda que usa el adaptador del contexto, con `n` miembros con saldo.
@@ -442,4 +445,51 @@ fn peor_caso_12_miembros_nadie_paga() {
     );
     // El pool simulado es mucho más liviano que Blend: el costo real se mide en testnet.
     assert!(cpu < 100_000_000);
+}
+
+// ===========================================================================
+// 5. TTL (política acordada con M1: máximo de la red, como mucho una vez al día)
+// ===========================================================================
+
+/// Las participaciones y el adaptador quedan con la vida máxima de la red en cada operación, y
+/// `renovar` (sin firma) las vuelve a llevar al máximo aunque nadie deposite ni retire en meses.
+#[test]
+fn ttl_al_maximo_y_renovar_sin_firma() {
+    use soroban_sdk::testutils::storage::{Instance as _, Persistent as _};
+    let c = setup();
+    let t = Address::generate(&c.env);
+    c.depositar(&t, 100 * U);
+    let max = c.env.storage().max_ttl();
+    let ttl_shares = || {
+        c.env.as_contract(&c.adaptador.address, || {
+            c.env
+                .storage()
+                .persistent()
+                .get_ttl(&Clave::Shares(t.clone()))
+        })
+    };
+    let ttl_instancia = || {
+        c.env.as_contract(&c.adaptador.address, || {
+            c.env.storage().instance().get_ttl()
+        })
+    };
+    assert_eq!(ttl_shares(), max);
+    assert_eq!(ttl_instancia(), max);
+
+    // Pasan 60 días sin que nadie toque el adaptador.
+    c.env
+        .ledger()
+        .with_mut(|l| l.sequence_number += 60 * 17_280);
+    assert_eq!(ttl_shares(), max - 60 * 17_280);
+    c.env.set_auths(&[]); // renovar no pide firma
+    c.adaptador.renovar(&t);
+    assert_eq!(ttl_shares(), max);
+    assert_eq!(ttl_instancia(), max);
+    // Renovar a un dueño que no existe no crea nada ni falla.
+    let nadie = Address::generate(&c.env);
+    c.adaptador.renovar(&nadie);
+    assert_eq!(c.adaptador.shares_de(&nadie), 0);
+    // Lecturas para la web.
+    assert_eq!(c.adaptador.pool(), c.pool);
+    assert_eq!(c.adaptador.token(), c.token.address);
 }

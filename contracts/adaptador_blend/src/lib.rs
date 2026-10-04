@@ -40,8 +40,9 @@ pub const SCALAR_12: i128 = 1_000_000_000_000;
 pub const SUPPLY: u32 = 0;
 pub const WITHDRAW: u32 = 1;
 
-const TTL_UMBRAL: u32 = 17_280;
-const TTL_EXTENDER: u32 = 518_400;
+/// Un día en ledgers (~5 s cada uno). Política de TTL acordada con M1: los datos se renuevan
+/// al máximo que permite la red (`max_ttl()`, hoy ~180 días), como mucho una vez al día.
+const DIA_LEDGERS: u32 = 17_280;
 
 /// Un pedido para el pool de Blend. Mismos nombres de campos que en Blend,
 /// para que se codifique igual.
@@ -94,6 +95,7 @@ impl AdaptadorBlend {
             Err(e) => panic_with_error!(&env, e),
         };
         s.set(&Clave::Indice, &indice);
+        Self::extender_instancia(&env);
     }
 
     /// Recibe `monto` de `desde` (que antes hizo `approve` a este adaptador) y lo deposita
@@ -103,7 +105,7 @@ impl AdaptadorBlend {
         if monto <= 0 {
             return Err(ErrorAdaptador::MontoInvalido);
         }
-        let (pool, tok) = (Self::pool(&env), Self::token_dir(&env));
+        let (pool, tok) = (Self::pool_dir(&env), Self::token_dir(&env));
         let yo = env.current_contract_address();
         let t = token::Client::new(&env, &tok);
 
@@ -177,9 +179,30 @@ impl AdaptadorBlend {
             .unwrap_or(0)
     }
 
+    /// Renueva la vida de las participaciones de `duenio` y del adaptador. No pide firma ni mueve
+    /// dinero (cualquiera puede pagar el "alquiler"). La tanda la llama en cada ronda, igual que con
+    /// la bóveda simulada, para que nada se archive aunque nadie retire en meses.
+    pub fn renovar(env: Env, duenio: Address) {
+        let clave = Clave::Shares(duenio);
+        if env.storage().persistent().has(&clave) {
+            Self::extender(&env, &clave);
+        }
+        Self::extender_instancia(&env);
+    }
+
+    /// El pool de Blend donde está el colateral (la web lo usa para enlazar a stellar.expert).
+    pub fn pool(env: Env) -> Address {
+        Self::pool_dir(&env)
+    }
+
+    /// El activo que deposita este adaptador.
+    pub fn token(env: Env) -> Address {
+        Self::token_dir(&env)
+    }
+
     // ----- internas -----
 
-    fn pool(env: &Env) -> Address {
+    fn pool_dir(env: &Env) -> Address {
         env.storage().instance().get(&Clave::Pool).unwrap()
     }
 
@@ -213,7 +236,7 @@ impl AdaptadorBlend {
             pedidos.into_val(env),
         ];
         let pos: Map<Symbol, Val> =
-            env.invoke_contract(&Self::pool(env), &Symbol::new(env, funcion), args);
+            env.invoke_contract(&Self::pool_dir(env), &Symbol::new(env, funcion), args);
         Self::supply_de(env, &pos)
     }
 
@@ -222,7 +245,7 @@ impl AdaptadorBlend {
     fn reserva(env: &Env) -> Result<(u32, i128), ErrorAdaptador> {
         let args: Vec<Val> = vec![env, Self::token_dir(env).into_val(env)];
         let r: Map<Symbol, Val> =
-            env.invoke_contract(&Self::pool(env), &Symbol::new(env, "get_reserve"), args);
+            env.invoke_contract(&Self::pool_dir(env), &Symbol::new(env, "get_reserve"), args);
         let config: Map<Symbol, Val> = r
             .get(Symbol::new(env, "config"))
             .ok_or(ErrorAdaptador::ReservaNoEncontrada)?
@@ -249,8 +272,11 @@ impl AdaptadorBlend {
     /// bTokens que el adaptador tiene en Blend para nuestra reserva.
     fn btokens_propios(env: &Env) -> i128 {
         let args: Vec<Val> = vec![env, env.current_contract_address().into_val(env)];
-        let pos: Map<Symbol, Val> =
-            env.invoke_contract(&Self::pool(env), &Symbol::new(env, "get_positions"), args);
+        let pos: Map<Symbol, Val> = env.invoke_contract(
+            &Self::pool_dir(env),
+            &Symbol::new(env, "get_positions"),
+            args,
+        );
         Self::supply_de(env, &pos)
     }
 
@@ -271,10 +297,22 @@ impl AdaptadorBlend {
             return Err(ErrorAdaptador::SharesInsuficientes);
         }
         p.set(&clave, &nuevo);
-        p.extend_ttl(&clave, TTL_UMBRAL, TTL_EXTENDER);
+        Self::extender(env, &clave);
+        Self::extender_instancia(env);
+        Ok(())
+    }
+
+    fn extender(env: &Env, clave: &Clave) {
+        let max = env.storage().max_ttl();
+        env.storage()
+            .persistent()
+            .extend_ttl(clave, max.saturating_sub(DIA_LEDGERS), max);
+    }
+
+    fn extender_instancia(env: &Env) {
+        let max = env.storage().max_ttl();
         env.storage()
             .instance()
-            .extend_ttl(TTL_UMBRAL, TTL_EXTENDER);
-        Ok(())
+            .extend_ttl(max.saturating_sub(DIA_LEDGERS), max);
     }
 }

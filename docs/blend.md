@@ -36,7 +36,7 @@ el pool TestnetV2 por RPC y lo volví a probar en testnet con XLM **y con el USD
 | 1.4b | ¿Una pérdida en Blend traba la tanda? | **Sí:** `cerrar_ronda` falla hasta que paguen los morosos | Media (raro) | `hallazgo_perdida_en_blend_traba_cerrar_ronda` |
 | 2 | Liquidez (pool muy prestado) | La tanda se traba y se destraba sola; sin pérdida | Media | `sin_liquidez_la_tanda_se_traba_y_se_destraba` |
 | 3 | Pool congelado | No se puede **unirse**; las tandas en curso terminan bien | Baja | `pool_congelado_bloquea_unirse_pero_no_retirar` |
-| 4 | TTL | Igual que M1: renovar al máximo de la red. Nada se pierde (se restaura) | Media | (ver M1) |
+| 4 | TTL | Aplicada la política de M1: máximo de la red y `renovar(dueño)` sin firma | Media | `ttl_al_maximo_y_renovar_sin_firma` |
 | 5 | Permisos | Correctos: nadie mueve lo de otro | — | `nadie_mueve_lo_de_otro_sin_su_firma` |
 | 6 | Costo del peor caso (12 retiros de Blend en un `cerrar_ronda`) | Medido en testnet (sección 3) | — | `peor_caso_12_miembros_nadie_paga` + testnet |
 
@@ -192,10 +192,13 @@ solo se renueva si le queda menos de 1 día. Lo que vive en Blend no es problema
 el mundo (instancia ~31 días, reservas ~46 días) y la posición del adaptador se renueva a ~120 días
 en cada operación nuestra.
 
-**Política (ACORDADA con M1):** instancia y cuenta de cada dueño al máximo de la red (`max_ttl()`)
-en cada llamada, renovando a lo más una vez al día. La tanda además renueva la instancia y el código
-de su bóveda (M1). Lo aplico en la fase 2, sobre la rama de M1 ya integrada, para usar la misma
-función. Desde el protocolo 23, un dato archivado no se pierde: la transacción lo restaura.
+**Política (ACORDADA con M1) y ya aplicada:** la instancia del adaptador y la cuenta de cada dueño se
+renuevan al máximo de la red (`max_ttl()`, hoy ~180 días) en cada operación, como mucho una vez al
+día. Además, el adaptador tiene `renovar(dueño)`, igual que la bóveda simulada de M1: no pide firma
+ni mueve dinero, y la tanda de M1 la llama en cada ronda (con `try`), así que nada se archiva aunque
+nadie retire en meses. Prueba: `ttl_al_maximo_y_renovar_sin_firma` (60 días sin tocar el adaptador y
+`renovar` lo vuelve al máximo). Desde el protocolo 23, además, un dato archivado no se pierde: la
+transacción que lo usa lo restaura.
 
 ### 2.4 Permisos
 
@@ -203,7 +206,8 @@ función. Desde el protocolo 23, un dato archivado no se pierde: la transacción
 | --- | --- | --- |
 | `depositar(desde, monto)` | `desde` | Nada: sin la firma de `desde` falla, aunque `desde` haya dado permiso de gasto al adaptador |
 | `retirar(hacia, shares)` / `retirar_monto(hacia, monto)` | `hacia` | Nada: solo se gastan las participaciones de `hacia` y el dinero va a `hacia` |
-| `valor`, `shares_de` | nadie (lectura) | — |
+| `valor`, `shares_de`, `pool`, `token` | nadie (lectura) | — |
+| `renovar(dueño)` | nadie | Solo alarga la vida de datos existentes; no crea ni mueve nada |
 | Constructor | quien despliega | Fija pool y token para siempre: **no hay admin** ni forma de cambiarlos |
 
 Sin admin no hay llave que pueda vaciar el adaptador; la contracara es que no hay forma de "rescatar"
@@ -397,7 +401,7 @@ bolsa += entregado;
 ## 8. Cómo reproducir
 
 ```bash
-cargo test -p adaptador_blend                     # 19 pruebas (6 originales + 13 de auditoría)
+cargo test -p adaptador_blend                     # 20 pruebas (6 originales + 14 de auditoría)
 stellar keys generate admin --network testnet --fund
 bash scripts/desplegar_blend.sh && bash scripts/demo_blend.sh                  # XLM
 ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_blend.sh   # USDC (ver sección 4)
