@@ -54,6 +54,10 @@ const MENSAJES: Record<number, string> = {
   // Errores de la bóveda simulada (contrato aparte, mismo rango de M1)
   17: 'La bóveda no aceptó ese monto.',
   18: 'La bóveda no tiene suficientes participaciones para ese retiro. Avísanos: no debería pasar.',
+  // M2: historial crediticio
+  20: 'El historial crediticio no está disponible en este momento. Intenta de nuevo en unos minutos.',
+  21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en «Mi historial».',
+  22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
   // M4: bóveda por token (contrato de la tanda)
   55: 'Esa moneda todavía no se puede usar en tandas.',
   56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
@@ -87,6 +91,9 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   SinDeuda: 14,
   PagoExcesivo: 15,
   MontoInvalido: 16,
+  HistorialNoConfigurado: 20,
+  PuntajeInsuficiente: 21,
+  RequisitosBloqueados: 22,
   TokenSinBoveda: 55,
   BovedaDeOtroToken: 56,
 }

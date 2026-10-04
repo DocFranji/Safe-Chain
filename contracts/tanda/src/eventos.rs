@@ -151,6 +151,27 @@ pub struct EvBovedaRapida {
     pub boveda: Option<Address>,
 }
 
+// ---------------------------------------------------------------------------
+// --- M2: historial crediticio ---
+// ---------------------------------------------------------------------------
+
+/// El admin conectó (o desconectó, con `None`) el contrato de historial.
+#[contractevent(topics = ["hist_conf"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvHistorialConfigurado {
+    pub historial: Option<Address>,
+}
+
+/// El creador de la tanda `id` fijó sus requisitos de historial.
+#[contractevent(topics = ["requisitos"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvRequisitos {
+    #[topic]
+    pub id: u32,
+    pub puntaje_minimo: u32,
+    pub descuento: bool,
+}
+
 // --- M4: bóveda por token ---
 
 /// El admin registró (o quitó) la bóveda de un token. Solo afecta a las tandas que se creen después.

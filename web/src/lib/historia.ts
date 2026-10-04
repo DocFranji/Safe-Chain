@@ -178,6 +178,21 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
       }
       case 'EvBovedaRapida':
         return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de las tandas de prueba' }
+      // --- M2: historial crediticio ---
+      case 'EvHistorialConfigurado':
+        return { ...base, tipo: 'info', titulo: 'Se conectó el historial crediticio' }
+      case 'EvRequisitos': {
+        const partes = [
+          ev.data.puntaje_minimo ? `pide historial con ${ev.data.puntaje_minimo} puntos o más` : null,
+          ev.data.descuento ? 'da descuento de garantía por buen historial' : null,
+        ].filter(Boolean)
+        return {
+          ...base,
+          tipo: 'info',
+          titulo: partes.length ? 'La tanda usa el historial crediticio' : 'La tanda no usa el historial crediticio',
+          detalle: partes.length ? `Esta tanda ${partes.join(' y ')}` : undefined,
+        }
+      }
       // M4: bóveda por token (evento del admin; no lleva número de tanda)
       case 'EvBovedaToken':
         return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de una moneda para las tandas nuevas' }

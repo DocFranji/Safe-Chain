@@ -18,6 +18,9 @@ export const Error = {
     14: { message: "SinDeuda" },
     15: { message: "PagoExcesivo" },
     16: { message: "MontoInvalido" },
+    20: { message: "HistorialNoConfigurado" },
+    21: { message: "PuntajeInsuficiente" },
+    22: { message: "RequisitosBloqueados" },
     55: { message: "TokenSinBoveda" },
     56: { message: "BovedaDeOtroToken" }
 };

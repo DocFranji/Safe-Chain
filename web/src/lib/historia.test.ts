@@ -141,6 +141,23 @@ describe('narrar: pagar deudas (M1)', () => {
   })
 })
 
+describe('narrar: historial crediticio (M2)', () => {
+  it('cuenta los requisitos de historial de la tanda', () => {
+    const [con, sin, conectado] = narrar(
+      [
+        ev({ name: 'EvRequisitos', data: { id: 1, puntaje_minimo: 100, descuento: true } }),
+        ev({ name: 'EvRequisitos', data: { id: 1, puntaje_minimo: 0, descuento: false } }),
+        ev({ name: 'EvHistorialConfigurado', data: { historial: 'C' } }),
+      ],
+      f,
+    )
+    expect(con.titulo).toBe('La tanda usa el historial crediticio')
+    expect(con.detalle).toBe('Esta tanda pide historial con 100 puntos o más y da descuento de garantía por buen historial')
+    expect(sin.titulo).toBe('La tanda no usa el historial crediticio')
+    expect(conectado.titulo).toBe('Se conectó el historial crediticio')
+  })
+})
+
 // --- M4: bóveda por token ---
 describe('narrar: bóveda por token (M4)', () => {
   it('cuenta el cambio de bóveda de una moneda como información', () => {

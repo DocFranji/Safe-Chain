@@ -228,7 +228,7 @@ impl TandaContract {
         let mut miembros = cargar_miembros(&env, id);
         let posicion = posicion_al_unirse(&env, &t, &miembros);
         let colateral =
-            ganchos::ajustar_colateral(&env, &t, &miembro, colateral_para(&t, posicion));
+            ganchos::ajustar_colateral(&env, &t, id, &miembro, colateral_para(&t, posicion));
 
         // 1) El miembro le pasa el colateral al contrato.
         let yo = env.current_contract_address();
@@ -436,6 +436,7 @@ impl TandaContract {
             t.estado = Estado::PorLiquidar;
         }
         guardar_tanda(&env, id, &t);
+        ganchos::al_fin_operacion(&env, &t, id); // M2: envía los hechos de esta ronda al historial
         Ok(())
     }
 
@@ -574,6 +575,7 @@ impl TandaContract {
             sin_repartir,
         }
         .publish(&env);
+        ganchos::al_fin_operacion(&env, &t, id); // M2: envía los hechos finales al historial
         Ok(())
     }
 

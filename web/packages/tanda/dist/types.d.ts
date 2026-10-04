@@ -67,6 +67,15 @@ export declare const Error: {
     16: {
         message: string;
     };
+    20: {
+        message: string;
+    };
+    21: {
+        message: string;
+    };
+    22: {
+        message: string;
+    };
     55: {
         message: string;
     };
@@ -159,6 +168,19 @@ export interface Faltante {
     acreedor: string;
     monto: bigint;
     ronda: number;
+}
+/**
+ * Requisitos de historial de una tanda (`configurar_requisitos`). Por defecto: ninguno.
+ */
+export interface Requisitos {
+    /**
+     * Dar descuento de garantía según el nivel del historial.
+     */
+    descuento: boolean;
+    /**
+     * Puntaje mínimo para unirse (0 = cualquiera puede).
+     */
+    puntaje_minimo: number;
 }
 /**
  * Event: EvPago
@@ -293,6 +315,17 @@ export interface EvFinalizadaEvent {
     };
 }
 /**
+ * El creador de la tanda `id` fijó sus requisitos de historial.
+ */
+export interface EvRequisitosEvent {
+    name: "EvRequisitos";
+    data: {
+        id: number;
+        puntaje_minimo?: number;
+        descuento?: boolean;
+    };
+}
+/**
  * El admin registró (o quitó) la bóveda de un token. Solo afecta a las tandas que se creen después.
  */
 export interface EvBovedaTokenEvent {
@@ -338,4 +371,13 @@ export interface EvBolsaRecuperadaEvent {
         garantia?: bigint;
     };
 }
-export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent;
+/**
+ * El admin conectó (o desconectó, con `None`) el contrato de historial.
+ */
+export interface EvHistorialConfiguradoEvent {
+    name: "EvHistorialConfigurado";
+    data: {
+        historial?: string | null;
+    };
+}
+export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvHistorialConfiguradoEvent;

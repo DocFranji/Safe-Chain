@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkInvitacion, parsearRuta, rutaDemo, rutaTanda } from './rutas'
+import { linkInvitacion, parsearRuta, rutaDemo, rutaHistorial, rutaTanda } from './rutas'
 
 describe('parsearRuta', () => {
   it('reconoce las páginas de la app', () => {
@@ -40,5 +40,18 @@ describe('link de invitación', () => {
     expect(link).toBe('https://tanda.example/app/#/tanda/7')
     expect(parsearRuta(new URL(link).hash)).toEqual({ tipo: 'tanda', id: 7 })
     expect(rutaTanda(7)).toBe('#/tanda/7')
+  })
+})
+
+describe('ruta del historial (M2)', () => {
+  const G = 'GB2NSL6RGGWODEWQLUP4MD3LC7PMJ775RLGI7TCPT3NJBE2FOUED5BNK'
+  it('reconoce el historial de una dirección y el propio', () => {
+    expect(parsearRuta(`#/historial/${G}`)).toEqual({ tipo: 'historial', dir: G })
+    expect(parsearRuta(rutaHistorial(G))).toEqual({ tipo: 'historial', dir: G })
+    expect(parsearRuta('#/historial')).toEqual({ tipo: 'historial', dir: null })
+  })
+  it('rechaza direcciones mal formadas', () => {
+    expect(parsearRuta('#/historial/GABC')).toEqual({ tipo: 'desconocida' })
+    expect(parsearRuta(`#/historial/${G.toLowerCase()}`)).toEqual({ tipo: 'desconocida' })
   })
 })
