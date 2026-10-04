@@ -105,3 +105,38 @@ describe('narrar: la historia de la demo', () => {
     expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió —')
   })
 })
+
+describe('narrar: pagar deudas (M1)', () => {
+  it('"Ana pagó su deuda" y "Carla recibió lo que le faltaba" son momentos clave', () => {
+    const [pago, abono] = narrar(
+      [
+        ev({ name: 'EvDeudaPagada', data: { id: 1, miembro: 'GANA', pagador: 'GANA', monto: 100n * U, deuda_restante: 0n } }),
+        ev({ name: 'EvAbono', data: { id: 1, deudor: 'GANA', acreedor: 'GCARLA', ronda: 2, monto: 100n * U, retenida: false } }),
+      ],
+      f,
+    )
+    expect(pago).toMatchObject({ tipo: 'clave', titulo: 'Ana pagó 100 TUSD y saldó su deuda', detalle: 'vuelve a estar al día' })
+    expect(abono).toMatchObject({ tipo: 'clave', titulo: 'Carla recibió los 100 TUSD que le faltaban', detalle: 'Ronda 3: lo pagó Ana' })
+  })
+
+  it('pago parcial, pagado por otra persona', () => {
+    const [h] = narrar(
+      [ev({ name: 'EvDeudaPagada', data: { id: 1, miembro: 'GANA', pagador: 'GBETO', monto: 30n * U, deuda_restante: 70n * U } })],
+      f,
+    )
+    expect(h).toMatchObject({ tipo: 'pago', titulo: 'Ana pagó 30 TUSD de su deuda', detalle: 'La pagó Beto · le faltan 70 TUSD' })
+  })
+
+  it('abono a una bolsa retenida y bolsa recuperada', () => {
+    const [abono, rec] = narrar(
+      [
+        ev({ name: 'EvAbono', data: { id: 1, deudor: 'GANA', acreedor: 'GCARLA', ronda: 2, monto: 100n * U, retenida: true } }),
+        ev({ name: 'EvBolsaRecuperada', data: { id: 1, miembro: 'GCARLA', monto: 190n * U, multas: 10n * U, garantia: 100n * U } }),
+      ],
+      f,
+    )
+    expect(abono).toMatchObject({ tipo: 'info', titulo: '100 TUSD se sumaron a la bolsa retenida de Carla' })
+    expect(rec).toMatchObject({ tipo: 'ok', titulo: 'Carla recuperó su bolsa: 190 TUSD' })
+    expect(rec.detalle).toBe('Se descontaron 10 TUSD de multas · 100 TUSD quedan como su garantía para las cuotas que le faltan')
+  })
+})

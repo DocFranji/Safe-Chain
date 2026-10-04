@@ -1,6 +1,7 @@
 // Tabla con cada participante: su turno, su garantía y cómo va.
 import type { DatosTanda } from '../hooks/useTanda'
 import { monto } from '../lib/formato'
+import { saldoSuDeuda } from '../lib/deudas'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { EXPLORADOR, SIMBOLO } from '../config'
 
@@ -52,6 +53,10 @@ export function ListaMiembros({ datos, yo }: Props) {
                   )}
                   <td>
                     {estadoMiembro(m, activa, tanda.ronda_actual)}
+                    {saldoSuDeuda(
+                      datos.deudas.find((d) => d.direccion === m.direccion),
+                      m.moroso,
+                    ) && <span className="sub saldo-deuda">Saldó su deuda</span>}
                     {m.atrasos > 0 && (
                       <span className="sub atraso">
                         {m.atrasos === 1 ? '1 atraso' : `${m.atrasos} atrasos`}

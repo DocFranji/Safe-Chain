@@ -92,3 +92,15 @@ pub(crate) fn al_terminar(
     _monto: i128,
 ) {
 }
+
+/// (M1) Alguien pagó `monto` de la deuda de `miembro`; le queda `deuda_restante`
+/// (0 = la saldó: ya no es moroso). Puede haberla pagado otra persona.
+pub(crate) fn al_pagar_deuda(
+    _env: &Env,
+    _t: &Tanda,
+    _id: u32,
+    _miembro: &Address,
+    _monto: i128,
+    _deuda_restante: i128,
+) {
+}
