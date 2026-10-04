@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, historial } from './mock.mjs'
+import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conMiBolsaLista, historial } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -207,6 +207,41 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Móvil (390px): la tanda con deuda y calendario no se desborda', !overflow)
   await shot(page, '06c-tanda-deuda-390')
   check('Tercero: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 5d. M1: "Tu bolsa está lista: cóbrala" (cerrador, opción C)
+{
+  const est = conMiBolsaLista(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  const tarjeta = page.locator('.tarjeta', { hasText: 'Tanda 6' })
+  check('Cobrar: en el lobby, la tarjeta de mi tanda dice "Tu bolsa está lista: cóbrala"', (await tarjeta.locator('.tarjeta-cobro').count()) === 1)
+  check('Cobrar: ninguna otra tarjeta lo dice', (await page.locator('.tarjeta-cobro').count()) === 1)
+  await page.goto(BASE + '#/tanda/6')
+  const boton = page.getByRole('button', { name: 'Tu bolsa está lista: cóbrala' })
+  await boton.waitFor({ timeout: 15000 }).catch(() => {})
+  check('Cobrar: en la tanda, botón principal "Tu bolsa está lista: cóbrala" habilitado', (await boton.count()) === 1 && !(await boton.isDisabled()) && /principal/.test((await boton.getAttribute('class')) ?? ''))
+  const t = (await texto(page)).replace(/\u00a0/g, ' ')
+  check('Cobrar: avisa que a Beto no le alcanza la garantía y que la bolsa sale con 60 TUSD menos', /A Beto no le alcanza la garantía: la bolsa sale con 60 TUSD menos, que te queda debiendo y puede pagar después/.test(t), t.slice(0, 1500))
+  check('Cobrar: ya no dice "Cerrar la ronda y pagarle a"', !/Cerrar la ronda y pagarle a/.test(t))
+  await shot(page, '06d-cobrar-bolsa')
+  check('Cobrar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Otra persona (Ana) ve la misma ronda: cualquiera puede cerrarla, pero no es "su" bolsa.
+  const est = conMiBolsaLista(nuevoEstado())
+  const { page } = await nuevaPagina(browser, { est, direccion: ANA, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('text=Cualquier persona puede cerrar la ronda', { timeout: 15000 }).catch(() => {})
+  const t = (await texto(page)).replace(/\u00a0/g, ' ')
+  check('Cobrar (otra persona): botón "Cerrar la ronda y pagarle a …" y no "cóbrala"', /Cerrar la ronda y pagarle a/.test(t) && !/Tu bolsa está lista/.test(t), t.slice(0, 1200))
+  check('Cobrar (otra persona): la diferencia se le queda debiendo a quien cobra', /que le queda debiendo a /.test(t))
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  check('Cobrar (otra persona): sin aviso de cobro en el lobby', (await page.locator('.tarjeta-cobro').count()) === 0)
   await page.close()
 }
 

@@ -230,3 +230,14 @@ Cada mejora va en su propio PR hacia `integracion`. Ninguna cambia el contrato: 
 - Es un aviso, no un problema: ningún retiro falla por falta de fondos.
 - **Pruebas:** `bovedas.test.ts` (la fórmula del contrato, los textos y cada caso) y 4 escenarios de navegador en `#/estado`.
 
+
+### "Tu bolsa está lista: cóbrala" (cerrador sin llaves, opción C)
+
+- **Problema:** cuando vence una ronda, alguien tiene que cerrarla (`cerrar_ronda` no pide firma: puede cualquiera). En una tanda mensual, si nadie se acuerda, la bolsa no llega. El Cron diario de Vercel (opción A) quedó **de momento no**.
+- **Solución:** a quien le toca cobrar se le muestra como lo que es para esa persona. Es quien más ganas tiene de cerrarla.
+  - En la tanda (`CerrarRonda.tsx`, una línea en `PanelRonda`): botón principal **"Tu bolsa está lista: cóbrala"**, que firma `cerrar_ronda`. Las demás personas siguen viendo "Cerrar la ronda y pagarle a …".
+  - En el lobby (`TarjetaTanda`): la tarjeta de esa tanda dice "Tu bolsa está lista: cóbrala".
+  - Si su bolsa queda retenida por deuda, no se le promete el cobro: el botón dice "Cerrar la ronda" y explica que la recupera al saldar.
+- **Antes de firmar dice si la bolsa sale incompleta** (`faltantesAlCerrar`, igual que `cerrar_ronda`): "A Beto no le alcanza la garantía: la bolsa sale con 60 TUSD menos, que te queda debiendo y puede pagar después". Antes decía siempre "la bolsa se entrega completa", lo que dejó de ser cierto con las deudas de M1.
+- **Con M3:** usa el mismo `beneficiario` que el panel (`posicion === ronda_actual`). Si el turno todavía no está decidido (subasta), no hay "cóbrala", solo "Cerrar la ronda".
+- **Pruebas:** `cobro.test.ts`, `faltantesAlCerrar` en `deudas.test.ts` y 2 escenarios de navegador (quien cobra, con el lobby; y otra persona a 390 px).

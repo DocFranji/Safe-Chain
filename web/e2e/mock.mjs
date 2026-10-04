@@ -183,6 +183,27 @@ export function conTandaMorosa(e) {
   }
   return e
 }
+
+/**
+ * M1: agrega la tanda 6, en curso y con la ronda 2 vencida: me toca cobrar a mí ("Tu bolsa está lista:
+ * cóbrala"). Ana y yo pagamos; Beto no, y su garantía (40 TUSD) no le alcanza: la bolsa sale con 60 menos.
+ * Usa el id 6 (el lobby lee las tandas 1..total), así que no se combina con `conTandaMorosa`.
+ */
+export function conMiBolsaLista(e) {
+  e.tandas[6] = {
+    tanda: tanda({
+      creador: ANA, estado: est('Activa'), ronda_actual: 1, periodo_seg: 120n, inicio_ronda: BigInt(ahora() - 300), shares_boveda: 240n * U,
+    }),
+    miembros: [
+      [ANA, miembro(0, { cobro: true })],
+      [ME, miembro(1)],
+      [BETO, miembro(2, { colateral: 40n * U })],
+    ],
+    pagaron: [ANA, ME],
+  }
+  e.historias = { ...e.historias, 6: [] } // la historia de la tanda 6 del mock es la de `conTandaMorosa`
+  return e
+}
 /** M2: un historial con todo en cero salvo lo que se indique. */
 export function historial(o = {}) {
   const base = {
@@ -420,9 +441,10 @@ const HISTORIAS = {
   ],
 }
 
-function eventosDe(idTanda) {
+function eventosDe(idTanda, est) {
   const base = Math.floor(Date.now() / 1000) - 600
-  return (HISTORIAS[idTanda] ?? []).map(([nombre, datos], i) => ({
+  // Un escenario puede cambiar la historia de una tanda con `est.historias[id]`.
+  return (est?.historias?.[idTanda] ?? HISTORIAS[idTanda] ?? []).map(([nombre, datos], i) => ({
     id: `${String(1000 + i).padStart(10, '0')}-0000000001`,
     type: 'contract',
     ledger: 900 + i,
@@ -454,7 +476,7 @@ export function respuestaRpc(est, cuerpo) {
     case 'getEvents':
       est.eventosPedidos++
       return ok({
-        events: eventosDe(idDelFiltro(params)), latestLedger: 1000, oldestLedger: 1, latestLedgerCloseTime: '1', oldestLedgerCloseTime: '1', cursor: 'x',
+        events: eventosDe(idDelFiltro(params), est), latestLedger: 1000, oldestLedger: 1, latestLedgerCloseTime: '1', oldestLedgerCloseTime: '1', cursor: 'x',
       })
     case 'getLatestLedger':
       return ok({ id: 'a', protocolVersion: 25, sequence: 1000 })
