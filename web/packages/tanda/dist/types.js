@@ -17,5 +17,8 @@ export const Error = {
     13: { message: "NoInicializado" },
     14: { message: "SinDeuda" },
     15: { message: "PagoExcesivo" },
-    16: { message: "MontoInvalido" }
+    16: { message: "MontoInvalido" },
+    20: { message: "HistorialNoConfigurado" },
+    21: { message: "PuntajeInsuficiente" },
+    22: { message: "RequisitosBloqueados" }
 };

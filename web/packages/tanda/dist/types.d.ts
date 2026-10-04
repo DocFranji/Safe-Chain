@@ -67,6 +67,15 @@ export declare const Error: {
     16: {
         message: string;
     };
+    20: {
+        message: string;
+    };
+    21: {
+        message: string;
+    };
+    22: {
+        message: string;
+    };
 };
 /**
  * Struct: Tanda
@@ -153,6 +162,19 @@ export interface Faltante {
     acreedor: string;
     monto: bigint;
     ronda: number;
+}
+/**
+ * Requisitos de historial de una tanda (`configurar_requisitos`). Por defecto: ninguno.
+ */
+export interface Requisitos {
+    /**
+     * Dar descuento de garantía según el nivel del historial.
+     */
+    descuento: boolean;
+    /**
+     * Puntaje mínimo para unirse (0 = cualquiera puede).
+     */
+    puntaje_minimo: number;
 }
 /**
  * Event: EvPago
@@ -287,6 +309,17 @@ export interface EvFinalizadaEvent {
     };
 }
 /**
+ * El creador de la tanda `id` fijó sus requisitos de historial.
+ */
+export interface EvRequisitosEvent {
+    name: "EvRequisitos";
+    data: {
+        id: number;
+        puntaje_minimo?: number;
+        descuento?: boolean;
+    };
+}
+/**
  * Alguien pagó (toda o una parte) la deuda de `miembro`. Puede ser el miembro u otra persona.
  */
 export interface EvDeudaPagadaEvent {
@@ -322,4 +355,13 @@ export interface EvBolsaRecuperadaEvent {
         garantia?: bigint;
     };
 }
-export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent | EvDeudaPagadaEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent;
+/**
+ * El admin conectó (o desconectó, con `None`) el contrato de historial.
+ */
+export interface EvHistorialConfiguradoEvent {
+    name: "EvHistorialConfigurado";
+    data: {
+        historial?: string | null;
+    };
+}
+export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent | EvRequisitosEvent | EvDeudaPagadaEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvHistorialConfiguradoEvent;

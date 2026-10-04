@@ -10,6 +10,12 @@ export const TANDA_ID: string =
 export const TOKEN_ID: string =
   import.meta.env.VITE_TOKEN_ID ?? 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ5'
 
+/**
+ * Contrato del historial crediticio (misión M2). Opcional: si está vacío, la web le pregunta al contrato
+ * de la tanda cuál tiene configurado (`get_historial`); si tampoco hay, esconde todo lo del historial.
+ */
+export const HISTORIAL_ID: string = import.meta.env.VITE_HISTORIAL_ID ?? ''
+
 /** Horizon: servicio que lee cuentas clásicas (G...), por ejemplo para saber si aceptaron TUSD. */
 export const HORIZON_URL: string = import.meta.env.VITE_HORIZON_URL ?? 'https://horizon-testnet.stellar.org'
 export const FRIENDBOT_URL = 'https://friendbot.stellar.org'

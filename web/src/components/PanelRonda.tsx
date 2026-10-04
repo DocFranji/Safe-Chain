@@ -7,6 +7,8 @@ import type { DatosTanda } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from './BotonesEntrar'
 import { PagarDeuda } from './PagarDeuda'
+import { NotaHistorial } from './NotaHistorial'
+import { useGarantiaConHistorial } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { monto, duracion, porcentaje } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
@@ -29,12 +31,15 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false)
   const ocupado = aviso?.tipo === 'esperando'
 
-  const { tanda, miembros, pagaron, vence, colateralSiguiente } = datos
+  const { tanda, miembros, pagaron, vence, colateralSiguiente: colateralNormal } = datos
   const estado = tanda.estado.tag
   const yo = billetera.direccion
   const esCreador = yo !== null && yo === tanda.creador
   const mio = miembros.find((m) => m.direccion === yo) ?? null
   const yaPague = yo !== null && pagaron.includes(yo)
+  // M2: con descuento por historial, la garantía de quien está conectado puede ser menor que la normal.
+  const historial = useGarantiaConHistorial(id, yo, colateralNormal)
+  const colateralSiguiente = historial.garantia ?? colateralNormal
   const restante = vence - ahora
   const vencida = estado === 'Activa' && restante <= 0
   const beneficiario = estado === 'Activa' ? miembros.find((m) => m.posicion === tanda.ronda_actual) : undefined
@@ -110,6 +115,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                   Unirme y dejar {monto(colateralSiguiente)} {SIMBOLO} de garantía
                 </button>
                 {faltaParaUnirse > 0n && <FaltaSaldo falta={faltaParaUnirse} />}
+                <NotaHistorial yo={yo} requisitos={historial.requisitos} normal={colateralNormal!} conDescuento={historial.garantia} />
                 <p className="explica">
                   Tu turno será el {miembros.length + 1}. La garantía se guarda en una bóveda que genera
                   rendimiento y se te devuelve al final, con intereses.
