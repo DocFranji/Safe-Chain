@@ -1,6 +1,6 @@
 // Mismos casos que contracts/tanda/src/test_deudas.rs.
 import { describe, expect, it } from 'vitest'
-import { bolsaQueRecupera, errorMontoDeuda, saldoSuDeuda } from './deudas'
+import { bolsaQueRecupera, errorMontoDeuda, garantiaPendiente, saldoSuDeuda } from './deudas'
 
 const U = 10_000_000n
 const BETO = 'GBETO'
@@ -16,7 +16,7 @@ describe('bolsaQueRecupera', () => {
       bolsa_retenida: 200n * U,
       pagado: 0n,
     }
-    expect(bolsaQueRecupera(d, CARLA, 10n * U)).toEqual({ bolsa: 300n * U, multas: 10n * U, neto: 290n * U })
+    expect(bolsaQueRecupera(d, CARLA, 10n * U)).toEqual({ bolsa: 300n * U, multas: 10n * U, garantia: 0n, neto: 290n * U })
   })
 
   it('sin bolsa retenida no recupera nada (su turno aún no llega o ya cobró)', () => {
@@ -38,5 +38,26 @@ describe('saldoSuDeuda y errorMontoDeuda', () => {
     expect(errorMontoDeuda(0n, 100n * U)).toMatch(/mayor que cero/)
     expect(errorMontoDeuda(101n * U, 100n * U)).toMatch(/más de lo que debes/)
     expect(errorMontoDeuda(100n * U, 100n * U)).toBeNull()
+  })
+})
+
+describe('garantiaPendiente (igual que moroso_salda_a_mitad_de_tanda_y_repone_su_garantia)', () => {
+  const t = { estado: 'Activa', n_miembros: 4, ronda_actual: 2, cuota: 100n * U, cobertura_bps: 0 }
+
+  it('Beto salda en la ronda 3 de 4: debe 2 cuotas, garantía mínima de una cuota', () => {
+    expect(garantiaPendiente(t, 0n)).toBe(100n * U)
+    const d = { faltantes: [{ ronda: 1, acreedor: BETO, monto: 100n * U }], bolsa_retenida: 300n * U, pagado: 0n }
+    expect(bolsaQueRecupera(d, BETO, 10n * U, garantiaPendiente(t, 0n))).toEqual({
+      bolsa: 400n * U,
+      multas: 10n * U,
+      garantia: 100n * U,
+      neto: 290n * U,
+    })
+  })
+
+  it('con garantía del 100 % repone las cuotas que faltan; si la tanda terminó, nada', () => {
+    expect(garantiaPendiente({ ...t, cobertura_bps: 10_000 }, 0n)).toBe(200n * U)
+    expect(garantiaPendiente({ ...t, cobertura_bps: 10_000 }, 150n * U)).toBe(50n * U)
+    expect(garantiaPendiente({ ...t, estado: 'PorLiquidar' }, 0n)).toBe(0n)
   })
 })

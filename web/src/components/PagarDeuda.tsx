@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import type { DatosTanda } from '../hooks/useTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
-import { bolsaQueRecupera, errorMontoDeuda } from '../lib/deudas'
+import { bolsaQueRecupera, errorMontoDeuda, garantiaPendiente } from '../lib/deudas'
 import { parseMonto } from '../lib/entradas'
 import { monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
@@ -58,6 +58,7 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
           d={deudas.find((x) => x.direccion === yo)}
           yo={yo}
           multas={mio.multas_pendientes}
+          garantia={garantiaPendiente({ ...tanda, estado }, mio.colateral)}
           cobraEnRonda={estado === 'Activa' && !mio.cobro && mio.posicion > tanda.ronda_actual ? mio.posicion + 1 : null}
           ocupado={ocupado}
           faltaSaldo={faltaSaldo}
@@ -120,6 +121,8 @@ type MiDeudaProps = {
   d: Parameters<typeof bolsaQueRecupera>[0]
   yo: string
   multas: bigint
+  /** Garantía que se repone de su bolsa si la tanda sigue (para las cuotas que aún debe). */
+  garantia: bigint
   /** Ronda (1, 2, ...) en la que cobra si su turno aún no llegó. */
   cobraEnRonda: number | null
   ocupado: boolean
@@ -129,8 +132,8 @@ type MiDeudaProps = {
   pagar: (cuanto: bigint) => void
 }
 
-function MiDeuda({ deuda, d, yo, multas, cobraEnRonda, ocupado, faltaSaldo, parcial, setParcial, pagar }: MiDeudaProps) {
-  const recupera = bolsaQueRecupera(d, yo, multas)
+function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaSaldo, parcial, setParcial, pagar }: MiDeudaProps) {
+  const recupera = bolsaQueRecupera(d, yo, multas, garantia)
   const montoParcial = parseMonto(parcial)
   const errorParcial = parcial.trim() === '' ? null : errorMontoDeuda(montoParcial, deuda)
   const falta = faltaSaldo(deuda)
@@ -162,10 +165,7 @@ function MiDeuda({ deuda, d, yo, multas, cobraEnRonda, ocupado, faltaSaldo, parc
       <p className="explica">
         Al saldarla vuelves a estar al día y puedes pagar tus cuotas otra vez.
         {cobraEnRonda !== null && ` Cobras tu bolsa en la ronda ${cobraEnRonda}, como estaba previsto.`}
-        {recupera &&
-          ` Recuperas tu bolsa retenida: ${monto(recupera.neto)} ${SIMBOLO}${
-            recupera.multas > 0n ? ` (se descuentan ${monto(recupera.multas)} ${SIMBOLO} de multas)` : ''
-          }.`}
+        {recupera && ` Recuperas tu bolsa retenida: ${monto(recupera.neto)} ${SIMBOLO}${descuentos(recupera)}.`}
       </p>
 
       <button className="boton principal" disabled={ocupado || falta > 0n} onClick={() => pagar(deuda)}>
@@ -208,4 +208,13 @@ function MiDeuda({ deuda, d, yo, multas, cobraEnRonda, ocupado, faltaSaldo, parc
       </details>
     </>
   )
+}
+
+/** " (se descuentan 10 TUSD de multas y 100 TUSD quedan como tu garantía...)" o "". */
+function descuentos(r: { multas: bigint; garantia: bigint }): string {
+  const partes = [
+    r.multas > 0n ? `se descuentan ${monto(r.multas)} ${SIMBOLO} de multas` : null,
+    r.garantia > 0n ? `${monto(r.garantia)} ${SIMBOLO} quedan como tu garantía para las cuotas que aún debes` : null,
+  ].filter(Boolean)
+  return partes.length ? ` (${partes.join(' y ')})` : ''
 }

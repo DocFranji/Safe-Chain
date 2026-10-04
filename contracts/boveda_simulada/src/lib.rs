@@ -58,8 +58,10 @@ enum Clave {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum ErrorBoveda {
-    MontoInvalido = 1,
-    SharesInsuficientes = 2,
+    // Códigos dentro del rango de M1 (14–19) para que la web no los confunda con los de la tanda:
+    // cuando una llamada a la bóveda falla, la transacción muestra el código de la bóveda.
+    MontoInvalido = 17,
+    SharesInsuficientes = 18,
 }
 
 #[contract]

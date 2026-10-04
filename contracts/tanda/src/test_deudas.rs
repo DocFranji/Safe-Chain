@@ -303,6 +303,54 @@ fn moroso_salda_al_final_y_recupera_su_bolsa_retenida_menos_multas() {
     c.assert_conservacion();
 }
 
+/// Beto queda moroso justo en su turno (su bolsa se retiene) y salda a mitad de la tanda: recupera su
+/// bolsa menos su multa, pero primero se repone su garantía para las 2 cuotas que aún debe (pedido de
+/// M3/ORQ: que no pueda cobrar y volver a desaparecer). Al final recupera esa garantía.
+#[test]
+fn moroso_salda_a_mitad_de_tanda_y_repone_su_garantia() {
+    let c = setup();
+    let g = personas(&c, 4);
+    let (ana, beto, carla, dani) = (&g[0], &g[1], &g[2], &g[3]);
+    let id = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &4,
+        &PERIODO,
+        &1_000,
+        &0,
+    );
+    for p in &g {
+        c.tanda.unirse(&id, p);
+    }
+    pagan(&c, id, &[ana, carla, dani]);
+    cerrar(&c, id); // Beto no paga: su garantía cubre (multa 10). Ana cobra 400.
+    pagan(&c, id, &[ana, carla, dani]);
+    cerrar(&c, id); // turno de Beto, moroso: su bolsa (300) se retiene
+    assert_eq!(c.tanda.get_tanda(&id).retenido, 300 * U);
+
+    let beto_antes = c.saldo(beto);
+    assert_eq!(c.tanda.pagar_deuda(&id, beto, beto, &(100 * U)), 0);
+    // Bolsa 400 (300 + su cuota pagada) − multa 10 − garantía para 2 cuotas (mínimo una cuota: 100) = 290.
+    assert_eq!(c.saldo(beto), beto_antes - 100 * U + 290 * U);
+    let mb = c.miembro(id, beto);
+    assert!(!mb.moroso && mb.cobro);
+    assert_eq!(mb.colateral, 100 * U);
+    let t = c.tanda.get_tanda(&id);
+    assert_eq!((t.retenido, t.fondo_premios), (0, 10 * U));
+
+    // Sigue la tanda: Beto vuelve a pagar y al final recupera su garantía.
+    for _ in 0..2 {
+        pagan(&c, id, &[ana, beto, carla, dani]);
+        cerrar(&c, id);
+    }
+    let beto_antes = c.saldo(beto);
+    c.tanda.finalizar(&id);
+    assert_eq!(c.saldo(beto), beto_antes + 100 * U);
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    assert_conservacion_de(&c, &g);
+}
+
 /// Dos morosos: Ana le debe a Carla una ronda en la que la bolsa de Carla se retuvo. El pago de Ana
 /// se suma a esa bolsa retenida; cuando Carla salda, la recupera completa.
 #[test]

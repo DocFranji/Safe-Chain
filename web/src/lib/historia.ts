@@ -164,16 +164,18 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
               titulo: `${quien(ev.data.acreedor)} recibió los ${dinero(ev.data.monto)} que le faltaban`,
               detalle: `${ronda(ev.data.ronda) || 'Una ronda'}: lo pagó ${quien(ev.data.deudor)}`,
             }
-      case 'EvBolsaRecuperada':
+      case 'EvBolsaRecuperada': {
+        const partes = [
+          (ev.data.multas ?? 0n) > 0n ? `se descontaron ${dinero(ev.data.multas)} de multas` : null,
+          (ev.data.garantia ?? 0n) > 0n ? `${dinero(ev.data.garantia)} quedan como su garantía para las cuotas que le faltan` : null,
+        ].filter(Boolean)
         return {
           ...base,
           tipo: 'ok',
           titulo: `${quien(ev.data.miembro)} recuperó su bolsa: ${dinero(ev.data.monto)}`,
-          detalle:
-            (ev.data.multas ?? 0n) > 0n
-              ? `Se descontaron ${dinero(ev.data.multas)} de multas, que se reparten entre quienes cumplieron`
-              : undefined,
+          detalle: partes.length ? partes.join(' · ').replace(/^./, (l) => l.toUpperCase()) : undefined,
         }
+      }
       case 'EvBovedaRapida':
         return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de las tandas de prueba' }
     }

@@ -51,6 +51,9 @@ const MENSAJES: Record<number, string> = {
   14: 'Esa persona no tiene deuda en esta tanda.',
   15: 'Ese monto es mayor que la deuda. Revisa cuánto falta por pagar.',
   16: 'Escribe un monto mayor que cero.',
+  // Errores de la bóveda simulada (contrato aparte, mismo rango de M1)
+  17: 'La bóveda no aceptó ese monto.',
+  18: 'La bóveda no tiene suficientes participaciones para ese retiro. Avísanos: no debería pasar.',
 }
 
 // A veces el SDK entrega el NOMBRE del error del contrato en vez del código.

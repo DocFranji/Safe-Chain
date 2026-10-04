@@ -309,7 +309,8 @@ export interface EvBovedaRapidaEvent {
     };
 }
 /**
- * Un moroso saldó su deuda y recuperó su bolsa retenida, menos sus multas pendientes.
+ * Un moroso saldó su deuda y recuperó su bolsa retenida: recibió `monto`; se descontaron `multas`
+ * (al fondo de premios) y `garantia` (repone su garantía para las cuotas que aún debe).
  */
 export interface EvBolsaRecuperadaEvent {
     name: "EvBolsaRecuperada";
@@ -318,6 +319,7 @@ export interface EvBolsaRecuperadaEvent {
         miembro?: string;
         monto?: bigint;
         multas?: bigint;
+        garantia?: bigint;
     };
 }
 export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent | EvDeudaPagadaEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent;

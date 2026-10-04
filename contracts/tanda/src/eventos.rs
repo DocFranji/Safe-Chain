@@ -131,7 +131,8 @@ pub struct EvAbono {
     pub retenida: bool,
 }
 
-/// Un moroso saldó su deuda y recuperó su bolsa retenida, menos sus multas pendientes.
+/// Un moroso saldó su deuda y recuperó su bolsa retenida: recibió `monto`; se descontaron `multas`
+/// (al fondo de premios) y `garantia` (repone su garantía para las cuotas que aún debe).
 #[contractevent(topics = ["bolsa_rec"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EvBolsaRecuperada {
@@ -140,6 +141,7 @@ pub struct EvBolsaRecuperada {
     pub miembro: Address,
     pub monto: i128,
     pub multas: i128,
+    pub garantia: i128,
 }
 
 /// El admin cambió la bóveda rápida (solo afecta a las tandas que se creen después).

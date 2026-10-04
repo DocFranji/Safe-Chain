@@ -7,7 +7,9 @@
 //! - `pagar_deuda` reparte el pago del faltante más viejo al más nuevo, **a quien cobró de menos**.
 //!   Si la bolsa de esa persona estaba retenida (también era morosa), el pago se suma a esa bolsa.
 //! - Al saldar todo: deja de ser moroso, puede volver a pagar cuotas y cobrar, y si su propia bolsa
-//!   se retuvo, la recupera menos sus multas pendientes (que van al fondo de premios).
+//!   se retuvo, la recupera menos sus multas pendientes (que van al fondo de premios). Si todavía le
+//!   quedan cuotas por pagar, de esa bolsa primero se repone su garantía para esas cuotas (como la que
+//!   dejó al unirse; vuelve al final con rendimiento): así no puede cobrar y volver a desaparecer.
 //! - Puede pagar otra persona (por ejemplo, un familiar): el dinero sale de `pagador`.
 //!
 //! Diseño y decisiones: `docs/tiempos-y-deudas.md`.
@@ -15,9 +17,19 @@ use soroban_sdk::{contractimpl, token, Address, Env, Vec};
 
 use crate::almacenamiento::*;
 use crate::{
-    ganchos, ClaveM1, Deuda, Error, Estado, EvAbono, EvBolsaRecuperada, EvDeudaPagada, Faltante,
-    Tanda, TandaContract, TandaContractArgs, TandaContractClient,
+    ganchos, BovedaClient, ClaveM1, Deuda, Error, Estado, EvAbono, EvBolsaRecuperada,
+    EvDeudaPagada, Faltante, Tanda, TandaContract, TandaContractArgs, TandaContractClient, BPS,
 };
+
+/// Garantía para las `restantes` cuotas que alguien todavía debe, con las reglas de la tanda: la
+/// misma fórmula que la garantía escalonada al unirse (`colateral_para`), con piso de una cuota.
+fn garantia_para(t: &Tanda, restantes: u32) -> i128 {
+    if restantes == 0 {
+        return 0;
+    }
+    let base = t.cuota * restantes as i128 * t.cobertura_bps as i128 / BPS;
+    base.max(t.cuota)
+}
 
 fn deuda_vacia(env: &Env) -> Deuda {
     Deuda {
@@ -164,7 +176,23 @@ impl TandaContract {
                 m.multas_pendientes -= multas;
                 t.fondo_premios += multas;
                 t.retenido -= bolsa;
-                let neto = bolsa - multas;
+                let mut neto = bolsa - multas;
+                // Si la tanda sigue, todavía debe las cuotas de esta ronda en adelante: primero se repone
+                // su garantía para esas cuotas (va a la bóveda y vuelve al final con rendimiento).
+                // M3: en las tandas con opciones de turnos, aquí va `turnos::completar_garantia(...)`.
+                let restantes = if t.estado == Estado::Activa {
+                    t.n_miembros - t.ronda_actual
+                } else {
+                    0
+                };
+                let garantia = (garantia_para(&t, restantes) - m.colateral).clamp(0, neto);
+                if garantia > 0 {
+                    let boveda = boveda_de(&env, id, &t)?;
+                    tok.approve(&yo, &boveda, &garantia, &(env.ledger().sequence() + 100));
+                    t.shares_boveda += BovedaClient::new(&env, &boveda).depositar(&yo, &garantia);
+                    m.colateral += garantia;
+                    neto -= garantia;
+                }
                 if neto > 0 {
                     tok.transfer(&yo, &miembro, &neto);
                 }
@@ -175,6 +203,7 @@ impl TandaContract {
                     miembro: miembro.clone(),
                     monto: neto,
                     multas,
+                    garantia,
                 }
                 .publish(&env);
             }
