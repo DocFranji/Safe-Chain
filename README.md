@@ -17,11 +17,21 @@ Una tanda es un grupo que aporta la misma cuota cada ronda y, por turnos, uno re
 
 Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tanda.
 
+**Quién cobra primero lo decide el grupo**, no solo el orden de llegada. Al crear la tanda se elige el mecanismo ([`docs/turnos.md`](docs/turnos.md)):
+
+- **Precio por turno** (como MoneyFellows): quien tiene prisa paga una prima y quien espera la gana. Suma cero: el contrato no se queda con nada.
+- **Subasta** (como los chit funds de la India): cada ronda gana quien acepte recibir menos, y ese descuento se reparte entre los demás.
+- **Sorteo:** el contrato sortea el orden cuando se llena la tanda.
+- **Elegir e intercambiar:** cada quien elige su turno y lo puede cambiar con otro, con una compensación si se ponen de acuerdo.
+
+En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la subasta, como el turno no se conoce al unirse, todos dejan una cuota y el resto se aparta de la bolsa al cobrar.
+
 ## Qué hay construido
 
 | Pieza | Qué hace | Dónde |
 | --- | --- | --- |
 | Contrato de la tanda | Reglas, garantías, multas, rondas, liquidación y eventos | `contracts/tanda/` |
+| Mecanismos de turnos | Precio por turno, subasta, sorteo, elegir turno e intercambio (`crear_tanda_avanzada`) | `contracts/tanda/src/turnos*.rs`, `docs/turnos.md` |
 | Bóveda simulada | Rendimiento de ejemplo con la misma interfaz que tendría un adaptador a Blend | `contracts/boveda_simulada/` |
 | Web (React) | Landing, lobby, crear tanda, invitaciones, resultados, demo en vivo y estado del sistema | `web/` |
 | Entrar con Google | Billetera Stellar creada y firmada por [Privy](https://privy.io); también funciona Freighter | `web/src/cuentas/`, `web/src/lib/firmante.ts` |
@@ -118,6 +128,12 @@ bash scripts/demo.sh
 Es el mismo guion del video. Ana cobra primero y desaparece, Beto paga tarde, y al final se ven los saldos.
 
 Para presentarla al jurado (pantalla proyectada, qué decir y plan B), vean [`DEMO.md`](DEMO.md). Variables útiles: `WEB=https://tu-sitio PAUSAR=1 bash scripts/demo.sh`.
+
+Los mecanismos de turnos tienen su propio guion (unos 4 minutos por modo):
+
+```bash
+MODO=sorteo bash scripts/demo_turnos.sh        # también: precio, subasta, intercambio o todos
+```
 
 ## 5. La interfaz web
 

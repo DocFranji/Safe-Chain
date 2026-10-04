@@ -524,6 +524,19 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Turnos/intercambio: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est, conectado: false })
+  await page.goto(BASE + '#/demo/8')
+  await page.waitForSelector('.demo-personas', { timeout: 15000 })
+  await page.waitForTimeout(500)
+  const t = await texto(page)
+  check('Turnos/demo proyectada: "Cobra quien gane la subasta"', /Cobra quien gane la subasta/.test(t), t.slice(0, 600))
+  check('Turnos/demo proyectada: turnos por decidir con "?"', (await page.locator('.demo-turno', { hasText: '?' }).count()) === 3)
+  await shot(page, 'm3-09-demo-subasta')
+  check('Turnos/demo proyectada: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
 for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/8', 'm3-07-subasta-movil'], ['#/tanda/7', 'm3-08-precio-movil']]) {
   const est = nuevoEstadoTurnos()
   const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 800 } })

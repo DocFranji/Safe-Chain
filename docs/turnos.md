@@ -2,7 +2,7 @@
 
 Rama `mision/m3-turnos` · Tablero: issue #4 · Instrucciones: `.claude/agents/m3-turnos.md`.
 
-> Estado: **diseño** (sáb 3 oct, 19:00 CR). Lo marcado con ❓ espera respuesta de las personas. Mientras tanto avanzo con la recomendación: todo es reversible hasta el despliegue v2.
+> Estado: **MVP implementado** (sáb 3 oct, 19:15 CR): contrato, web, pruebas de navegador y `scripts/demo_turnos.sh`. Las cinco preguntas ❓ quedaron **DECIDIDAS por @DocFranji tal como se recomendaron** (tablero, sáb 18:50): ver §8. Cómo se probó: §9.
 
 ## En 20 segundos
 
@@ -267,10 +267,39 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 - Sorteo: el resultado es una permutación válida y cambia con la semilla (`env.host().set_base_prng_seed`).
 - Presupuesto: los tres peores casos de §5.4 con 12 miembros.
 
-## 8. Preguntas para las personas ❓
+## 8. Decisiones (✅ DECIDIDO por @DocFranji, sáb 3 oct, 18:50 CR)
 
-1. **Tarjeta "Intercambio"** = elegir turno gratis + intercambio, y el intercambio también se puede activar en los otros modos (menos subasta). **Recomiendo sí.**
-2. **Garantía en sorteo y subasta:** A) completarla al cobrar, apartándola de la bolsa; B) que todos dejen la máxima al unirse. **Recomiendo A** (§3, con números).
-3. **Subasta sin ofertas:** A) orden de respaldo sorteado al llenarse; B) turno pendiente más bajo (que es otra vez el orden de llegada). **Recomiendo A.**
-4. **Dividendo de la subasta:** A) se suma a la garantía y vuelve al final con rendimiento; B) se paga en efectivo al cerrar cada ronda (hasta 11 transferencias más por cierre). **Recomiendo A.**
-5. **Límites:** prima máxima 20 % (MoneyFellows llega a 16 % de comisión y 20 % de bonificación); descuento máximo de subasta 50 %. En la web, por defecto 10 % y 30 %. **Recomiendo esos valores.**
+1. **Tarjeta "Intercambio"** = elegir turno gratis + intercambio. El intercambio también se puede activar en llegada, precio por turno y sorteo (en la subasta no hay turnos futuros que cambiar).
+2. **Garantía en sorteo y subasta:** se completa al cobrar, apartándola de la bolsa (todos dejan 1 cuota al unirse). Ver §3 con números.
+3. **Subasta sin ofertas:** cobra el siguiente de un orden de respaldo sorteado al llenarse, visible desde el inicio.
+4. **Dividendo de la subasta:** se suma a la garantía de cada uno y vuelve al final con rendimiento.
+5. **Límites:** prima máxima 20 % (MoneyFellows llega a 16 % de comisión y 20 % de bonificación); descuento máximo de subasta 50 %. En la web, por defecto 10 % y 30 %.
+
+## 9. Implementación y cómo se probó
+
+| Pieza | Archivos |
+| --- | --- |
+| Lógica de turnos (puertas, garantía al cobrar, primas, subasta, propuestas) | `contracts/tanda/src/turnos.rs` |
+| Funciones públicas y consultas | `contracts/tanda/src/turnos_acciones.rs` |
+| Tipos, errores 30–39 y eventos | bloques `// --- M3 ---` de `tipos.rs` y `eventos.rs` |
+| Flujo principal | `lib.rs`: `unirse` → `unirse_en(..., turno)`; regla 3 de `cerrar_ronda`. `consultas.rs`: `colateral_siguiente` |
+| Pruebas | `contracts/tanda/src/test_turnos.rs` (22) |
+| Web | `web/src/lib/turnos.ts` (+ pruebas), `components/OpcionesTurnos.tsx`, `components/AccionesTurnos.tsx`, `historia.ts`, `contrato.ts`, `Rueda.tsx`, `ListaMiembros.tsx` |
+| Navegador | `web/e2e/mock.mjs` (`nuevoEstadoTurnos()`), escenarios "Turnos" en `run.mjs` |
+| Demo por terminal | `scripts/demo_turnos.sh` |
+
+```bash
+cargo test -p tanda test_turnos -- --nocapture   # 22 pruebas de M3 (imprime el costo del peor caso)
+bash scripts/verificar.sh                        # toda la Definición de Terminado
+MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después de desplegar_testnet.sh)
+```
+
+**Peor caso con 12 miembros** (código nativo de las pruebas; con WASM es más, ver el PR):
+
+| Operación | Instrucciones | Escrituras |
+| --- | --- | --- |
+| Último `unirse` de un sorteo (baraja y asigna 12 turnos) | 2,5 M | 21 |
+| `cerrar_ronda` de subasta con dividendos para 11 | 5,6 M | — |
+| `cerrar_ronda` con prima y garantía apartada | 1,3 M | — |
+
+**Tamaño:** `tanda.wasm` pasa de 29 KB a 53 KB (límite de la red: 128 KB).
