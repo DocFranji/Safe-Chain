@@ -106,6 +106,18 @@ export declare const Error: {
     39: {
         message: string;
     };
+    40: {
+        message: string;
+    };
+    41: {
+        message: string;
+    };
+    42: {
+        message: string;
+    };
+    43: {
+        message: string;
+    };
     55: {
         message: string;
     };
@@ -266,6 +278,11 @@ export interface Requisitos {
  */
 export interface EstadoTurnos {
     /**
+     * Subasta sellada en curso: hasta este momento se sella; después, hasta que vence, se revela
+     * (0 si no aplica).
+     */
+    fin_sellado: bigint;
+    /**
      * PrecioPorTurno: primas ya cobradas que esperan a los últimos turnos.
      */
     fondo_primas: bigint;
@@ -286,6 +303,10 @@ export interface EstadoTurnos {
      * Subasta: orden sorteado al llenarse; decide quién cobra en las rondas sin ofertas.
      */
     respaldo: Array<string>;
+    /**
+     * Subasta sellada: quiénes sellaron una oferta en la ronda en curso y aún no la revelan.
+     */
+    sellos: Array<string>;
 }
 /**
  * Opciones de turnos que elige el creador (`crear_tanda_avanzada`).
@@ -297,6 +318,10 @@ export interface OpcionesTanda {
     descuento_max_bps: number;
     modo: ModoTurnos;
     /**
+     * Subasta: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.
+     */
+    ofertas_selladas: boolean;
+    /**
      * Dos miembros pueden cambiar sus turnos futuros (no aplica a la subasta).
      */
     permitir_intercambio: boolean;
@@ -304,6 +329,15 @@ export interface OpcionesTanda {
      * PrecioPorTurno: prima del primer turno, en bps sobre la bolsa. El último recibe lo mismo.
      */
     prima_max_bps: number;
+    /**
+     * Elegir turno y precio por turno: cuántos de los primeros turnos piden historial (M2).
+     * 0 = ninguno. Esos turnos solo los toma quien tenga al menos `puntaje_primeros`.
+     */
+    primeros_con_historial: number;
+    /**
+     * Puntaje de historial que piden los primeros turnos (0 si `primeros_con_historial` es 0).
+     */
+    puntaje_primeros: number;
 }
 /**
  * Event: EvPago
@@ -354,6 +388,17 @@ export interface EvRondaEvent {
         ronda?: number;
         beneficiario?: string;
         monto_pagado?: bigint;
+    };
+}
+/**
+ * Subasta sellada: `miembro` selló una oferta en la ronda `ronda` (el monto se verá al revelarla).
+ */
+export interface EvSelloEvent {
+    name: "EvSello";
+    data: {
+        id: number;
+        ronda?: number;
+        miembro?: string;
     };
 }
 /**
@@ -482,6 +527,9 @@ export interface EvOpcionesEvent {
         permitir_intercambio?: boolean;
         prima_max_bps?: number;
         descuento_max_bps?: number;
+        primeros_con_historial?: number;
+        puntaje_primeros?: number;
+        ofertas_selladas?: boolean;
     };
 }
 /**
@@ -623,4 +671,4 @@ export interface EvHistorialConfiguradoEvent {
         historial?: string | null;
     };
 }
-export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
+export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;

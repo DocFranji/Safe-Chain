@@ -6,7 +6,8 @@ import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from '../components/BotonesEntrar'
 import { OpcionesTurnos } from '../components/OpcionesTurnos'
 import { OpcionesHistorial } from '../components/OpcionesHistorial'
-import { SIN_REQUISITOS, hayRequisitos } from '../lib/historial'
+import { SIN_REQUISITOS, hayRequisitos, puntajeDe } from '../lib/historial'
+import { useHistorialCacheado } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
@@ -24,7 +25,15 @@ import { RUTA_LOBBY, irA, rutaTanda } from '../lib/rutas'
 import { OpcionesMoneda } from '../components/OpcionesMoneda'
 import { MonedaContexto, useSaldoEn, useSimbolo } from '../hooks/useMoneda'
 import { TUSD, type Moneda } from '../lib/monedas'
-import { OPCIONES_CLASICAS, aContrato, esClasica, garantiaAlUnirse, validarOpciones, type OpcionesForm } from '../lib/turnos'
+import {
+  OPCIONES_CLASICAS,
+  aContrato,
+  esClasica,
+  garantiaAlUnirse,
+  turnoAlCrear,
+  validarOpciones,
+  type OpcionesForm,
+} from '../lib/turnos'
 
 type Formulario = {
   cuota: string
@@ -90,12 +99,15 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
     coberturaBps: f.cobertura * 100,
   }
   const errores = validarParametros(parciales)
-  const errorTurnos = validarOpciones(turnos)
+  const errorTurnos = validarOpciones(turnos, f.n)
   const valido = Object.keys(errores).length === 0
   const params = valido ? (parciales as ParametrosTanda) : null
   const trabajando = progreso.tipo === 'trabajando'
   // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
-  const garantiaPropia = params ? garantiaAlUnirse(params, turnos.modo, 0) : 0n
+  // Si los primeros turnos piden un historial que no tiene, queda en el primero que no lo pide (M2 + M3).
+  const miHistorial = useHistorialCacheado(yo ?? '')
+  const turnoPropio = turnoAlCrear(turnos, miHistorial ? puntajeDe(miHistorial) : 0)
+  const garantiaPropia = params ? garantiaAlUnirse(params, turnos.modo, turnoPropio) : 0n
   const faltaSaldo = unirmeYo && saldoMoneda !== null && saldoMoneda < garantiaPropia ? garantiaPropia - saldoMoneda : 0n
 
   const duracionTotal = params ? params.periodoSeg * params.nMiembros : 0
@@ -323,7 +335,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                       ? '; tu turno se sortea al llenarse'
                       : turnos.modo === 'Subasta'
                         ? '; tu turno se decide en las subastas'
-                        : ' y cobrarás en la ronda 1'}
+                        : ` y cobrarás en la ronda ${turnoPropio + 1}`}
                     )
                   </span>
                 )}

@@ -113,6 +113,10 @@ pub enum Error {
     IntercambioInvalido = 37,
     PropuestaExistente = 38,
     SinPropuesta = 39,
+    TurnoExigeHistorial = 40,
+    FaseEquivocada = 41,
+    SelloInvalido = 42,
+    SelloRepetido = 43,
     // --- M4: bóveda por token (50–59; el adaptador de Blend usa 50–53 con sus propios nombres) ---
     TokenSinBoveda = 55,    // no hay bóveda para el token de esta tanda
     BovedaDeOtroToken = 56, // la bóveda que se quiere registrar guarda otro token
@@ -240,6 +244,13 @@ pub struct OpcionesTanda {
     pub prima_max_bps: u32,
     /// Subasta: descuento máximo que se puede ofrecer, en bps sobre la bolsa.
     pub descuento_max_bps: u32,
+    /// Elegir turno y precio por turno: cuántos de los primeros turnos piden historial (M2).
+    /// 0 = ninguno. Esos turnos solo los toma quien tenga al menos `puntaje_primeros`.
+    pub primeros_con_historial: u32,
+    /// Puntaje de historial que piden los primeros turnos (0 si `primeros_con_historial` es 0).
+    pub puntaje_primeros: u32,
+    /// Subasta: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.
+    pub ofertas_selladas: bool,
 }
 
 /// Subasta: la mejor oferta de una ronda.
@@ -277,6 +288,11 @@ pub struct EstadoTurnos {
     pub propuestas: Vec<Propuesta>,
     /// PrecioPorTurno: primas ya cobradas que esperan a los últimos turnos.
     pub fondo_primas: i128,
+    /// Subasta sellada: quiénes sellaron una oferta en la ronda en curso y aún no la revelan.
+    pub sellos: Vec<Address>,
+    /// Subasta sellada en curso: hasta este momento se sella; después, hasta que vence, se revela
+    /// (0 si no aplica).
+    pub fin_sellado: u64,
 }
 
 // --- M4: bóveda por token ---

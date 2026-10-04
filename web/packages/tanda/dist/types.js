@@ -31,6 +31,10 @@ export const Error = {
     37: { message: "IntercambioInvalido" },
     38: { message: "PropuestaExistente" },
     39: { message: "SinPropuesta" },
+    40: { message: "TurnoExigeHistorial" },
+    41: { message: "FaseEquivocada" },
+    42: { message: "SelloInvalido" },
+    43: { message: "SelloRepetido" },
     55: { message: "TokenSinBoveda" },
     56: { message: "BovedaDeOtroToken" }
 };

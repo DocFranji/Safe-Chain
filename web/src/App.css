@@ -1541,6 +1541,27 @@ td .dir {
 .turno-casilla .sub {
   font-size: 13px;
 }
+/* Turnos que piden historial (M2 + M3): una etiqueta chica con el nivel. */
+.etiqueta-historial {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--borde);
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+.turno-casilla .etiqueta-historial {
+  margin-left: 0;
+}
+/* En la tabla de la vista previa, el nivel va debajo del número del turno (sin agrandar la columna). */
+.nivel-turno {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
 .fila-oferta {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

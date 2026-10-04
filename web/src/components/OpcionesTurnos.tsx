@@ -2,7 +2,9 @@
 // los parámetros del modo elegido y una vista previa por turno: cuánto se deja, cuánto se aparta
 // al cobrar, la prima o bonificación y cuánto se recibe. La lógica vive en lib/turnos.ts.
 import type { ParametrosTanda } from '../lib/colateral'
-import { MAX_DESCUENTO_BPS, MAX_PRIMA_BPS, MODOS, vistaPrevia, type Modo, type OpcionesForm } from '../lib/turnos'
+import { MAX_DESCUENTO_BPS, MAX_PRIMA_BPS, MODOS, eligeTurno, vistaPrevia, type Modo, type OpcionesForm } from '../lib/turnos'
+import { NIVELES, nivelDePuntaje } from '../lib/historial'
+import { useDireccionHistorial } from '../hooks/useHistorial'
 import { monto } from '../lib/formato'
 import { useSimbolo } from '../hooks/useMoneda'
 
@@ -73,6 +75,21 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
             onChange={(e) => alCambiar({ ...valor, descuentoPct: Number(e.target.value) })}
           />
           <p className="ayuda">Nadie puede ofrecer recibir menos que esto. Así nadie se queda con muy poco.</p>
+          <label className="casilla">
+            <input
+              type="checkbox"
+              checked={valor.selladas}
+              onChange={(e) => alCambiar({ ...valor, selladas: e.target.checked })}
+            />
+            <span>
+              Ofertas selladas
+              <span className="ayuda">
+                {' '}
+                (nadie ve las ofertas de los demás: en la primera mitad de cada ronda cada quien sella la suya y en la
+                segunda la revela. Gana la mayor. Se revela desde el mismo navegador con el que se selló)
+              </span>
+            </span>
+          </label>
         </div>
       )}
 
@@ -82,6 +99,8 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
           un validador de la red podría influir en él.
         </p>
       )}
+
+      {eligeTurno(valor.modo) && <PrimerosConHistorial params={params} valor={valor} alCambiar={alCambiar} />}
 
       {valor.modo !== 'Subasta' && (
         <label className="casilla">
@@ -101,6 +120,70 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
 
       {params && !error && valor.modo !== 'Llegada' && <TablaTurnos params={params} valor={valor} />}
     </fieldset>
+  )
+}
+
+/**
+ * (M2 + M3) Los primeros turnos solo para quien ya tiene historial: cobrar primero es recibir un
+ * préstamo del grupo. Solo se ofrece si la tanda tiene historial conectado.
+ */
+function PrimerosConHistorial({ params, valor, alCambiar }: Omit<Props, 'error'>) {
+  const historial = useDireccionHistorial()
+  if (!historial) return null
+  const maximo = Math.max(1, (params?.nMiembros ?? 12) - 1)
+  const niveles = NIVELES.filter((n) => n.desde > 0)
+  return (
+    <div className="campo primeros-historial">
+      <label className="casilla">
+        <input
+          type="checkbox"
+          checked={valor.primeros > 0}
+          onChange={(e) => alCambiar({ ...valor, primeros: e.target.checked ? Math.min(2, maximo) : 0 })}
+        />
+        <span>
+          Los primeros turnos, solo para quien tenga buen historial
+          <span className="ayuda">
+            {' '}
+            (quien cobra primero recibe la bolsa antes de terminar de pagar: es como un préstamo del grupo)
+          </span>
+        </span>
+      </label>
+      {valor.primeros > 0 && (
+        <div className="fila-campo">
+          <label htmlFor="primeros-turnos">Turnos</label>
+          <select
+            id="primeros-turnos"
+            value={valor.primeros}
+            onChange={(e) => alCambiar({ ...valor, primeros: Number(e.target.value) })}
+          >
+            {Array.from({ length: maximo }, (_, i) => i + 1).map((k) => (
+              <option key={k} value={k}>
+                {k === 1 ? 'El turno 1' : `Del turno 1 al ${k}`}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="primeros-nivel">Nivel mínimo</label>
+          <select
+            id="primeros-nivel"
+            value={valor.puntajePrimeros}
+            onChange={(e) => alCambiar({ ...valor, puntajePrimeros: Number(e.target.value) })}
+          >
+            {niveles.map((n) => (
+              <option key={n.nombre} value={n.desde}>
+                {n.nombre} ({n.desde} puntos)
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {valor.primeros > 0 && (
+        <p className="ayuda">
+          {valor.primeros === 1 ? 'El turno 1 solo lo puede elegir' : `Los turnos 1 a ${valor.primeros} solo los puede elegir`}{' '}
+          quien tenga historial {nivelDePuntaje(valor.puntajePrimeros)} o mejor. Los demás turnos quedan abiertos para
+          cualquiera.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -138,7 +221,10 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
           <tbody>
             {filas.map((f) => (
               <tr key={f.turno}>
-                <td className="turno">{f.turno + 1}</td>
+                <td className="turno">
+                  {f.turno + 1}
+                  {f.pideHistorial && <span className="nivel-turno">{nivelDePuntaje(valor.puntajePrimeros)}</span>}
+                </td>
                 <td className="num">{monto(f.alUnirse)}</td>
                 {conApartado && <td className="num">{f.apartado > 0n ? monto(f.apartado) : '—'}</td>}
                 {conPrima && (

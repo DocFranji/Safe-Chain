@@ -44,6 +44,8 @@ jobs:
       - name: Verificación (sin WASM)
         env:
           SIN_WASM: "1"
+          # Escenarios al azar de las pruebas de invariantes (contracts/tanda/src/test_invariantes.rs).
+          INVARIANTES_SEMILLAS: "32"
           # Chrome viene instalado en las máquinas de GitHub; web/e2e lo usa en vez de /opt/pw-browsers.
           CHROMIUM_PATH: /usr/bin/google-chrome
         run: bash scripts/verificar.sh

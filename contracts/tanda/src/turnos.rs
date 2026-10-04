@@ -12,9 +12,10 @@
 //! - El azar nunca decide a quién se le paga en la misma transacción: Stellar fija de antemano qué
 //!   datos toca cada transacción y la simulación usa otra semilla. Por eso el sorteo se hace al
 //!   llenarse la tanda y la subasta sin ofertas usa un orden de respaldo sorteado entonces.
-use soroban_sdk::{contracttype, token, Address, Env, IntoVal, Map, TryFromVal, Val, Vec};
+use soroban_sdk::{contracttype, token, Address, BytesN, Env, IntoVal, Map, TryFromVal, Val, Vec};
 
 use crate::almacenamiento::*;
+use crate::requisitos;
 use crate::{
     ganchos, BovedaClient, Error, EvGarantia, EvPrima, EvPropuestaRetirada, EvSorteo, EvSubasta,
     Miembro, ModoTurnos, Oferta, OpcionesTanda, Propuesta, Tanda, BPS, SIN_TURNO,
@@ -41,6 +42,18 @@ pub enum ClaveM3 {
     Propuestas(u32),
     /// Precio por turno: primas cobradas que esperan a los últimos turnos.
     FondoPrimas(u32),
+    /// Subasta sellada: sellos de la ronda en curso.
+    Sellos(u32),
+    /// Subasta sellada: (ronda, momento en que de verdad empezó) si la ronda anterior se cerró tarde.
+    InicioReal(u32),
+}
+
+/// Subasta sellada: los sellos de una ronda (miembro → sha256 de su oferta y su sal).
+#[contracttype]
+#[derive(Clone)]
+pub struct Sellos {
+    pub ronda: u32,
+    pub sellos: Map<Address, BytesN<32>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +77,8 @@ fn renovar_claves(env: &Env, t: &Tanda, id: u32) {
         ClaveM3::Respaldo(id),
         ClaveM3::Propuestas(id),
         ClaveM3::FondoPrimas(id),
+        ClaveM3::Sellos(id),
+        ClaveM3::InicioReal(id),
     ] {
         if p.has(&clave) {
             renovar(env, t, &clave);
@@ -95,6 +110,9 @@ pub(crate) fn opciones_por_defecto() -> OpcionesTanda {
         permitir_intercambio: false,
         prima_max_bps: 0,
         descuento_max_bps: 0,
+        primeros_con_historial: 0,
+        puntaje_primeros: 0,
+        ofertas_selladas: false,
     }
 }
 
@@ -120,6 +138,34 @@ pub(crate) fn guardar_oferta(env: &Env, t: &Tanda, id: u32, o: &Oferta) {
     guardar(env, t, &ClaveM3::Oferta(id), o);
 }
 
+/// Subasta sellada: los sellos de la ronda en curso (los de rondas pasadas no cuentan).
+pub(crate) fn sellos_vigentes(env: &Env, t: &Tanda, id: u32) -> Map<Address, BytesN<32>> {
+    leer::<Sellos>(env, t, &ClaveM3::Sellos(id))
+        .filter(|s| s.ronda == t.ronda_actual)
+        .map(|s| s.sellos)
+        .unwrap_or(Map::new(env))
+}
+
+pub(crate) fn guardar_sellos(env: &Env, t: &Tanda, id: u32, sellos: Map<Address, BytesN<32>>) {
+    let s = Sellos {
+        ronda: t.ronda_actual,
+        sellos,
+    };
+    guardar(env, t, &ClaveM3::Sellos(id), &s);
+}
+
+/// Subasta sellada: hasta este momento se sella; desde aquí hasta que vence la ronda, se revela.
+/// Es la mitad del tiempo que la ronda tuvo de verdad: con el calendario anclado (M1), si la ronda
+/// anterior se cerró tarde, esta empezó cuando se cerró aquella, no en `inicio_ronda`.
+pub(crate) fn mitad_de_ronda(env: &Env, t: &Tanda, id: u32) -> u64 {
+    let vence = t.inicio_ronda + t.periodo_seg;
+    let desde = leer::<(u32, u64)>(env, t, &ClaveM3::InicioReal(id))
+        .filter(|(ronda, _)| *ronda == t.ronda_actual)
+        .map(|(_, momento)| momento.clamp(t.inicio_ronda, vence))
+        .unwrap_or(t.inicio_ronda);
+    desde + (vence - desde) / 2
+}
+
 pub(crate) fn respaldo(env: &Env, t: &Tanda, id: u32) -> Vec<Address> {
     leer(env, t, &ClaveM3::Respaldo(id)).unwrap_or(Vec::new(env))
 }
@@ -141,21 +187,34 @@ pub(crate) fn fondo_primas(env: &Env, t: &Tanda, id: u32) -> i128 {
 // ---------------------------------------------------------------------------
 
 /// Cada modo usa solo sus parámetros; los demás deben venir en cero (así nadie cree que aplican).
-pub(crate) fn validar_opciones(o: &OpcionesTanda) -> Result<(), Error> {
-    let ok = match o.modo {
-        ModoTurnos::Llegada | ModoTurnos::Eleccion | ModoTurnos::Sorteo => {
-            o.prima_max_bps == 0 && o.descuento_max_bps == 0
-        }
-        ModoTurnos::PrecioPorTurno => {
-            (1..=MAX_PRIMA_BPS).contains(&o.prima_max_bps) && o.descuento_max_bps == 0
-        }
-        // En la subasta los turnos se asignan al cobrar: no hay turnos futuros que intercambiar.
-        ModoTurnos::Subasta => {
-            (1..=MAX_DESCUENTO_BPS).contains(&o.descuento_max_bps)
-                && o.prima_max_bps == 0
-                && !o.permitir_intercambio
-        }
+pub(crate) fn validar_opciones(o: &OpcionesTanda, n_miembros: u32) -> Result<(), Error> {
+    // Historial para los primeros turnos: solo donde cada quien elige su turno, con un puntaje
+    // mayor que 0 y dejando al menos un turno libre para cualquiera.
+    let primeros_ok = if o.primeros_con_historial == 0 {
+        o.puntaje_primeros == 0
+    } else {
+        matches!(o.modo, ModoTurnos::Eleccion | ModoTurnos::PrecioPorTurno)
+            && o.puntaje_primeros > 0
+            && o.primeros_con_historial < n_miembros
     };
+    // Las ofertas selladas son de la subasta.
+    let sellado_ok = !o.ofertas_selladas || o.modo == ModoTurnos::Subasta;
+    let ok = primeros_ok
+        && sellado_ok
+        && match o.modo {
+            ModoTurnos::Llegada | ModoTurnos::Eleccion | ModoTurnos::Sorteo => {
+                o.prima_max_bps == 0 && o.descuento_max_bps == 0
+            }
+            ModoTurnos::PrecioPorTurno => {
+                (1..=MAX_PRIMA_BPS).contains(&o.prima_max_bps) && o.descuento_max_bps == 0
+            }
+            // En la subasta los turnos se asignan al cobrar: no hay turnos futuros que intercambiar.
+            ModoTurnos::Subasta => {
+                (1..=MAX_DESCUENTO_BPS).contains(&o.descuento_max_bps)
+                    && o.prima_max_bps == 0
+                    && !o.permitir_intercambio
+            }
+        };
     if ok {
         Ok(())
     } else {
@@ -169,7 +228,8 @@ pub(crate) fn validar_opciones(o: &OpcionesTanda) -> Result<(), Error> {
 
 /// Turno (posición) que recibe quien se une ahora. `pedido` = el turno que eligió (`unirse_en_turno`).
 /// - Sin opciones, o modo llegada: el siguiente por orden de llegada (como siempre).
-/// - Elección y precio por turno: el turno pedido, o el libre más bajo si no pidió ninguno.
+/// - Elección y precio por turno: el turno pedido, o el libre más bajo si no pidió ninguno. Los
+///   turnos que piden historial solo se toman eligiéndolos (`unirse_en_turno` revisa el puntaje).
 /// - Sorteo y subasta: todavía ninguno (`SIN_TURNO`).
 pub(crate) fn posicion_al_unirse(
     env: &Env,
@@ -178,20 +238,17 @@ pub(crate) fn posicion_al_unirse(
     miembros: &Vec<Address>,
     pedido: Option<u32>,
 ) -> Result<u32, Error> {
-    let modo = match opciones(env, t, id) {
-        None => ModoTurnos::Llegada,
-        Some(o) => o.modo,
-    };
-    match modo {
+    let o = opciones(env, t, id).unwrap_or(opciones_por_defecto());
+    match o.modo {
         ModoTurnos::Eleccion | ModoTurnos::PrecioPorTurno => {
             let turnos = turnos_de(env, t, id);
             match pedido {
                 Some(p) if p >= t.n_miembros => Err(Error::TurnoInvalido),
                 Some(p) if turnos.contains_key(p) => Err(Error::TurnoOcupado),
                 Some(p) => Ok(p),
-                None => Ok((0..t.n_miembros)
+                None => (o.primeros_con_historial..t.n_miembros)
                     .find(|p| !turnos.contains_key(*p))
-                    .unwrap_or(t.n_miembros)),
+                    .ok_or(Error::TurnoExigeHistorial),
             }
         }
         _ if pedido.is_some() => Err(Error::ModoNoPermite),
@@ -228,6 +285,28 @@ pub(crate) fn colateral_base_siguiente(env: &Env, t: &Tanda, id: u32) -> Result<
     }
     let pos = posicion_al_unirse(env, t, id, &miembros, None)?;
     Ok(colateral_al_unirse(t, pos))
+}
+
+/// (M2) Si el turno `posicion` es de los que piden historial, `quien` debe tener al menos el
+/// puntaje que pide la tanda. Si el historial no responde, no se puede comprobar: falla cerrado.
+pub(crate) fn revisar_historial_turno(
+    env: &Env,
+    o: &OpcionesTanda,
+    quien: &Address,
+    posicion: u32,
+) -> Result<(), Error> {
+    if posicion >= o.primeros_con_historial {
+        return Ok(());
+    }
+    let h = requisitos::direccion_historial(env).ok_or(Error::HistorialNoConfigurado)?;
+    let puntaje = match requisitos::HistorialClient::new(env, &h).try_puntaje(quien) {
+        Ok(Ok(p)) => p,
+        _ => return Err(Error::HistorialNoConfigurado),
+    };
+    if puntaje < o.puntaje_primeros {
+        return Err(Error::TurnoExigeHistorial);
+    }
+    Ok(())
 }
 
 /// Después de guardar al nuevo miembro: anota su turno en el mapa (solo tandas con opciones).
@@ -296,6 +375,15 @@ pub(crate) fn resolver_ronda(
     };
     renovar_claves(env, t, id);
     limpiar_propuestas(env, t, id, ronda + 1)?;
+    if o.ofertas_selladas {
+        // La ronda que sigue empieza de verdad ahora (ver `mitad_de_ronda`).
+        guardar(
+            env,
+            t,
+            &ClaveM3::InicioReal(id),
+            &(ronda + 1, env.ledger().timestamp()),
+        );
+    }
     match o.modo {
         ModoTurnos::Subasta => resolver_subasta(env, t, id, miembros, ronda, bolsa),
         modo => {

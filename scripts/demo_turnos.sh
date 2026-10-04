@@ -10,7 +10,8 @@
 #   MODO=precio bash scripts/demo_turnos.sh       # precio por turno: quien tiene prisa paga, quien espera gana
 #   MODO=subasta bash scripts/demo_turnos.sh      # cada ronda gana quien acepte recibir menos
 #   MODO=intercambio bash scripts/demo_turnos.sh  # elegir turno y cambiarlo con compensación
-#   MODO=todos bash scripts/demo_turnos.sh        # los cuatro, uno detrás de otro (por defecto)
+#   MODO=sellada bash scripts/demo_turnos.sh      # subasta con ofertas selladas: se sellan y luego se revelan
+#   MODO=todos bash scripts/demo_turnos.sh        # los cinco, uno detrás de otro (por defecto)
 # Variables opcionales: PERIODO (segundos por ronda, mínimo 60), WEB (para el enlace), PAUSAR=1.
 set -euo pipefail
 
@@ -47,9 +48,23 @@ cerrar() {
 }
 
 # Opciones de turnos en el JSON que entiende la CLI.
-opciones() { # modo intercambio prima_bps descuento_bps
-  printf '{"modo":"%s","permitir_intercambio":%s,"prima_max_bps":%s,"descuento_max_bps":%s}' "$1" "$2" "$3" "$4"
+opciones() { # modo intercambio prima_bps descuento_bps [ofertas_selladas] (sin historial mínimo)
+  printf '{"modo":"%s","permitir_intercambio":%s,"prima_max_bps":%s,"descuento_max_bps":%s,"primeros_con_historial":0,"puntaje_primeros":0,"ofertas_selladas":%s}' \
+    "$1" "$2" "$3" "$4" "${5:-false}"
 }
+
+# Subasta sellada: sello = sha256(descuento_bps en 4 bytes big-endian ‖ sal de 32 bytes), como el
+# contrato y la web. Aquí la sal son 32 bytes iguales a $2 (en la web es al azar).
+sello() { # descuento_bps byte_de_la_sal
+  local bps=$1 b=$2 i bytes
+  bytes=$(printf '\\x%02x\\x%02x\\x%02x\\x%02x' $(((bps >> 24) & 255)) $(((bps >> 16) & 255)) $(((bps >> 8) & 255)) $((bps & 255)))
+  for i in $(seq 32); do bytes+=$(printf '\\x%02x' "$b"); done
+  printf "$bytes" | sha256sum | cut -c1-64
+}
+sal() { local i h=""; for i in $(seq 32); do h+=$(printf '%02x' "$1"); done; echo "$h"; }
+# Espera a que pase el momento $1 (segundos unix) más unos segundos de margen para la red.
+esperar_hasta() { while [ "$(date +%s)" -lt $(($1 + 5)) ]; do sleep 2; done; }
+dato() { T --source admin -- get_estado_turnos --id "$ID" | grep -o "\"$1\":[0-9]*" | cut -d: -f2; }
 
 crear() { # opciones (JSON)
   ID=$(T --source admin -- crear_tanda_avanzada --creador "$(dir admin)" --token "$TOKEN" \
@@ -131,6 +146,30 @@ demo_subasta() {
   final
 }
 
+demo_sellada() {
+  echo "== SUBASTA SELLADA (máx. 30 %): nadie ve las ofertas de los demás hasta que se revelan =="
+  crear "$(opciones Subasta false 0 3000 true)"
+  for p in ana beto carla; do T --source "$p" -- unirse --id "$ID" --miembro "$(dir "$p")"; done
+  echo "-- Primera mitad de la ronda 1: Beto sella 5 % y Carla sella 10 %. En la red solo quedan los sellos."
+  T --source beto -- ofertar_sellada --id "$ID" --miembro "$(dir beto)" --sello "$(sello 500 11)"
+  T --source carla -- ofertar_sellada --id "$ID" --miembro "$(dir carla)" --sello "$(sello 1000 22)"
+  T --source admin -- get_estado_turnos --id "$ID"
+  pagan ana beto carla
+  echo "-- Esperamos la segunda mitad para revelar..."
+  esperar_hasta "$(dato fin_sellado)"
+  echo "-- Revelan: Carla gana con 10 % (recibe 270, se apartan 100 de garantía; Ana y Beto reciben 15)"
+  T --source beto -- revelar_oferta --id "$ID" --miembro "$(dir beto)" --descuento_bps 500 --sal "$(sal 11)"
+  T --source carla -- revelar_oferta --id "$ID" --miembro "$(dir carla)" --descuento_bps 1000 --sal "$(sal 22)"
+  T --source admin -- get_estado_turnos --id "$ID"
+  sleep $((PERIODO / 2))
+  cerrar
+  echo "-- Rondas 2 y 3: nadie oferta: cobra el orden de respaldo"
+  ronda
+  ronda
+  turnos ana beto carla
+  final
+}
+
 demo_intercambio() {
   echo "== ELEGIR E INTERCAMBIAR: turnos por llegada y cambio con compensación =="
   crear "$(opciones Eleccion true 0 0)"
@@ -151,7 +190,8 @@ case "$MODO" in
   precio) demo_precio ;;
   subasta) demo_subasta ;;
   intercambio) demo_intercambio ;;
-  todos) demo_sorteo; demo_precio; demo_subasta; demo_intercambio ;;
-  *) echo "MODO desconocido: $MODO (usa sorteo, precio, subasta, intercambio o todos)" >&2; exit 1 ;;
+  sellada) demo_sellada ;;
+  todos) demo_sorteo; demo_precio; demo_subasta; demo_intercambio; demo_sellada ;;
+  *) echo "MODO desconocido: $MODO (usa sorteo, precio, subasta, intercambio, sellada o todos)" >&2; exit 1 ;;
 esac
 echo "Listo."

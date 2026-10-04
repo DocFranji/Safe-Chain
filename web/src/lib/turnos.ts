@@ -24,10 +24,31 @@ export const eligeTurno = (modo: Modo) => modo === 'Eleccion' || modo === 'Preci
  *  se aparta de la bolsa al cobrar. */
 export const garantiaAlCobrar = (modo: Modo) => modo === 'Sorteo' || modo === 'Subasta'
 
-/** Lo que la persona elige en el formulario de crear (porcentajes enteros, como los demás campos). */
-export type OpcionesForm = { modo: Modo; intercambio: boolean; primaPct: number; descuentoPct: number }
+/**
+ * Lo que la persona elige en el formulario de crear (porcentajes enteros, como los demás campos).
+ * `primeros`: cuántos de los primeros turnos piden historial (0 = ninguno; solo donde se elige turno).
+ * `puntajePrimeros`: puntaje de historial (M2) que piden esos turnos.
+ * `selladas`: subasta con ofertas selladas (se sellan en la primera mitad de la ronda y se revelan después).
+ */
+export type OpcionesForm = {
+  modo: Modo
+  intercambio: boolean
+  primaPct: number
+  descuentoPct: number
+  primeros: number
+  puntajePrimeros: number
+  selladas: boolean
+}
 
-export const OPCIONES_CLASICAS: OpcionesForm = { modo: 'Llegada', intercambio: false, primaPct: 10, descuentoPct: 30 }
+export const OPCIONES_CLASICAS: OpcionesForm = {
+  modo: 'Llegada',
+  intercambio: false,
+  primaPct: 10,
+  descuentoPct: 30,
+  primeros: 0,
+  puntajePrimeros: 100,
+  selladas: false,
+}
 
 export const MODOS: { modo: Modo; titulo: string; lema: string; detalle: string }[] = [
   {
@@ -73,6 +94,9 @@ export function tituloModo(modo: Modo): string {
 /** Sin nada nuevo: se crea con `crear_tanda`, como siempre. */
 export const esClasica = (o: OpcionesForm) => o.modo === 'Llegada' && !o.intercambio
 
+/** ¿Los primeros turnos piden historial? Solo donde cada quien elige su turno. */
+const conHistorial = (o: OpcionesForm) => eligeTurno(o.modo) && o.primeros > 0
+
 /** Las opciones del formulario en el formato del contrato (cada modo solo usa sus parámetros). */
 export function aContrato(o: OpcionesForm): OpcionesTanda {
   return {
@@ -80,11 +104,14 @@ export function aContrato(o: OpcionesForm): OpcionesTanda {
     permitir_intercambio: o.modo !== 'Subasta' && o.intercambio,
     prima_max_bps: o.modo === 'PrecioPorTurno' ? Math.round(o.primaPct * 100) : 0,
     descuento_max_bps: o.modo === 'Subasta' ? Math.round(o.descuentoPct * 100) : 0,
+    primeros_con_historial: conHistorial(o) ? o.primeros : 0,
+    puntaje_primeros: conHistorial(o) ? o.puntajePrimeros : 0,
+    ofertas_selladas: o.modo === 'Subasta' && o.selladas,
   }
 }
 
 /** Las mismas condiciones que hacen fallar a `crear_tanda_avanzada` con OpcionesInvalidas. */
-export function validarOpciones(o: OpcionesForm): string | null {
+export function validarOpciones(o: OpcionesForm, nMiembros?: number): string | null {
   const prima = Math.round(o.primaPct * 100)
   const descuento = Math.round(o.descuentoPct * 100)
   if (o.modo === 'PrecioPorTurno' && !(prima >= 1 && prima <= MAX_PRIMA_BPS)) {
@@ -93,7 +120,26 @@ export function validarOpciones(o: OpcionesForm): string | null {
   if (o.modo === 'Subasta' && !(descuento >= 1 && descuento <= MAX_DESCUENTO_BPS)) {
     return `El descuento máximo va de 1 % a ${MAX_DESCUENTO_BPS / 100} %.`
   }
+  if (conHistorial(o)) {
+    if (o.puntajePrimeros <= 0) return 'Elige el nivel de historial que piden los primeros turnos.'
+    if (nMiembros !== undefined && o.primeros >= nMiembros) {
+      return `Deja al menos un turno para cualquiera: con ${nMiembros} personas, pide historial en ${nMiembros - 1} turnos como máximo.`
+    }
+  }
   return null
+}
+
+/** ¿El turno `posicion` pide historial en esta tanda? */
+export function pideHistorial(o: Pick<OpcionesTanda, 'primeros_con_historial'> | null | undefined, posicion: number): boolean {
+  return !!o && posicion < o.primeros_con_historial
+}
+
+/**
+ * Turno en el que queda quien crea la tanda y se une enseguida (sin elegir): el 1, salvo que los
+ * primeros pidan un historial que no tiene; entonces el primero que no lo pide.
+ */
+export function turnoAlCrear(o: OpcionesForm, miPuntaje: number): number {
+  return conHistorial(o) && miPuntaje < o.puntajePrimeros ? o.primeros : 0
 }
 
 /**
@@ -126,6 +172,8 @@ export type FilaTurno = {
   prima: bigint
   /** Efectivo que recibe al cobrar si todos pagan (en la subasta, sin contar su descuento). */
   recibe: bigint
+  /** Este turno pide historial (los primeros, si el creador lo eligió). */
+  pideHistorial: boolean
 }
 
 /** Una fila por turno: cuánto se deja, cuánto se aparta, la prima y cuánto se recibe. */
@@ -137,7 +185,8 @@ export function vistaPrevia(p: ParametrosTanda, o: OpcionesForm): FilaTurno[] {
     const alUnirse = garantiaAlUnirse(p, o.modo, i)
     const apartado = garantia - alUnirse
     const prima = primaBps > 0 ? primaDeTurno(p, primaBps, i) : 0n
-    return { turno: i, garantia, alUnirse, apartado, prima, recibe: b - prima - apartado }
+    const historial = conHistorial(o) && i < o.primeros
+    return { turno: i, garantia, alUnirse, apartado, prima, recibe: b - prima - apartado, pideHistorial: historial }
   })
 }
 

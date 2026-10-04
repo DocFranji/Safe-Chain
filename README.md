@@ -21,9 +21,11 @@ Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tand
 **Quién cobra primero lo decide el grupo**, no solo el orden de llegada. Al crear la tanda se elige el mecanismo ([`docs/turnos.md`](docs/turnos.md)):
 
 - **Precio por turno** (como MoneyFellows): quien tiene prisa paga una prima y quien espera la gana. Suma cero: el contrato no se queda con nada.
-- **Subasta** (como los chit funds de la India): cada ronda gana quien acepte recibir menos, y ese descuento se reparte entre los demás.
+- **Subasta** (como los chit funds de la India): cada ronda gana quien acepte recibir menos, y ese descuento se reparte entre los demás. Puede ser con ofertas selladas: en la primera mitad de la ronda cada quien sella su oferta sin que los demás la vean, y en la segunda la revela.
 - **Sorteo:** el contrato sortea el orden cuando se llena la tanda.
 - **Elegir e intercambiar:** cada quien elige su turno y lo puede cambiar con otro, con una compensación si se ponen de acuerdo.
+
+En precio por turno y en elegir turno, si la tanda usa el historial crediticio, el creador puede pedir un puntaje mínimo para tomar los primeros turnos: son los que reciben la bolsa antes de haber aportado casi nada.
 
 En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la subasta, como el turno no se conoce al unirse, todos dejan una cuota y el resto se aparta de la bolsa al cobrar.
 
@@ -139,7 +141,7 @@ Para presentarla al jurado (pantalla proyectada, qué decir y plan B), vean [`DE
 Los mecanismos de turnos tienen su propio guion (unos 4 minutos por modo):
 
 ```bash
-MODO=sorteo bash scripts/demo_turnos.sh        # también: precio, subasta, intercambio o todos
+MODO=sorteo bash scripts/demo_turnos.sh        # también: precio, subasta, sellada, intercambio o todos
 ```
 
 ## 5. La interfaz web

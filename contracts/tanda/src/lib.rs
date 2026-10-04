@@ -53,6 +53,8 @@ mod test_deudas; // M1
 #[cfg(test)]
 mod test_historial; // M2
 #[cfg(test)]
+mod test_invariantes; // ORQ
+#[cfg(test)]
 mod test_tiempos; // M1
 #[cfg(test)]
 mod test_turnos; // M3
@@ -519,20 +521,26 @@ impl TandaContract {
             }
         }
         if suma_col2 > 0 {
+            // Se reparte en proporción lo que de verdad volvió para estas garantías. (ORQ) El
+            // rendimiento puede salir unas unidades mínimas NEGATIVO por el redondeo de las
+            // participaciones: sumar "colateral + parte" daba a veces un pago negativo al último, que
+            // no se transfería, y `finalizar` pagaba de más y se trababa. Con rendimiento >= 0 da lo
+            // mismo que antes; nunca hay pagos negativos.
+            let disponible = (suma_col2 + rendimiento).max(0);
             let mut repartido: i128 = 0;
             let mut ultimo: Option<u32> = None;
             for i in 0..n {
                 let m = datos.get(i).unwrap();
                 if !m.moroso && m.colateral > 0 {
-                    let parte = rendimiento * m.colateral / suma_col2;
-                    pagos.set(i, m.colateral + parte);
-                    repartido += parte;
+                    let pago = disponible * m.colateral / suma_col2;
+                    pagos.set(i, pago);
+                    repartido += pago;
                     ultimo = Some(i);
                 }
             }
             // El resto del redondeo va al último receptor: el saldo termina en 0 exacto.
             if let Some(u) = ultimo {
-                pagos.set(u, pagos.get(u).unwrap() + (rendimiento - repartido));
+                pagos.set(u, pagos.get(u).unwrap() + (disponible - repartido));
             }
         } else {
             // Nadie tiene colateral: el rendimiento se suma al fondo de premios.
