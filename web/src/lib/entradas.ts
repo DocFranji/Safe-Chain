@@ -18,12 +18,15 @@ export function parseMonto(texto: string): bigint | null {
   return valor
 }
 
-export type UnidadPeriodo = 'minutos' | 'horas' | 'dias'
+export type UnidadPeriodo = 'minutos' | 'horas' | 'dias' | 'semanas' | 'meses'
 
+/** En toda la app, 1 mes = 30 días (así lo dice la interfaz). */
 export const SEGUNDOS_POR_UNIDAD: Record<UnidadPeriodo, number> = {
   minutos: 60,
   horas: 3_600,
   dias: 86_400,
+  semanas: 604_800,
+  meses: 2_592_000,
 }
 
 /** (2, 'minutos') -> 120. Devuelve null si no es un entero positivo. */

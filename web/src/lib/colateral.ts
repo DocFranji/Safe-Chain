@@ -8,6 +8,8 @@
 export const MIN_MIEMBROS = 3
 export const MAX_MIEMBROS = 12
 export const MIN_PERIODO_SEG = 60
+/** Ronda más larga: 90 días (3 meses), igual que `MAX_PERIODO_SEG` en lib.rs. */
+export const MAX_PERIODO_SEG = 90 * 86_400
 export const MAX_PENALIDAD_BPS = 5_000
 export const MAX_COBERTURA_BPS = 10_000
 
@@ -77,6 +79,8 @@ export function validarParametros(p: Partial<ParametrosTanda>): Errores {
   }
   if (p.periodoSeg === undefined || !Number.isInteger(p.periodoSeg) || p.periodoSeg < MIN_PERIODO_SEG) {
     e.periodoSeg = 'Escribe un número entero: cada ronda debe durar al menos 1 minuto.'
+  } else if (p.periodoSeg > MAX_PERIODO_SEG) {
+    e.periodoSeg = 'Cada ronda puede durar hasta 3 meses (90 días).'
   }
   if (
     p.penalidadBps === undefined ||
