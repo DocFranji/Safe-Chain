@@ -87,6 +87,20 @@ cliente_al_dia() {
   fi
 }
 
+clientes_subidos() {
+  # Cada cliente de web/packages debe tener su dist/ (ya compilado) EN EL REPO: CI y Vercel no tienen
+  # la CLI de Stellar para generarlo. Si solo existe en tu máquina, aquí todo pasa y allá no compila.
+  local falta=0 d
+  for p in web/packages/*/package.json; do
+    d=$(dirname "$p")
+    if ! git ls-files --error-unmatch "$d/dist/index.js" >/dev/null 2>&1; then
+      echo "$d/dist no está en el repo: corre bash scripts/generar_cliente.sh y súbelo (mira web/.gitignore)."
+      falta=1
+    fi
+  done
+  return "$falta"
+}
+
 dependencias_web() {
   (cd web && npm ci --no-audit --no-fund --loglevel=error) || return 1
   # Igual que preparar_entorno.sh: nada de node_modules dentro de web/packages/* (duplicaría el SDK).
@@ -134,6 +148,7 @@ if [ "$QUE" = "todo" ] && [ "${SIN_WASM:-}" != "1" ]; then
 fi
 
 if [ "$QUE" = "todo" ] || [ "$QUE" = "web" ]; then
+  paso "Clientes compilados en el repo (web/packages/*/dist)" clientes_subidos
   paso "web: npm ci" dependencias_web
   paso "web: lint" bash -c 'cd web && npm run lint'
   paso "web: pruebas" bash -c 'cd web && npm test'
