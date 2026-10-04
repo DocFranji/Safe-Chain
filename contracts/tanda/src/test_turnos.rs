@@ -924,3 +924,140 @@ fn intercambio_pide_las_firmas_correctas() {
     assert!(c.tanda.try_ofertar(&id, &c.beto, &100).is_err());
     assert!(c.tanda.try_unirse_en_turno(&id, &c.beto, &1).is_err());
 }
+
+// ===========================================================================
+// Peor caso con los contratos compilados a WASM (costo real de la VM)
+// ===========================================================================
+
+/// Como `setup`, pero con la tanda y la bóveda en WASM (`stellar contract build`). Es la misma idea
+/// que `setup_wasm` de M1; cuando M1 esté en `integracion`, esta prueba usa la suya.
+fn setup_wasm_turnos() -> Ctx {
+    use soroban_sdk::testutils::Ledger as _;
+    let leer = |nombre: &str| {
+        let ruta = std::format!(
+            "{}/../../target/wasm32v1-none/release/{nombre}.wasm",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::read(&ruta)
+            .unwrap_or_else(|_| panic!("falta {ruta}: corre `stellar contract build`"))
+    };
+    let (wasm_tanda, wasm_boveda) = (leer("tanda"), leer("boveda_simulada"));
+    let env = soroban_sdk::Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|l| {
+        l.timestamp = 1_000;
+        l.sequence_number = 100;
+    });
+    let token_addr = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+    let sac = StellarAssetClient::new(&env, &token_addr);
+    let token = soroban_sdk::token::TokenClient::new(&env, &token_addr);
+    let boveda = env.register(wasm_boveda.as_slice(), (token_addr.clone(), 0u32, 1u32));
+    sac.mint(&boveda, &FONDEO_BOVEDA);
+    let tanda_addr = env.register(wasm_tanda.as_slice(), ());
+    let tanda = TandaContractClient::new(&env, &tanda_addr);
+    tanda.inicializar(&Address::generate(&env), &boveda, &None);
+    let (ana, beto, carla) = (
+        Address::generate(&env),
+        Address::generate(&env),
+        Address::generate(&env),
+    );
+    for p in [&ana, &beto, &carla] {
+        sac.mint(p, &SALDO_INICIAL);
+    }
+    Ctx {
+        creador: Address::generate(&env),
+        verificador: Address::generate(&env),
+        env,
+        tanda,
+        tanda_addr,
+        boveda,
+        token,
+        ana,
+        beto,
+        carla,
+    }
+}
+
+/// Peor caso de cada modo con 12 miembros y WASM real. Necesita `stellar contract build` antes, por
+/// eso solo corre con `PEOR_CASO_WASM=1`:
+/// `stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso_turnos -- --nocapture`
+#[test]
+fn peor_caso_turnos_12_miembros_en_wasm() {
+    if std::env::var("PEOR_CASO_WASM").is_err() {
+        std::println!("(omitida: corre `stellar contract build` y luego con PEOR_CASO_WASM=1)");
+        return;
+    }
+    let medir = |c: &Ctx, que: &str, peor: &mut (i64, u32, u32)| {
+        let r = c.env.cost_estimate().resources();
+        let lecturas = r.disk_read_entries + r.memory_read_entries;
+        std::println!(
+            "  {que:<44} {:>12} instrucciones · {:>3} lecturas · {:>3} escrituras",
+            r.instructions,
+            lecturas,
+            r.write_entries
+        );
+        peor.0 = peor.0.max(r.instructions);
+        peor.1 = peor.1.max(lecturas);
+        peor.2 = peor.2.max(r.write_entries);
+    };
+    let mut peor = (0i64, 0u32, 0u32);
+    std::println!("Peor caso con 12 miembros (WASM real):");
+
+    // Sorteo: el último `unirse` baraja y reescribe a los 12.
+    let c = setup_wasm_turnos();
+    let id = c.crear_con(12, 10_000, &opciones(ModoTurnos::Sorteo));
+    let gente = c.personas(12);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    medir(&c, "sorteo: último unirse (baraja 12)", &mut peor);
+    c.pagan_todos(id, &gente);
+    c.cerrar(id);
+    medir(&c, "sorteo: cerrar_ronda 1 (aparta 1 000)", &mut peor);
+
+    // Subasta: oferta en cada ronda y dividendos para 11; la mitad no paga (sus garantías cubren).
+    let c = setup_wasm_turnos();
+    let id = c.crear_con(12, 10_000, &subasta(5_000));
+    let gente = c.personas(12);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    medir(&c, "subasta: último unirse (orden de respaldo)", &mut peor);
+    c.tanda.ofertar(&id, &gente[0], &1_000);
+    medir(&c, "subasta: ofertar", &mut peor);
+    c.pagan_todos(id, &gente[..6]);
+    c.cerrar(id);
+    medir(
+        &c,
+        "subasta: cerrar_ronda (6 impagos, 11 dividendos)",
+        &mut peor,
+    );
+
+    // Precio por turno: prima y garantía apartada al cobrar.
+    let c = setup_wasm_turnos();
+    let id = c.crear_con(12, 10_000, &con_intercambio(precio(2_000)));
+    let gente = c.personas(12);
+    for (i, p) in gente.iter().enumerate() {
+        c.tanda.unirse_en_turno(&id, p, &(11 - i as u32));
+    }
+    medir(&c, "precio: último unirse_en_turno", &mut peor);
+    c.tanda
+        .proponer_intercambio(&id, &gente[0], &gente[1], &(10 * U));
+    medir(&c, "precio: proponer_intercambio", &mut peor);
+    c.tanda.aceptar_intercambio(&id, &gente[1], &gente[0]);
+    medir(&c, "precio: aceptar_intercambio", &mut peor);
+    c.pagan_todos(id, &gente);
+    c.cerrar(id);
+    medir(&c, "precio: cerrar_ronda (prima)", &mut peor);
+
+    std::println!(
+        "  Máximo: {} instrucciones · {} lecturas · {} escrituras",
+        peor.0,
+        peor.1,
+        peor.2
+    );
+    // Límites de mainnet (más estrictos que testnet): 100 M instrucciones, 100 lecturas, 50 escrituras.
+    assert!(peor.0 < 100_000_000 && peor.1 <= 100 && peor.2 <= 50);
+}
