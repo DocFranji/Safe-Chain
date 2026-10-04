@@ -34,6 +34,8 @@ use soroban_sdk::{
 mod test;
 #[cfg(test)]
 mod test_auditoria;
+#[cfg(test)]
+mod test_peor_caso;
 
 /// El b_rate de Blend v2 usa 12 decimales.
 pub const SCALAR_12: i128 = 1_000_000_000_000;

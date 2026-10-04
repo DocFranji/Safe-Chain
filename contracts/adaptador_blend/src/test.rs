@@ -15,7 +15,7 @@ extern crate std;
 
 use super::*;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
     testutils::{Address as _, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env, Map, Vec,
@@ -105,6 +105,29 @@ enum K {
     Perdida,
     /// SOLO para la prueba de defensa: b_rate extra que usa `submit` y no `get_reserve`.
     Desfase,
+}
+
+/// Los mismos eventos que emite Blend v2 al depositar y retirar (`pool/src/events.rs`):
+/// tópicos `["supply"|"withdraw", activo, desde]` y datos `[monto, b_tokens]`. Así las pruebas miden el
+/// tamaño de los eventos de una transacción igual que la red (límite de 16 KiB por transacción).
+#[contractevent(topics = ["supply"], data_format = "vec")]
+pub struct EvSupplyBlend {
+    #[topic]
+    pub asset: Address,
+    #[topic]
+    pub from: Address,
+    pub tokens_in: i128,
+    pub b_tokens_minted: i128,
+}
+
+#[contractevent(topics = ["withdraw"], data_format = "vec")]
+pub struct EvWithdrawBlend {
+    #[topic]
+    pub asset: Address,
+    #[topic]
+    pub from: Address,
+    pub tokens_out: i128,
+    pub b_tokens_burnt: i128,
 }
 
 #[contract]
@@ -311,6 +334,13 @@ impl PoolSimulado {
                     } else {
                         tok.transfer(&spender, &yo, &r.amount);
                     }
+                    EvSupplyBlend {
+                        asset: asset.clone(),
+                        from: from.clone(),
+                        tokens_in: r.amount,
+                        b_tokens_minted: bt,
+                    }
+                    .publish(&env);
                 }
                 WITHDRAW => {
                     let mut bt = (r.amount * SCALAR_12 + rate - 1) / rate; // hacia arriba
@@ -334,6 +364,13 @@ impl PoolSimulado {
                         panic_with_error!(&env, ErrorPool::InvalidUtilRate);
                     }
                     tok.transfer(&yo, &to, &sale);
+                    EvWithdrawBlend {
+                        asset: asset.clone(),
+                        from: from.clone(),
+                        tokens_out: sale,
+                        b_tokens_burnt: bt,
+                    }
+                    .publish(&env);
                 }
                 _ => panic!("tipo no soportado en el simulador"),
             }

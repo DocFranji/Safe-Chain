@@ -6,6 +6,7 @@ version = 4
 name = "adaptador_blend"
 version = "0.1.0"
 dependencies = [
+ "historial",
  "soroban-sdk",
  "tanda",
 ]

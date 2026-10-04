@@ -299,3 +299,88 @@ fn peor_caso_12_miembros_en_la_boveda_registrada() {
     );
     assert!(max_cpu < 100_000_000 && cpu_fin < 100_000_000);
 }
+
+/// Cuántos `transfer` del token salieron de `boveda` en la última llamada.
+fn retiros_de(c: &Ctx, token: &Address, boveda: &Address) -> usize {
+    use soroban_sdk::testutils::Events as _;
+    use soroban_sdk::xdr::{ContractEventBody, ScSymbol, ScVal};
+    use soroban_sdk::TryFromVal;
+    let transfer = ScVal::Symbol(ScSymbol("transfer".try_into().unwrap()));
+    let desde = ScVal::try_from_val(&c.env, &boveda.to_val()).unwrap();
+    c.env
+        .events()
+        .all()
+        .filter_by_contract(token)
+        .events()
+        .iter()
+        .filter(|e| {
+            let ContractEventBody::V0(b) = &e.body;
+            b.topics.len() >= 2 && b.topics[0] == transfer && b.topics[1] == desde
+        })
+        .count()
+}
+
+/// Un cierre en el que 11 garantías cubren su cuota saca de la bóveda UNA sola vez. Con Blend, un
+/// retiro por moroso emitía un evento por retiro y la transacción pasaba el límite de 16 KiB de eventos
+/// de la red: la ronda no se podía cerrar (docs/blend.md §9). El reparto no cambia y el dinero cuadra.
+#[test]
+fn cerrar_ronda_saca_de_la_boveda_una_sola_vez() {
+    let c = setup_con(500, 52_560, false);
+    let u = usdc(&c);
+    c.tanda
+        .registrar_boveda(&u.token.address, &Some(u.boveda.clone()));
+    let miembros: std::vec::Vec<Address> = (0..12).map(|_| Address::generate(&c.env)).collect();
+    for m in &miembros {
+        u.sac.mint(m, &(20 * CUOTA));
+    }
+    let id = u.crear(&c, 12);
+    for m in &miembros {
+        c.tanda.unirse(&id, m);
+    }
+    let total = || {
+        miembros.iter().map(|m| u.saldo(m)).sum::<i128>()
+            + u.saldo(&u.boveda)
+            + u.saldo(&c.tanda_addr)
+    };
+    let inicial = total();
+    // El presupuesto del entorno se acumula en toda la prueba; aquí importa contar los retiros.
+    c.env.cost_estimate().budget().reset_unlimited();
+
+    // Ronda 1: solo paga quien cobra; las garantías de los otros 11 cubren sus cuotas.
+    let quien_cobra = &miembros[0];
+    c.tanda.pagar_cuota(&id, quien_cobra);
+    let antes = u.saldo(quien_cobra);
+    c.avanzar(PERIODO);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(retiros_de(&c, &u.token.address, &u.boveda), 1);
+    assert_eq!(
+        u.saldo(quien_cobra),
+        antes + 12 * CUOTA,
+        "la bolsa sale completa"
+    );
+    for m in &miembros[1..] {
+        assert_eq!(c.miembro(id, m).atrasos, 1);
+    }
+    assert_eq!(total(), inicial);
+
+    // Con todos al día no se toca la bóveda al cerrar.
+    for m in &miembros {
+        c.tanda.pagar_cuota(&id, m);
+    }
+    c.avanzar(PERIODO);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(retiros_de(&c, &u.token.address, &u.boveda), 0);
+
+    // El resto sin pagos hasta el final: todo vuelve y el dinero cuadra.
+    for _ in 2..12 {
+        c.avanzar(PERIODO);
+        c.tanda.cerrar_ronda(&id);
+        assert!(retiros_de(&c, &u.token.address, &u.boveda) <= 1);
+    }
+    c.tanda.finalizar(&id);
+    assert_eq!(total(), inicial, "el dinero en USDC no cuadra");
+    assert_eq!(
+        BovedaSimuladaClient::new(&c.env, &u.boveda).shares_de(&c.tanda_addr),
+        0
+    );
+}

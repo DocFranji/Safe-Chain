@@ -15,3 +15,5 @@ soroban-sdk = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 # Para probar la tanda completa usando este adaptador en lugar de la bóveda simulada.
 tanda = { path = "../tanda" }
+# El historial crediticio (M2), para medir el peor caso de la tanda con todo conectado.
+historial = { path = "../historial" }

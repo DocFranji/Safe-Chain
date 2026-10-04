@@ -364,6 +364,10 @@ impl TandaContract {
         let mut bolsa: i128 = 0;
         // M1: lo que cada moroso no alcanzó a cubrir esta ronda (se le debe a quien cobra).
         let mut faltantes: Vec<(Address, i128)> = Vec::new(&env);
+        // M4: lo que cubren las garantías se saca de la bóveda en UN solo retiro, después del bucle.
+        // Con Blend, un retiro por moroso emitía un evento por retiro y con 11 morosos la transacción
+        // pasaba el límite de 16 KiB de eventos de la red: la ronda no se podía cerrar (docs/blend.md §9).
+        let mut cubierto_total: i128 = 0;
 
         for dir in miembros.iter() {
             if env
@@ -399,9 +403,7 @@ impl TandaContract {
             };
             if cubierto > 0 {
                 m.colateral -= cubierto;
-                // Nunca gasta participaciones de otra tanda: si la bóveda vale menos de lo anotado,
-                // entra lo que de verdad salió (M4/M1, ver `sacar_de_boveda`).
-                bolsa += sacar_de_boveda(&env, &boveda, &mut t, cubierto);
+                cubierto_total += cubierto;
                 ganchos::al_cubrir(&env, &t, id, &dir, ronda, cubierto);
                 EvCubierto {
                     id,
@@ -412,6 +414,11 @@ impl TandaContract {
                 .publish(&env);
             }
             guardar_miembro(&env, id, &dir, &m);
+        }
+        if cubierto_total > 0 {
+            // Nunca gasta participaciones de otra tanda: si la bóveda vale menos de lo anotado,
+            // entra lo que de verdad salió (M4/M1, ver `sacar_de_boveda`).
+            bolsa += sacar_de_boveda(&env, &boveda, &mut t, cubierto_total);
         }
 
         // Regla 3: paga al beneficiario de turno (o retiene si es moroso).
