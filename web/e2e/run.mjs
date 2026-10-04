@@ -180,6 +180,15 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Lista: "Saldó su deuda" para Carla', /Saldó su deuda/.test(lista), lista.slice(0, 400))
   const cal = (await page.locator('.calendario').innerText().catch(() => '')).replace(/\u00a0/g, ' ')
   check('Calendario: 4 rondas, 2 cerradas y fechas para las que faltan', (await page.locator('.calendario tbody tr').count()) === 4 && (cal.match(/Cerrada/g) ?? []).length === 2 && /Vence el \S+ \d+ de \S+/.test(cal), cal)
+  // M1 fase 2: "Agregar a mi calendario" baja un .ics con las 2 fechas que faltan y recordatorios.
+  const [descarga] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Agregar a mi calendario' }).click(),
+  ])
+  const ics = fs.readFileSync(await descarga.path(), 'utf8')
+  check('Calendario .ics: se llama rounda-tanda-6.ics', descarga.suggestedFilename() === 'rounda-tanda-6.ics', descarga.suggestedFilename())
+  check('Calendario .ics: 2 fechas de pago (las rondas que faltan) con recordatorio un día antes', (ics.match(/BEGIN:VEVENT/g) ?? []).length === 2 && (ics.match(/TRIGGER:-P1D/g) ?? []).length === 2 && ics.endsWith('END:VCALENDAR\r\n'), ics.slice(0, 600))
+  check('Calendario .ics: en mi ronda dice que cobro mi bolsa, con el enlace a la tanda', /SUMMARY:Tanda 6: pagas tu cuota y cobras tu bolsa \(ronda 4 de 4\)/.test(ics) && /#\/tanda\/6/.test(ics), ics.slice(0, 1500))
   await page.waitForSelector('.historia-item', { timeout: 15000 }).catch(() => {})
   const hist = (await page.locator('.historia-seccion').innerText()).replace(/\u00a0/g, ' ')
   check('Historia: "Carla pagó 50 TUSD y saldó su deuda"', /Carla pagó 50 TUSD y saldó su deuda/.test(hist), hist.slice(0, 500))

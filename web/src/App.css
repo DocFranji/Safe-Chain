@@ -1578,6 +1578,18 @@ td .dir {
   margin: 0;
   color: var(--tinta);
 }
+/* M1: bajar las fechas de pago al calendario del teléfono (.ics). */
+.agregar-calendario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+}
+.agregar-calendario .explica {
+  flex: 1 1 240px;
+  margin: 0;
+}
 /* M1: en el lobby, a quien le toca cobrar (al cobrar cierra la ronda). */
 .tarjeta-cobro {
   margin: 4px 0 0;
