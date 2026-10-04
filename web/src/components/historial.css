@@ -125,6 +125,21 @@ a.insignia:focus-visible {
 .historial-buscar input {
   flex: 1 1 14rem;
   min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--papel);
+  color: var(--tinta);
+  font: inherit;
+}
+.historial-buscar .boton {
+  flex: 0 0 auto;
+}
+.historial h2 {
+  margin-top: 1.75rem;
+}
+.historial-form {
+  margin-top: 1rem;
 }
 .nota-historial {
   margin: 0.5rem 0;

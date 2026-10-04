@@ -1,6 +1,6 @@
 # M2 · Historial crediticio on-chain
 
-> Estado: **contratos implementados** (dom 4 oct 2026): `contracts/historial/` y la conexión en `tanda` (ganchos + `requisitos.rs`), con pruebas. Decisiones §7 aprobadas por @DocFranji (como se recomendó). Falta: web, cliente TS y scripts de despliegue.
+> Estado: **contratos implementados** (dom 4 oct 2026): `contracts/historial/` y la conexión en `tanda` (ganchos + `requisitos.rs`), con pruebas. Decisiones §7 aprobadas por @DocFranji (como se recomendó). Web, cliente TS y scripts de despliegue también listos (ver §6 y §9).
 
 ## Cómo explicarlo en 20 segundos
 
@@ -237,3 +237,12 @@ Si `puntaje_minimo > 0` y `puntaje(miembro) < puntaje_minimo` → `Error::Puntaj
 
 - `contracts/historial`: puntos y nivel por cada hecho; topes (cuota mínima, tope por tanda); negativos que no se borran; emisor no autorizado → error; revocar impide escrituras futuras; eventos publicados; no existen funciones de borrado.
 - `contracts/tanda/src/test_historial.rs`: tanda completa actualiza a todos; moroso marcado; con M1, saldar deuda suma; puntaje mínimo (entra / no entra); descuento aplicado + `assert_conservacion()`; la tanda funciona sin historial y con un historial que falla; peor caso con 12 miembros (`cerrar_ronda` y `finalizar`).
+
+## 9. Despliegue y web (estado)
+
+- `scripts/desplegar_testnet.sh` despliega el historial, lo inicializa, **autoriza la tanda como emisor** y llama `configurar_historial`. `SIN_HISTORIAL=1` lo omite. Guarda `HISTORIAL=` en `scripts/.contratos` y `VITE_HISTORIAL_ID` en `web/.env.local`.
+- `scripts/demo.sh` imprime al final el puntaje, el nivel y el enlace al historial de cada persona.
+- **Probado en testnet** (dom 4 oct, cuentas desechables): despliegue completo + `demo.sh`. Resultado: Carla 80 (3 a tiempo + tanda cumplida), Beto 48 (2 a tiempo + 1 tarde + tanda con atrasos), Ana 5 (1 a tiempo − 2 cubiertas + tanda con atrasos), igual a la fórmula.
+- Web: `VITE_HISTORIAL_ID` es **opcional**: si falta, la web le pregunta a la tanda (`get_historial`). Con un contrato de tanda anterior a M2 (el de producción hoy), todo lo del historial se esconde sin errores (hay prueba de navegador para eso).
+- Página `#/historial/<dirección>` (y `#/historial` = el mío), enlace "Mi historial" en el menú, insignia de nivel en "Quiénes participan", nota al unirse (requisito y descuento; el botón usa la garantía con descuento), opciones al crear (firma extra `configurar_requisitos` antes de unirse).
+- Pendiente (extra): insignias en las tarjetas del lobby y línea de tiempo del historial (necesita indexador).

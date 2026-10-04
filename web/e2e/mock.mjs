@@ -1,6 +1,7 @@
 // RPC de Stellar + Horizon + Friendbot + faucet + Freighter SIMULADOS, para probar la web sin red.
 // Codifica las respuestas con el mismo Spec del contrato que usa el cliente real.
 import { Client } from '../packages/tanda/dist/index.js'
+import { Client as ClienteHistorial } from '../packages/historial/dist/index.js'
 import * as SDK from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
 const { xdr, StrKey, nativeToScVal, TransactionBuilder, Address, scValToNative, SorobanDataBuilder } = SDK
@@ -11,6 +12,8 @@ export const TOKEN_ID = 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ
 export const BOVEDA_ID = StrKey.encodeContract(Buffer.alloc(32, 7))
 /** M1: bóveda "real" (sin acelerar) para tandas de días, semanas o meses. La de arriba es la rápida. */
 export const BOVEDA_REAL = StrKey.encodeContract(Buffer.alloc(32, 8))
+/** M2: contrato de historial crediticio (la tanda simulada lo devuelve en `get_historial`). */
+export const HISTORIAL_ID = StrKey.encodeContract(Buffer.alloc(32, 9))
 export const ANA = 'GADMQOSHB74SMBATS6IF67ZKS2KJPQC4FOM6NDGGWADEUT253XCATVPD'
 export const BETO = 'GBPDH2E2EX5D7DO76YRIX477LPJWNPB7MJZRTEDJWBKZMS5KTLLRU2LO'
 export const CARLA = 'GDPIB76VVYNDJINI6BRYGVOKTPOTERZABL43OB7DIOCLTXSKEUMJWNUN'
@@ -20,6 +23,7 @@ export const U = 10_000_000n
 
 const cliente = new Client({ contractId: TANDA_ID, networkPassphrase: PASS, rpcUrl: 'https://mock.test' })
 const spec = cliente.spec
+const specHistorial = new ClienteHistorial({ contractId: HISTORIAL_ID, networkPassphrase: PASS, rpcUrl: 'https://mock.test' }).spec
 
 const ahora = () => Math.floor(Date.now() / 1000)
 const miembro = (posicion, o = {}) => ({
@@ -68,6 +72,15 @@ export function nuevoEstado() {
     },
     cuentas: { [ME]: { existe: true, trustline: true, saldo: 1000n * U }, [BOVEDA_ID]: { existe: true, trustline: true, saldo: 10000n * U } },
     contratoCaido: false,
+    // M2: historial de cada dirección (lo que no está, vale cero). `historialActivo: false` simula un
+    // contrato de tanda anterior a M2 (sin `get_historial`).
+    historialActivo: true,
+    historiales: {
+      [ANA]: historial({ cuotas_a_tiempo: 30, tandas_cumplidas: 3, cobros: 3, puntos_positivos: 330 }),
+      [BETO]: historial({ cuotas_a_tiempo: 11, cuotas_tarde: 1, tandas_con_atrasos: 1, cobros: 1, puntos_positivos: 138 }),
+      [CARLA]: historial({ cuotas_a_tiempo: 4, cuotas_cubiertas: 1, veces_moroso: 1, deudas_saldadas: 1, puntos_positivos: 100, puntos_negativos: 115 }),
+      [ME]: historial({ cuotas_a_tiempo: 6, tandas_cumplidas: 1, cobros: 1, puntos_positivos: 110 }),
+    },
     faucetStatus: null,
     eventosPedidos: 0,
     llamadas: [],
@@ -103,6 +116,39 @@ export function conTandaMorosa(e) {
   }
   return e
 }
+/** M2: un historial con todo en cero salvo lo que se indique. */
+export function historial(o = {}) {
+  const base = {
+    cuotas_a_tiempo: 0, cuotas_tarde: 0, cuotas_cubiertas: 0, veces_moroso: 0, deudas_saldadas: 0, tandas_cumplidas: 0,
+    tandas_con_atrasos: 0, cobros: 0, monto_pagado: 0n, puntos_positivos: 0, puntos_negativos: 0, primera_actividad: 0n, ultima_actividad: 0n,
+  }
+  const h = { ...base, ...o }
+  if (h.puntos_positivos || h.puntos_negativos) {
+    h.monto_pagado ||= BigInt(h.cuotas_a_tiempo + h.cuotas_tarde) * 100n * U
+    h.primera_actividad ||= BigInt(ahora() - 90 * 86_400)
+    h.ultima_actividad ||= BigInt(ahora() - 86_400)
+  }
+  return h
+}
+
+/**
+ * M2: agrega la tanda 7, abierta y vacía, de 6 personas, que pide historial Bronce (100 puntos) y da
+ * descuento. "Yo" (Bronce, 110 puntos) entraría en el turno 1: garantía normal 500, con descuento 450.
+ */
+export function conTandaExigente(e) {
+  e.tandas[7] = {
+    tanda: tanda({ creador: BETO, n_miembros: 6 }),
+    miembros: [],
+    pagaron: [],
+    requisitos: { puntaje_minimo: 100, descuento: true },
+  }
+  return e
+}
+
+const puntaje = (h) => Math.max(0, h.puntos_positivos - h.puntos_negativos)
+const nivelDe = (p) => (p >= 600 ? 3 : p >= 300 ? 2 : p >= 100 ? 1 : 0)
+const beneficioDe = (h) => (h.veces_moroso > h.deudas_saldadas ? 0 : [0, 1000, 2500, 5000][nivelDe(puntaje(h))])
+
 const i128 = (n) => nativeToScVal(BigInt(n), { type: 'i128' })
 const u32 = (n) => nativeToScVal(n, { type: 'u32' })
 const u64 = (n) => nativeToScVal(BigInt(n), { type: 'u64' })
@@ -122,6 +168,11 @@ function valorSim(est, contrato, fn, args) {
   if (contrato === TANDA_ID && est.contratoCaido) return { error: { error: 'HostError: Error(Storage, MissingValue)', latestLedger: 1000 } }
   if (contrato === TANDA_ID) {
     if (fn === 'total_tandas') return u32(Object.keys(est.tandas).length)
+    // --- M2 (sin id de tanda) ---
+    if (fn === 'get_historial') {
+      if (!est.historialActivo) return { error: { error: 'HostError: Error(WasmVm, MissingValue)', latestLedger: 1000 } }
+      return addr(HISTORIAL_ID)
+    }
     const id = nativos[0]
     const t = est.tandas[id]
     if (!t) return { error: erroresContrato(2) }
@@ -141,10 +192,27 @@ function valorSim(est, contrato, fn, args) {
     if (fn === 'get_deudas') {
       return xdr.ScVal.scvVec((t.deudas ?? []).map(([a, d]) => xdr.ScVal.scvVec([addr(a), spec.nativeToUdt(d, 'Deuda')])))
     }
+    // --- M2 ---
+    if (fn === 'get_requisitos') return spec.nativeToUdt(t.requisitos ?? { puntaje_minimo: 0, descuento: false }, 'Requisitos')
+    if (fn === 'colateral_para_miembro') {
+      if (t.miembros.length >= t.tanda.n_miembros) return { error: erroresContrato(6) }
+      const normal = colateralPara(t.tanda, t.miembros.length)
+      if (!t.requisitos?.descuento) return i128(normal)
+      const h = est.historiales[nativos[1]] ?? historial()
+      const conDescuento = normal - (normal * BigInt(beneficioDe(h))) / 10000n
+      const piso = t.tanda.cuota < normal ? t.tanda.cuota : normal
+      return i128(conDescuento > piso ? conDescuento : piso)
+    }
     if (fn === 'get_deuda') {
       const d = (t.deudas ?? []).find(([a]) => a === nativos[1])?.[1] ?? { faltantes: [], bolsa_retenida: 0n, pagado: 0n }
       return spec.nativeToUdt(d, 'Deuda')
     }
+  }
+  if (contrato === HISTORIAL_ID) {
+    const h = est.historiales[nativos[0]] ?? historial()
+    if (fn === 'historial') return specHistorial.nativeToUdt(h, 'Historial')
+    if (fn === 'puntaje') return u32(puntaje(h))
+    if (fn === 'beneficio_colateral_bps') return u32(beneficioDe(h))
   }
   if (contrato === TOKEN_ID) {
     if (fn === 'balance') return i128(est.cuentas[nativos[0]]?.saldo ?? 0n)

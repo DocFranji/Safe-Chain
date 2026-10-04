@@ -46,6 +46,10 @@ export function Historial({ dir, billetera }: Props) {
           <p>Entra o conecta tu billetera para ver tu historial, o busca el de cualquier dirección.</p>
           <BotonesEntrar billetera={billetera} />
         </>
+      ) : !esDireccion(quien) ? (
+        <Mensaje titulo="Esa dirección no es válida">
+          Revisa que esté completa: una dirección de Stellar empieza con G y tiene 56 caracteres.
+        </Mensaje>
       ) : estado.tipo === 'cargando' ? (
         <p className="cargando" role="status">
           Leyendo el historial…
@@ -162,14 +166,14 @@ function Buscar() {
   const valido = esDireccion(limpio)
   return (
     <form
-      className="formulario"
+      className="historial-form"
       onSubmit={(e) => {
         e.preventDefault()
         if (valido) irA(rutaHistorial(limpio))
       }}
     >
       <h2>Ver el historial de otra persona</h2>
-      <div className="campo historial-buscar">
+      <div className="historial-buscar">
         <label htmlFor="buscar-dir" className="sr-solo">
           Dirección de Stellar
         </label>

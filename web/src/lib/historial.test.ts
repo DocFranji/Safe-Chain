@@ -66,6 +66,7 @@ describe('esDireccion', () => {
   it('acepta G... y C... de 56 caracteres', () => {
     expect(esDireccion('GB2NSL6RGGWODEWQLUP4MD3LC7PMJ775RLGI7TCPT3NJBE2FOUED5BNK')).toBe(true)
     expect(esDireccion('GB2NSL6')).toBe(false)
+    expect(esDireccion('G' + 'A'.repeat(55))).toBe(false) // forma correcta, código de verificación no
     expect(esDireccion('hola')).toBe(false)
   })
 })

@@ -4,6 +4,7 @@
 // en pantalla (la tabla "Cómo se calcula" y el "te faltan N puntos"). El puntaje y el nivel que se
 // muestran siempre vienen del contrato. Diseño: docs/historial.md.
 import { Client, type Historial } from 'historial'
+import { StrKey } from '@stellar/stellar-sdk'
 import { clienteLectura, leer } from './contrato'
 import { HISTORIAL_ID, NETWORK_PASSPHRASE, RPC_URL } from '../config'
 
@@ -131,9 +132,9 @@ export async function leerHistorial(dir: string): Promise<Historial | null> {
   return tx.result
 }
 
-/** Una dirección de Stellar con forma válida (G... o C..., 56 caracteres). */
+/** Una dirección de Stellar válida (cuenta G... o contrato C..., con su código de verificación). */
 export function esDireccion(texto: string): boolean {
-  return /^[GC][A-Z2-7]{55}$/.test(texto)
+  return StrKey.isValidEd25519PublicKey(texto) || StrKey.isValidContract(texto)
 }
 
 /** Requisitos de historial de una tanda. Con un contrato anterior a M2: ninguno. */
