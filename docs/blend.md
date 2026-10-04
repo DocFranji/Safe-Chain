@@ -24,6 +24,11 @@ el pool TestnetV2 por RPC y lo volví a probar en testnet con XLM **y con el USD
   **TUSD → bóveda simulada** (rendimiento acelerado para la demo) y **USDC → Blend** (rendimiento
   real). XLM queda como alternativa. Encaja con el modelo que ya acordaron M1 y ORQ (cada tanda
   guarda su bóveda al crearse).
+- **Fase 2 (4 oct): hallazgo en el peor caso con Blend, ya arreglado** (sección 9). Una tanda en USDC de
+  12 personas con 11 morosos en la misma ronda **no se podía cerrar**: la transacción emitía 16 600 bytes
+  de eventos y la red rechaza más de 16 KiB por transacción, aunque la simulación pase. Ahora
+  `cerrar_ronda` saca de la bóveda **una sola vez** por cierre: en testnet ese cierre pasó a 12 204 bytes y
+  30,8 M instrucciones (antes 70,7 M). También baja el costo con TUSD.
 
 ## 1. Hallazgos
 
@@ -39,6 +44,7 @@ el pool TestnetV2 por RPC y lo volví a probar en testnet con XLM **y con el USD
 | 4 | TTL | Aplicada la política de M1: máximo de la red y `renovar(dueño)` sin firma | Media | `ttl_al_maximo_y_renovar_sin_firma` |
 | 5 | Permisos | Correctos: nadie mueve lo de otro | — | `nadie_mueve_lo_de_otro_sin_su_firma` |
 | 6 | Costo del peor caso (12 retiros de Blend en un `cerrar_ronda`) | Medido en testnet (sección 3) | — | `peor_caso_12_miembros_nadie_paga` + testnet |
+| 7 | ¿El peor caso con todo (M1 + M2 + M3 + Blend) cabe en una transacción? | **No cabía:** 16 600 bytes de eventos (límite 16 384), la ronda quedaba trabada. **Arreglado:** un solo retiro por cierre (sección 9) | **Alta** | `cerrar_ronda_saca_de_la_boveda_una_sola_vez`, `test_peor_caso.rs` + `scripts/peor_caso_blend.mjs` |
 
 ### 1.1 Redondeo entre dueños del adaptador: descartado
 
@@ -412,7 +418,9 @@ La entrega se movió al lunes 12 de octubre; la integración de M4 está previst
 ## 8. Cómo reproducir
 
 ```bash
-cargo test -p adaptador_blend                     # 21 pruebas (6 originales + 15 de auditoría)
+cargo test -p adaptador_blend                     # 23 pruebas (6 originales + 15 de auditoría + 2 de peor caso)
+cargo test -p adaptador_blend test_peor_caso -- --nocapture   # peor caso con eventos de Blend: lecturas, escrituras, bytes de eventos
+node scripts/peor_caso_blend.mjs                  # el mismo peor caso en testnet con Blend real (~35 min)
 stellar keys generate admin --network testnet --fund
 bash scripts/desplegar_blend.sh && bash scripts/demo_blend.sh                  # XLM
 ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_blend.sh   # USDC (ver sección 4)
@@ -469,6 +477,76 @@ pregunta al contrato si acepta USDC. `/api/faucet-blend` no usa secretos.
 
 Demo en vivo: `PRINCIPAL=1 bash scripts/demo_blend.sh` (tanda en USDC en el contrato principal).
 
+### Hallazgo de la fase 2: el límite de 16 KiB de eventos (arreglado)
+
+**Qué pasó.** Al medir en testnet el peor caso de M3 con todo conectado (subasta, garantía mínima,
+casi nadie paga, historial de M2) en una tanda **en USDC**, el cierre de la ronda 2 (11 personas caen
+en mora a la vez) fue rechazado por la red con `resource_limit_exceeded`
+([`d0390b62…48a3`](https://stellar.expert/explorer/testnet/tx/d0390b628759561fce550ea2b89491ff76fd8c55044f5e7680bfaac775c348a3)).
+No fueron las instrucciones (usó 64,8 M de 70,7 M declaradas), ni la memoria (13,8 MB), ni las
+entradas (77 · 43): fueron los **eventos**, 16 600 bytes cuando la red acepta como máximo **16 384 por
+transacción** (`txMaxContractEventsSizeBytes`, igual en testnet y mainnet). La simulación del RPC no revisa
+ese límite, así que la web (o la CLI) arma la transacción sin problema y la red la rechaza. Volver a
+intentarlo da lo mismo: **la ronda queda trabada para siempre**.
+
+| Quién emitió | Eventos | Bytes |
+| --- | --- | --- |
+| historial (`hist_hecho`) | 22 | 6 952 |
+| tanda (`moroso`, `cubierto`, `subasta`, `ronda`) | 24 | 4 808 |
+| USDC (`transfer`, un retiro por moroso) | 11 | 2 640 |
+| Blend (`withdraw`, un retiro por moroso) | 11 | 2 200 |
+| **Total** | 68 | **16 600** |
+
+**Por qué no lo vimos antes.** Las pruebas de peor caso miden instrucciones, lecturas y escrituras, pero
+no `contract_events_size_bytes`. Medido en local con la bóveda simulada (TUSD), ese mismo cierre ya
+usaba **14 172 bytes (86 % del límite)**; Blend suma un evento `withdraw` (200 bytes) por retiro y lo pasa.
+
+**Arreglo (`lib.rs::cerrar_ronda`, cambio mínimo).** Lo que cubren las garantías se suma en el bucle y se
+saca de la bóveda en **un solo** `sacar_de_boveda` después del bucle (antes, uno por moroso, cada uno con
+`valor` + `retirar_monto`: 22 llamadas a la bóveda con 11 morosos). El reparto no cambia: entra a la bolsa
+lo que de verdad salió de la bóveda y cada miembro sigue con su evento `cubierto` y su hecho en el historial.
+
+| El peor cierre (12 personas, 11 caen en mora, historial) | Antes | Después |
+| --- | --- | --- |
+| USDC con Blend, **testnet** | 70,7 M · 77 · 43 · **16 600 B: rechazada** | **30,8 M · 77 · 43 · 12 204 B** |
+| USDC con Blend, local (pool con los eventos de Blend v2) | 16 372 B | 12 012 B |
+| TUSD con la bóveda simulada, local (WASM) | 38,97 M · 70 · 42 · 14 172 B | 23,8 M · 70 · 42 · 11 812 B |
+
+(Instrucciones · lecturas · escrituras · bytes de eventos.)
+
+**Pruebas nuevas.**
+- `tanda/src/test_blend.rs::cerrar_ronda_saca_de_la_boveda_una_sola_vez`: 11 garantías cubren en el mismo
+  cierre y la bóveda hace **un** `transfer` (sin el arreglo hace 11), la bolsa sale completa y el dinero
+  cuadra hasta `finalizar`.
+- `adaptador_blend/src/test_peor_caso.rs`: los dos escenarios más pesados de M3 con el historial, el
+  adaptador y un pool simulado que emite **los mismos eventos que Blend v2**; revisa lecturas, escrituras y
+  bytes de eventos con 1 KiB de margen (el token de prueba tiene un nombre más corto que `USDC:GATAL…`).
+- `scripts/peor_caso_blend.mjs`: los mismos escenarios en testnet con Blend real; lee de la red lo que de
+  verdad usó cada transacción (`core_metrics`), incluido el tamaño de los eventos.
+
+**Peor caso con Blend real en testnet, después del arreglo** (`node scripts/peor_caso_blend.mjs`, contratos
+desechables con el código de esta rama, 12 personas en cada escenario, rondas de 2 minutos):
+
+| Operación (USDC, garantía en Blend, historial conectado) | Instrucciones | Lecturas | Escrituras | Bytes de eventos | Transacción |
+| --- | --- | --- | --- | --- | --- |
+| A: `cerrar_ronda` 1 (11 garantías cubren) | 28,8 M | **83** | 37 | 8 504 | [`132e23f5…21cc`](https://stellar.expert/explorer/testnet/tx/132e23f5cd9dfc62a0ffee346fc125e8ca7f2668c7eb102b84e29ec610e621cc) |
+| A: `cerrar_ronda` 2 (11 caen en mora: la que antes se trababa) | **30,8 M** | 77 | **43** | **12 204** | [`55f3820c…168d`](https://stellar.expert/explorer/testnet/tx/55f3820c7d8b8488ef5ccea0474f94ead7fcee4df665438eae09471b215c168d) |
+| A: `cerrar_ronda` 3 a 12 | 14,8–16,2 M | 52–53 | 26 | 500 | |
+| A: `finalizar` | 13,6 M | 48 | 21 | 3 516 | [`607a440a…53d0`](https://stellar.expert/explorer/testnet/tx/607a440a327acf2e1945d559c067d6e83f7e007e3f9c5542b05c93e5d68f53d0) |
+| B: `cerrar_ronda` (todos cumplen, oferta y dividendos para 11) | 20,8 M | 72 | 26 | 3 664 | [`7ed25e58…36a2`](https://stellar.expert/explorer/testnet/tx/7ed25e58db16ccc819bab9a7dadb9e35823dcaceaebbc8bfdbaba93c704836a2) |
+| B: `finalizar` (12 cumplidos: 12 garantías de Blend y 12 tandas en el historial) | 20,7 M | 70 | **43** | 9 720 | [`84cce90d…35f0`](https://stellar.expert/explorer/testnet/tx/84cce90dc5d578d9450640bd39e2bb8ea0088685f03c80d398031e9b33f635f0) |
+| **Máximo** | **30,8 M** | **83** | **43** | **12 204** | límites de mainnet: 100 M · 100 · 50 · 16 384 |
+
+Con Blend, lo más justo son las **lecturas** (83 de 100: además del adaptador, Blend lee la configuración
+del pool, la reserva y las posiciones) y las **escrituras** (43 de 50; con TUSD el mismo peor caso da 42–43:
+las entradas de Blend reemplazan a las de la bóveda simulada). Si algo nuevo agrega eventos,
+lecturas o escrituras en `cerrar_ronda` o `finalizar`, conviene medirlo también con
+`cargo test -p adaptador_blend test_peor_caso` (local, en segundos) o con este script (testnet, ~35 min).
+
+**Recomendación para el equipo** (avisada en el tablero): sumar `contract_events_size_bytes ≤ 16 384` a las
+pruebas de peor caso de la tanda (`test_deudas.rs`, `test_historial.rs`, `test_turnos.rs`). El que más
+bytes emite es el historial: 22 eventos `hist_hecho` (6 952 bytes) en el peor cierre.
+
 ### Validación en testnet (4 de octubre)
 
 Con el código de esta rama (M1 + M2 + M3 + M4), en contratos de prueba desechables (no son los de producción):
@@ -497,7 +575,7 @@ Con el código de esta rama (M1 + M2 + M3 + M4), en contratos de prueba desechab
 `get_boveda_token(TUSD)` = nada (TUSD sigue la regla de M1); `pool()` y `token()` del adaptador correctos;
 `shares_de(tanda)` = 0 después de finalizar (no queda nada de la tanda en Blend).
 
-**Tamaños:** `tanda.wasm` 74 806 bytes; `adaptador_blend.wasm` 10 756 bytes. El peor caso de 12 miembros en la
+**Tamaños:** `tanda.wasm` 74 806 bytes en esa validación (81 718 hoy, con las ofertas selladas de M3 y el arreglo de abajo); `adaptador_blend.wasm` 10 756 bytes. El peor caso de 12 miembros en la
 bóveda registrada usa como máximo ~10,1 M de instrucciones en `cerrar_ronda` y ~4,9 M en `finalizar` (prueba
 `peor_caso_12_miembros_en_la_boveda_registrada`, con el adaptador real sobre el pool simulado).
 
