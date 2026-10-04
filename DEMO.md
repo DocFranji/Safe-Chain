@@ -48,8 +48,8 @@ Al terminar, `demo.sh` imprime el puntaje de cada persona y el enlace a su pági
 
 1. **¿Testnet sigue con el contrato?** Stellar reinicia testnet cada tanto. Abre `<tu-web>/#/estado`: debe decir *"Todo listo para la demo"*. Si el contrato no responde, hay que volver a desplegar (ver "Si algo falla").
 2. **Faucet** (para que el jurado consiga TUSD): en Vercel deben estar `FAUCET_ISSUER_SECRET`, `VITE_TANDA_ID`, `VITE_TOKEN_ID` y `VITE_NOMBRES`. `#/estado` lo comprueba. Pruébalo con una cuenta nueva de Freighter: activar con Friendbot, aceptar TUSD y pedir TUSD.
-3. **Bóveda con fondos:** paga los intereses con su propio saldo. `#/estado` avisa si le falta.
-4. **Bóveda rápida nueva (1 a 2 horas antes):** la acelerada rinde menos cuanto más vieja es (con un día de edad, unas 8 veces menos). Cámbiala por una nueva con `bash scripts/renovar_boveda_rapida.sh` (en la máquina que tiene la cuenta `emisor`). Las tandas que ya existen no se afectan.
+3. **Bóvedas con fondos:** pagan los intereses con su propio saldo. `#/estado` revisa las dos: cuánto les queda libre para intereses (sin contar las garantías) y avisa si les falta. Si se acaba, el rendimiento se detiene; nadie pierde lo que depositó.
+4. **Bóveda rápida nueva (1 a 2 horas antes):** la acelerada rinde menos cuanto más vieja es (con un día de edad, unas 8 veces menos). `#/estado` dice cuánto rinde hoy una demo de 5 minutos por cada 100 TUSD y avisa si es poco. Cámbiala por una nueva con `bash scripts/renovar_boveda_rapida.sh` (en la máquina que tiene la cuenta `emisor`). Las tandas que ya existen no se afectan.
 5. **Ensayo completo** (30 minutos antes), tal como será la demo real:
    ```bash
    WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh

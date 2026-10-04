@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { ejecutarChequeos, type Chequeo, type Nivel } from '../lib/estado'
-import { monto } from '../lib/formato'
 import { RUTA_DEMO, RUTA_LOBBY } from '../lib/rutas'
 import { TANDA_ID, TOKEN_ID } from '../config'
 
@@ -51,7 +50,7 @@ export function Estado({ billetera }: { billetera: Billetera }) {
 
   const revisar = useCallback(async () => {
     setRevisando(true)
-    const r = await ejecutarChequeos(monto)
+    const r = await ejecutarChequeos()
     setRed(r)
     setHora(new Date())
     setRevisando(false)
@@ -83,7 +82,7 @@ export function Estado({ billetera }: { billetera: Billetera }) {
       </p>
 
       {todos === null ? (
-        <p className="cargando">Revisando el contrato, la bóveda y el faucet…</p>
+        <p className="cargando">Revisando el contrato, las bóvedas y el faucet…</p>
       ) : (
         <>
           <p className={errores > 0 ? 'estado-resumen error' : avisos > 0 ? 'estado-resumen aviso' : 'estado-resumen ok'} role="status">
