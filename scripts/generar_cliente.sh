@@ -11,8 +11,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Contratos que usa la web. Si agregas uno (por ejemplo `historial`), súmalo aquí.
-CONTRATOS=(tanda)
+# Contratos que usa la web. Si agregas uno, súmalo aquí.
+CONTRATOS=(tanda historial)
 if [ "$#" -gt 0 ]; then CONTRATOS=("$@"); fi
 
 echo "== Compilando contratos a WASM =="

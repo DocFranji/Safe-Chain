@@ -5,6 +5,7 @@ import { saldoSuDeuda } from '../lib/deudas'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { EXPLORADOR, SIMBOLO } from '../config'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
+import { InsigniaNivel } from './InsigniaNivel'
 
 type Props = { datos: DatosTanda; yo: string | null }
 
@@ -44,6 +45,7 @@ export function ListaMiembros({ datos, yo }: Props) {
                     <a href={`${EXPLORADOR}/account/${m.direccion}`} target="_blank" rel="noreferrer" title={m.direccion}>
                       {nombreDe(m.direccion)}
                     </a>
+                    <InsigniaNivel dir={m.direccion} />
                     {m.direccion === yo && <span className="marca-yo">tú</span>}
                     {NOMBRES[m.direccion] && <span className="dir">{direccionCorta(m.direccion)}</span>}
                   </td>

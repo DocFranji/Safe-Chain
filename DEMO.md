@@ -34,6 +34,16 @@ DEUDA=1 WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
 
 Desde la web, quien está en mora ve el botón **"Pagar mi deuda"** con cuánto debe, a quién le llega y qué recupera.
 
+### Cierre: el historial crediticio (misión M2)
+
+Al terminar, `demo.sh` imprime el puntaje de cada persona y el enlace a su página pública (`#/historial/<dirección>`). En la demo normal: Carla 80 (pagó todo a tiempo), Beto 48 (un pago tarde), Ana 5 (su garantía cubrió dos cuotas).
+
+| Qué se ve | Qué decir |
+| --- | --- |
+| La página de Carla: puntaje, nivel y "3 cuotas pagadas a tiempo, 1 tanda terminada sin atrasos" | "Cada cuota que pagas a tiempo queda escrita en Stellar para siempre. Tu historial es tuyo, cualquiera puede verificarlo y nadie lo puede borrar." |
+| En otra tanda, junto a cada persona, su insignia (Bronce, Plata, Oro) | "Con buen historial entras a tandas exigentes y dejas menos garantía: hasta la mitad con nivel Oro." |
+| Al unirse a una tanda con descuento: *"Por tu historial Bronce, tu garantía baja de 500 a 450 TUSD"* | "Esto resuelve la paradoja del crédito: quien cumple necesita menos dinero inmovilizado." |
+
 ## Antes de la demo (una hora antes)
 
 1. **¿Testnet sigue con el contrato?** Stellar reinicia testnet cada tanto. Abre `<tu-web>/#/estado`: debe decir *"Todo listo para la demo"*. Si el contrato no responde, hay que volver a desplegar (ver "Si algo falla").
@@ -106,5 +116,7 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 - **¿Funciona para una tanda de verdad, de meses?** Sí: rondas de hasta 3 meses y tandas de hasta un año o más, con fechas de pago fijas. El contrato renueva solo sus datos en la red para que nada se archive a mitad de la tanda.
 - **¿Y si alguien queda en mora?** Puede pagar su deuda cuando quiera (o un familiar por él). El dinero le llega a quien cobró de menos y la persona vuelve a estar al día.
 - **¿Qué pasa si alguien no paga?** Su garantía cubre su cuota. Si no alcanza, queda en mora y su parte se reparte entre quienes cumplieron.
+- **¿Qué es el historial crediticio?** Un contrato aparte que anota cada cuota pagada, atraso y deuda saldada de cada dirección. Empieza en cero, lo negativo no se borra, nadie (ni nosotros) puede editarlo, y solo guarda direcciones, ningún dato personal. Quien cumple sube de nivel y recibe descuento de garantía en las tandas que lo ofrezcan.
+- **¿No se puede hacer trampa con billeteras propias?** Una billetera nueva empieza en cero y el cero no da beneficios. Solo suman tandas con cuota de 10 TUSD o más, con máximo 150 puntos por tanda: llegar a Oro exige al menos 4 tandas completas con dinero inmovilizado.
 - **¿Está auditado?** No. Es un prototipo de hackathon.
 - **¿Quién puede cerrar las rondas?** Cualquiera: así nadie puede bloquear la tanda.

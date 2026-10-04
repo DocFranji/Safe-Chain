@@ -330,7 +330,7 @@ pub(crate) fn completar_garantia(
         return Ok(0);
     }
     let ronda = m.posicion;
-    let objetivo = ganchos::ajustar_colateral(env, t, dir, colateral_para(t, ronda));
+    let objetivo = ganchos::ajustar_colateral(env, t, id, dir, colateral_para(t, ronda));
     let apartar = (objetivo - m.colateral).min(disponible);
     if apartar <= 0 {
         return Ok(0);

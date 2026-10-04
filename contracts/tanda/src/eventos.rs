@@ -154,6 +154,27 @@ pub struct EvBovedaRapida {
 }
 
 // ---------------------------------------------------------------------------
+// --- M2: historial crediticio ---
+// ---------------------------------------------------------------------------
+
+/// El admin conectó (o desconectó, con `None`) el contrato de historial.
+#[contractevent(topics = ["hist_conf"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvHistorialConfigurado {
+    pub historial: Option<Address>,
+}
+
+/// El creador de la tanda `id` fijó sus requisitos de historial.
+#[contractevent(topics = ["requisitos"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvRequisitos {
+    #[topic]
+    pub id: u32,
+    pub puntaje_minimo: u32,
+    pub descuento: bool,
+}
+
+// ---------------------------------------------------------------------------
 // --- M3: turnos ---
 // Todos con tópicos [nombre, id], como los de arriba: la web los lee con el mismo filtro.
 // ---------------------------------------------------------------------------

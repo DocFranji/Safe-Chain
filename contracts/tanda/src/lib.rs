@@ -240,6 +240,7 @@ impl TandaContract {
         let colateral = ganchos::ajustar_colateral(
             &env,
             &t,
+            id,
             &miembro,
             turnos::colateral_al_unirse(&t, posicion),
         );
@@ -460,6 +461,7 @@ impl TandaContract {
             t.estado = Estado::PorLiquidar;
         }
         guardar_tanda(&env, id, &t);
+        ganchos::al_fin_operacion(&env, &t, id); // M2: envía los hechos de esta ronda al historial
         Ok(())
     }
 
@@ -598,6 +600,7 @@ impl TandaContract {
             sin_repartir,
         }
         .publish(&env);
+        ganchos::al_fin_operacion(&env, &t, id); // M2: envía los hechos finales al historial
         Ok(())
     }
 

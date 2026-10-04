@@ -1,7 +1,8 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa } from './mock.mjs'
+import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, historial } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
+import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
 const BASE = BASE_URL
 const SHOTS = new URL('./shots/', import.meta.url).pathname
@@ -643,6 +644,160 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   check(`Turnos 390 px (${ruta}): sin desborde horizontal`, ancho.sw <= ancho.cw + 1, JSON.stringify(ancho))
   await shot(page, nombre)
   check(`Turnos 390 px (${ruta}): sin errores de consola`, errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M2 + M3: historial donde se elige turno
+{
+  // Precio por turno (tanda 8) que pide Bronce y da descuento. "Yo" soy Bronce (110 puntos): 10 % menos.
+  const est = nuevoEstadoTurnos()
+  est.tandas[8].requisitos = { puntaje_minimo: 100, descuento: true }
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  await page.waitForSelector('.nota-historial', { timeout: 15000 }).catch(() => {})
+  let t = await texto(page)
+  check('Historial + turnos: la nota del historial también sale donde se elige turno', /pide historial Bronce o mejor/.test(t) && /Tienes 110: puedes entrar/.test(t), t.slice(0, 900))
+  await page.locator('.turno-casilla').nth(0).click()
+  await page.getByRole('button', { name: /^Unirme en el turno 1 y dejar 180 TUSD$/ }).waitFor({ timeout: 15000 }).catch(() => {})
+  t = await texto(page)
+  check('Historial + turnos: el turno 1 cotiza la garantía con descuento (200 -> 180)', /dejas 180 TUSD de garantía \(con el descuento de tu historial\)/.test(t), t.slice(0, 900))
+  check('Historial + turnos: el botón usa la garantía con descuento', await page.getByRole('button', { name: 'Unirme en el turno 1 y dejar 180 TUSD' }).isEnabled())
+  await shot(page, 'm2m3-01-precio-con-historial')
+  check('Historial + turnos: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M2. Historial crediticio
+{
+  // Página pública de otra persona
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + `#/historial/${ANA}`)
+  await page.waitForSelector('.historial-cabeza', { timeout: 15000 }).catch(() => {})
+  const t = (await texto(page)).replace(/ /g, ' ')
+  check('Historial: muestra puntaje y nivel Plata de Ana', /330 puntos/.test(t) && /Plata/.test(t), t.slice(0, 400))
+  check('Historial: desglose en frases', /30 cuotas pagadas a tiempo/.test(t) && /3 tandas terminadas sin atrasos/.test(t))
+  check('Historial: dice el descuento y lo que falta para Oro', /25 % menos de garantía/.test(t) && /Faltan 270 puntos para Oro/.test(t))
+  await page.getByText('Cómo se calcula').click()
+  const reglas = await texto(page)
+  check('Historial: explica la fórmula y las reglas anti-trampa', /Pagar una cuota a tiempo\s*\+10/.test(reglas) && /150 puntos por tanda/.test(reglas))
+  check('Historial: enlace al contrato en el explorador', (await page.locator('a[href*="/contract/C"]', { hasText: 'Verlo en el explorador' }).count()) === 1)
+  await shot(page, 'm2-01-historial-ana')
+  // Buscar otra dirección
+  await page.locator('#buscar-dir').fill(CARLA.toLowerCase())
+  await page.getByRole('button', { name: 'Ver historial' }).click()
+  await page.waitForFunction(() => /Historial de Carla/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  const tc = await texto(page)
+  check('Historial: buscar lleva al de Carla (mora saldada, puntaje 0, Nuevo)', /0 puntos/.test(tc) && /1 vez en mora/.test(tc) && /1 deuda saldada/.test(tc) && !/deuda sin saldar/.test(tc), tc.slice(0, 400))
+  check('Historial: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Mi historial (menú) y una dirección sin historial
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.getByRole('link', { name: 'Mi historial' }).click()
+  await page.waitForSelector('.historial-cabeza', { timeout: 15000 }).catch(() => {})
+  const t = await texto(page)
+  check('Mi historial: desde el menú, con 110 puntos (Bronce)', /Tu historial/.test(t) && /110 puntos/.test(t) && /Bronce/.test(t), t.slice(0, 300))
+  est.historiales[ME] = historial()
+  await page.goto(BASE + `#/historial/${StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 3))}`)
+  await page.waitForFunction(() => /no tiene historial/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  check('Historial: una dirección nueva empieza en cero', /todavía no tiene historial/.test(await texto(page)))
+  await page.goto(BASE + `#/historial/${'G' + 'A'.repeat(55)}`)
+  await page.waitForFunction(() => /no es válida/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  check('Historial: una dirección con error de tipeo se explica', /Esa dirección no es válida/.test(await texto(page)))
+  check('Mi historial: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Insignias en la lista de miembros
+  const est = nuevoEstado()
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/2')
+  await page.waitForSelector('.miembros .insignia', { timeout: 15000 }).catch(() => {})
+  const insignias = await page.locator('.miembros .insignia').allInnerTexts()
+  check('Insignias: Ana Plata, Beto Bronce, Carla Nuevo', insignias.join(',') === 'Plata,Bronce,Nuevo', JSON.stringify(insignias))
+  const href = await page.locator('.miembros .insignia').first().getAttribute('href')
+  check('Insignias: llevan al historial de esa persona', href === `#/historial/${ANA}`, href)
+  await page.close()
+}
+{
+  // Tanda exigente: puntaje mínimo y descuento al unirse
+  const est = conTandaExigente(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/7')
+  await page.waitForSelector('.nota-historial', { timeout: 15000 }).catch(() => {})
+  await page.waitForFunction(() => /baja de/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {})
+  const t = (await texto(page)).replace(/ /g, ' ')
+  check('Unirse: dice que la tanda pide Bronce y que sí puedo entrar', /pide historial Bronce o mejor/.test(t) && /Tienes 110: puedes entrar/.test(t), t.slice(0, 600))
+  check('Unirse: la garantía baja de 500 a 450 por mi historial', /tu garantía baja de 500 a 450 TUSD/.test(t))
+  check('Unirse: el botón usa la garantía con descuento', (await page.getByRole('button', { name: /Unirme y dejar 450 TUSD/ }).count()) === 1)
+  await shot(page, 'm2-02-unirse-con-descuento')
+  check('Unirse con descuento: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+
+  const est2 = conTandaExigente(nuevoEstado())
+  est2.historiales[ME] = historial({ cuotas_a_tiempo: 5, puntos_positivos: 50 })
+  const p2 = await nuevaPagina(browser, { est: est2 })
+  await p2.page.goto(BASE + '#/tanda/7')
+  await p2.page.waitForFunction(() => /Tienes 50/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  const t2 = (await texto(p2.page)).replace(/ /g, ' ')
+  check('Unirse: con 50 puntos avisa que todavía no puede entrar', /Tienes 50: todavía no puedes unirte/.test(t2) && /garantía por buen historial/.test(t2), t2.slice(0, 600))
+  check('Unirse sin nivel: el botón usa la garantía normal', (await p2.page.getByRole('button', { name: /Unirme y dejar 500 TUSD/ }).count()) === 1)
+  await p2.page.close()
+}
+{
+  // Crear: opciones de historial
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.opciones-historial', { timeout: 15000 }).catch(() => {})
+  check('Crear: ofrece las opciones de historial', (await page.locator('.opciones-historial').count()) === 1)
+  await page.getByLabel('Pedir un nivel mínimo para unirse').check()
+  await page.locator('#nivel-minimo').selectOption('300')
+  const t = await texto(page)
+  check('Crear: avisa que con nivel Plata yo (110) no podría unirme', /Tu historial tiene 110 puntos/.test(t) && /firma más/.test(t), t.slice(0, 200))
+  await page.getByLabel('Dar descuento de garantía por buen historial').check()
+  check('Crear: el descuento se puede marcar', await page.getByLabel('Dar descuento de garantía por buen historial').isChecked())
+  await shot(page, 'm2-03-crear-opciones')
+  check('Crear con historial: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Contrato de tanda anterior a M2: todo lo del historial se esconde sin errores
+  const est = conTandaExigente(nuevoEstado())
+  est.historialActivo = false
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/2')
+  await page.waitForSelector('.miembros table', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(800)
+  check('Sin historial: no hay insignias', (await page.locator('.insignia').count()) === 0)
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.vista-previa table', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(500)
+  check('Sin historial: crear no muestra las opciones de historial', (await page.locator('.opciones-historial').count()) === 0)
+  await page.goto(BASE + '#/historial')
+  await page.waitForTimeout(800)
+  check('Sin historial: la página lo explica', /todavía no está activo/.test(await texto(page)))
+  check('Sin historial: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // 390 px
+  const est = conTandaExigente(nuevoEstado())
+  const { page } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + `#/historial/${ANA}`)
+  await page.waitForSelector('.historial-cabeza', { timeout: 15000 }).catch(() => {})
+  const desborde = async () => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+  check('Móvil (390px): el historial no se desborda', !(await desborde()))
+  await shot(page, 'm2-04-historial-390')
+  await page.goto(BASE + '#/tanda/7')
+  await page.waitForSelector('.nota-historial', { timeout: 15000 }).catch(() => {})
+  check('Móvil (390px): unirse con descuento no se desborda', !(await desborde()))
+  await shot(page, 'm2-05-unirse-390')
   await page.close()
 }
 

@@ -1,9 +1,12 @@
 // Formulario para crear una tanda, con vista previa de lo que va a pasar antes de firmar.
-// Flujo: crear_tanda (firma 1) y, si la persona quiere, unirse como primera (firma 2).
+// Flujo: crear_tanda (firma 1), requisitos de historial si se eligieron (firma extra, M2) y, si la
+// persona quiere, unirse como primera (última firma).
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from '../components/BotonesEntrar'
 import { OpcionesTurnos } from '../components/OpcionesTurnos'
+import { OpcionesHistorial } from '../components/OpcionesHistorial'
+import { SIN_REQUISITOS, hayRequisitos } from '../lib/historial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
@@ -66,6 +69,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const [f, setF] = useState<Formulario>(INICIAL)
   const [unirmeYo, setUnirmeYo] = useState(true)
   const [turnos, setTurnos] = useState<OpcionesForm>(OPCIONES_CLASICAS)
+  const [requisitos, setRequisitos] = useState(SIN_REQUISITOS)
   const [progreso, setProgreso] = useState<Progreso>({ tipo: 'ninguno' })
 
   const yo = billetera.direccion
@@ -123,6 +127,20 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
     } catch (e) {
       setProgreso({ tipo: 'error', texto: traducirError(e) })
       return
+    }
+
+    if (hayRequisitos(requisitos)) {
+      setProgreso({ tipo: 'trabajando', texto: `Tanda ${id} creada. Confirma otra vez para guardar los requisitos de historial…` })
+      try {
+        await enviar(await clienteFirma(yo).configurar_requisitos({ id, ...requisitos }))
+      } catch (e) {
+        setProgreso({
+          tipo: 'creada-sin-unirse',
+          id,
+          texto: `La tanda ${id} sí se creó, pero no pudimos guardar los requisitos de historial: ${traducirError(e)}`,
+        })
+        return
+      }
     }
 
     if (!unirmeYo) {
@@ -282,6 +300,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
           </div>
 
           <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
+          <OpcionesHistorial valor={requisitos} alCambiar={setRequisitos} yo={yo} unirmeYo={unirmeYo} />
 
           <label className="casilla">
             <input type="checkbox" checked={unirmeYo} onChange={(e) => setUnirmeYo(e.target.checked)} />

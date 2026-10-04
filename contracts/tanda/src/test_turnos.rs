@@ -1011,26 +1011,67 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     medir(&c, "precio: cerrar_ronda (prima)", &mut peor);
 
     // Lo más pesado combinado con M1: subasta con garantía mínima donde casi nadie paga (deudas en
-    // cada ronda), con una oferta y dividendos en cada cierre.
+    // cada ronda), con una oferta y dividendos en cada cierre. Se mide sin y con el historial de M2
+    // conectado (en WASM), que suma sus escrituras a cada cierre.
+    for con_historial in [false, true] {
+        let c = crate::test_tiempos::setup_wasm(0, 1);
+        c.env.cost_estimate().budget().reset_unlimited();
+        if con_historial {
+            conectar_historial_wasm(&c);
+        }
+        let que = if con_historial {
+            "subasta + M1 + M2: cerrar_ronda casi sin pagos"
+        } else {
+            "subasta + M1: cerrar_ronda casi sin pagos"
+        };
+        let id = c.crear_con(12, 0, &subasta(5_000));
+        let gente = c.personas(12);
+        for p in &gente {
+            c.tanda.unirse(&id, p);
+        }
+        for r in 0..11usize {
+            // Oferta quien todavía no tiene turno y está al día (el último de la lista que lo cumpla).
+            if let Some(p) = gente.iter().rev().find(|p| {
+                let m = c.miembro(id, p);
+                m.posicion == SIN_TURNO && !m.moroso
+            }) {
+                c.tanda.ofertar(&id, p, &(100 * (r as u32 + 1)));
+            }
+            c.tanda.pagar_cuota(&id, &gente[11]);
+            c.cerrar(id);
+            medir(&c, que, &mut peor);
+        }
+        // Última ronda (sin subasta) y el reparto final.
+        c.tanda.pagar_cuota(&id, &gente[11]);
+        c.cerrar(id);
+        c.tanda.finalizar(&id);
+        medir(&c, "subasta: finalizar", &mut peor);
+    }
+
+    // Con el historial, lo que más escribe es que todos cumplan: cada cierre suma un hecho positivo
+    // por persona. Subasta con oferta y dividendos para 11 en cada ronda, y el reparto final.
     let c = crate::test_tiempos::setup_wasm(0, 1);
     c.env.cost_estimate().budget().reset_unlimited();
-    let id = c.crear_con(12, 0, &subasta(5_000));
+    conectar_historial_wasm(&c);
+    let id = c.crear_con(12, 10_000, &subasta(5_000));
     let gente = c.personas(12);
     for p in &gente {
         c.tanda.unirse(&id, p);
     }
-    for r in 0..11usize {
-        // Oferta quien todavía no tiene turno y está al día (el último de la lista que lo cumpla).
-        if let Some(p) = gente.iter().rev().find(|p| {
-            let m = c.miembro(id, p);
-            m.posicion == SIN_TURNO && !m.moroso
-        }) {
-            c.tanda.ofertar(&id, p, &(100 * (r as u32 + 1)));
+    for r in 0..12usize {
+        if let Some(p) = gente
+            .iter()
+            .find(|p| c.miembro(id, p).posicion == SIN_TURNO)
+            .filter(|_| r < 11)
+        {
+            c.tanda.ofertar(&id, p, &500);
         }
-        c.tanda.pagar_cuota(&id, &gente[11]);
+        c.pagan_todos(id, &gente);
         c.cerrar(id);
-        medir(&c, "subasta + M1: cerrar_ronda casi sin pagos", &mut peor);
+        medir(&c, "subasta + M2: cerrar_ronda, todos cumplen", &mut peor);
     }
+    c.tanda.finalizar(&id);
+    medir(&c, "subasta + M2: finalizar, 12 cumplidos", &mut peor);
 
     std::println!(
         "  Máximo: {} instrucciones · {} lecturas · {} escrituras",
@@ -1040,6 +1081,20 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     );
     // Límites de mainnet (más estrictos que testnet): 100 M instrucciones, 100 lecturas, 50 escrituras.
     assert!(peor.0 < 100_000_000 && peor.1 <= 100 && peor.2 <= 50);
+}
+
+/// (M2) Conecta el historial compilado a WASM, como en testnet.
+fn conectar_historial_wasm(c: &Ctx) {
+    let ruta = std::format!(
+        "{}/../../target/wasm32v1-none/release/historial.wasm",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let wasm = std::fs::read(&ruta).unwrap_or_else(|_| panic!("falta {ruta}"));
+    let dir = c.env.register(wasm.as_slice(), ());
+    let h = historial::HistorialContractClient::new(&c.env, &dir);
+    h.inicializar(&Address::generate(&c.env));
+    h.autorizar_emisor(&c.tanda_addr);
+    c.tanda.configurar_historial(&Some(dir));
 }
 
 // ===========================================================================

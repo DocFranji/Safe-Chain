@@ -65,6 +65,10 @@ const MENSAJES: Record<number, string> = {
   // Errores de la bóveda simulada (contrato aparte, mismo rango de M1)
   17: 'La bóveda no aceptó ese monto.',
   18: 'La bóveda no tiene suficientes participaciones para ese retiro. Avísanos: no debería pasar.',
+  // M2: historial crediticio
+  20: 'El historial crediticio no está disponible en este momento. Intenta de nuevo en unos minutos.',
+  21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en «Mi historial».',
+  22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
 }
 
 // A veces el SDK entrega el NOMBRE del error del contrato en vez del código.
@@ -95,6 +99,9 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   SinDeuda: 14,
   PagoExcesivo: 15,
   MontoInvalido: 16,
+  HistorialNoConfigurado: 20,
+  PuntajeInsuficiente: 21,
+  RequisitosBloqueados: 22,
 }
 
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */

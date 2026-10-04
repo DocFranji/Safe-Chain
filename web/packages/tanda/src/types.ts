@@ -38,6 +38,9 @@ export const Error = {
   14 : { message: "SinDeuda" },
   15 : { message: "PagoExcesivo" },
   16 : { message: "MontoInvalido" },
+  20 : { message: "HistorialNoConfigurado" },
+  21 : { message: "PuntajeInsuficiente" },
+  22 : { message: "RequisitosBloqueados" },
   30 : { message: "OpcionesInvalidas" },
   31 : { message: "ModoNoPermite" },
   32 : { message: "TurnoInvalido" },
@@ -165,6 +168,20 @@ export interface Propuesta {
    * Cada ronda cobra quien ofrezca el mayor descuento sobre la bolsa.
    */
   { tag: "Subasta"; values: void };
+
+/**
+ * Requisitos de historial de una tanda (`configurar_requisitos`). Por defecto: ninguno.
+ */
+export interface Requisitos {
+  /**
+   * Dar descuento de garantía según el nivel del historial.
+   */
+  descuento: boolean;
+  /**
+   * Puntaje mínimo para unirse (0 = cualquiera puede).
+   */
+  puntaje_minimo: number;
+}
 
 /**
  * Todo lo de turnos que la web necesita, en una sola lectura (`get_estado_turnos`).
@@ -458,6 +475,18 @@ export interface EvFinalizadaEvent {
 }
 
 /**
+ * El creador de la tanda `id` fijó sus requisitos de historial.
+ */
+export interface EvRequisitosEvent {
+  name: "EvRequisitos";
+  data: {
+    id: number;
+    puntaje_minimo?: number;
+    descuento?: boolean;
+  };
+}
+
+/**
  * Alguien pagó (toda o una parte) la deuda de `miembro`. Puede ser el miembro u otra persona.
  */
 export interface EvDeudaPagadaEvent {
@@ -522,5 +551,15 @@ export interface EvPropuestaRetiradaEvent {
     con?: string;
   };
 }
-    export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent;
+
+/**
+ * El admin conectó (o desconectó, con `None`) el contrato de historial.
+ */
+export interface EvHistorialConfiguradoEvent {
+  name: "EvHistorialConfigurado";
+  data: {
+    historial?: string | null;
+  };
+}
+    export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
     

@@ -159,6 +159,8 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
   const precio = elegido === null ? null : cotizado?.turno === elegido ? cotizado : { turno: elegido, ...local(elegido) }
   const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
   const falta = precio && saldo !== null && saldo < precio.colateral ? precio.colateral - saldo : 0n
+  // M2: el contrato ya aplicó el descuento por historial; la rejilla muestra la garantía normal.
+  const conDescuento = precio !== null && precio.colateral < colateralDeTurno(p, precio.turno)
 
   return (
     <>
@@ -198,7 +200,8 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
       {precio && (
         <>
           <p className="explica">
-            Turno {precio.turno + 1}: dejas {monto(precio.colateral)} {SIMBOLO} de garantía y en la ronda {precio.turno + 1}{' '}
+            Turno {precio.turno + 1}: dejas {monto(precio.colateral)} {SIMBOLO} de garantía
+            {conDescuento ? ' (con el descuento de tu historial)' : ''} y en la ronda {precio.turno + 1}{' '}
             recibes {monto(bolsa - precio.prima)} {SIMBOLO}
             {precio.prima > 0n
               ? ` (la bolsa menos ${monto(precio.prima)} por cobrar antes)`

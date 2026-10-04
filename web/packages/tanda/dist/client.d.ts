@@ -1,4 +1,4 @@
-import { OpcionesTanda, EstadoTurnos, Deuda, Tanda, Miembro, ContractEvent } from './types.js';
+import { Requisitos, OpcionesTanda, EstadoTurnos, Deuda, Tanda, Miembro, ContractEvent } from './types.js';
 import { Result, AssembledTransaction, Client as ContractClient, ClientOptions as ContractClientOptions, MethodOptions, ExternalExecutableRef } from '@stellar/stellar-sdk/contract';
 import { Address, xdr } from '@stellar/stellar-sdk';
 export interface Client {
@@ -71,6 +71,34 @@ export interface Client {
         miembro: string | Address;
         verificado: boolean;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    get_historial(options?: MethodOptions): Promise<AssembledTransaction<string | null>>;
+    get_requisitos(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Requisitos, Error>>>;
+    /**
+     * (admin) Conecta el contrato de historial (o lo desconecta con `None`).
+     * La tanda debe estar autorizada como emisor en el historial para que sus hechos cuenten.
+     */
+    configurar_historial(args: {
+        historial: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * (creador) Requisitos de historial de la tanda `id`. Solo mientras está abierta y sin miembros,
+     * para que nadie entre con unas reglas y después le cambien otras.
+     */
+    configurar_requisitos(args: {
+        id: number;
+        puntaje_minimo: number;
+        descuento: boolean;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Garantía que dejaría `miembro` si se uniera ahora, con el descuento de su historial
+     * (para mostrarla antes de firmar).
+     */
+    colateral_para_miembro(args: {
+        id: number;
+        miembro: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<bigint, Error>>>;
     /**
      * Subasta: ofrecer recibir `descuento_bps` menos de la bolsa para cobrar en la ronda en
      * curso. Debe superar la mejor oferta y se acepta solo hasta que vence la ronda.
@@ -243,6 +271,11 @@ export declare class Client extends ContractClient {
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
         marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_historial: (json: string) => AssembledTransaction<string | null>;
+        get_requisitos: (json: string) => AssembledTransaction<Result<Requisitos, Error>>;
+        configurar_historial: (json: string) => AssembledTransaction<Result<null, Error>>;
+        configurar_requisitos: (json: string) => AssembledTransaction<Result<null, Error>>;
+        colateral_para_miembro: (json: string) => AssembledTransaction<Result<bigint, Error>>;
         ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
         cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
@@ -273,6 +306,11 @@ export declare class Client extends ContractClient {
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
         marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_historial: (json: string) => AssembledTransaction<string | null>;
+        get_requisitos: (json: string) => AssembledTransaction<Result<Requisitos, Error>>;
+        configurar_historial: (json: string) => AssembledTransaction<Result<null, Error>>;
+        configurar_requisitos: (json: string) => AssembledTransaction<Result<null, Error>>;
+        colateral_para_miembro: (json: string) => AssembledTransaction<Result<bigint, Error>>;
         ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
         cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
@@ -406,6 +444,12 @@ export declare class Client extends ContractClient {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvRequisitos" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evRequisitosEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvDeudaPagada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evDeudaPagadaEventFilter(topicValues?: {
@@ -433,4 +477,8 @@ export declare class Client extends ContractClient {
     evPropuestaRetiradaEventFilter(topicValues?: {
         id?: number;
     }): string[];
+    /**
+     * Build a topics filter row for the "EvHistorialConfigurado" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evHistorialConfiguradoEventFilter(): string[];
 }

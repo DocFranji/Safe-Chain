@@ -279,7 +279,7 @@ impl TandaContract {
             ModoTurnos::Sorteo | ModoTurnos::Subasta => colateral_al_unirse(&t, SIN_TURNO),
             _ => colateral_para(&t, posicion),
         };
-        let colateral = ganchos::ajustar_colateral(&env, &t, &miembro, base);
+        let colateral = ganchos::ajustar_colateral(&env, &t, id, &miembro, base);
         let prima = if o.modo == ModoTurnos::PrecioPorTurno {
             prima_de_turno(&t, o.prima_max_bps, posicion)
         } else {

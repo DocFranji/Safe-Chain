@@ -33,6 +33,7 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 | --- | --- | --- |
 | Contrato de la tanda | Reglas, garantías, multas, rondas, liquidación y eventos | `contracts/tanda/` |
 | Mecanismos de turnos | Precio por turno, subasta, sorteo, elegir turno e intercambio (`crear_tanda_avanzada`) | `contracts/tanda/src/turnos*.rs`, `docs/turnos.md` |
+| Historial crediticio | Puntaje público e inmutable por dirección (cuotas a tiempo, atrasos, mora, deudas saldadas); da descuento de garantía y acceso a tandas exigentes. Ver [`docs/historial.md`](docs/historial.md) | `contracts/historial/`, `web/src/pages/Historial.tsx` |
 | Bóveda simulada | Rendimiento de ejemplo con la misma interfaz que tendría un adaptador a Blend | `contracts/boveda_simulada/` |
 | Web (React) | Landing, lobby, crear tanda, invitaciones, resultados, demo en vivo y estado del sistema | `web/` |
 | Entrar con Google | Billetera Stellar creada y firmada por [Privy](https://privy.io); también funciona Freighter | `web/src/cuentas/`, `web/src/lib/firmante.ts` |
@@ -59,6 +60,7 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 - **La bóveda es simulada.** Las tandas reales (días, semanas o meses) rinden 5 % anual al ritmo de la vida real; las tandas de prueba (rondas de hasta 10 minutos) usan una bóveda acelerada para que el rendimiento se note en una demo. La interfaz de la bóveda permite cambiarla por un adaptador a Blend sin tocar el contrato de la tanda (ver más abajo).
 - **Las billeteras de Google las custodia Privy.** Es cómodo para probar, pero en producción habría que decidir el modelo de custodia.
 - **El faucet regala dinero de prueba:** nunca debe apuntar a una cuenta con valor real.
+- **El historial crediticio no prueba identidad.** Es evidencia pública de cumplimiento; para tandas grandes conviene combinarlo con verificación (el contrato ya tiene el gancho `marcar_verificado`). Los eventos hecho por hecho solo los guarda el RPC unos días: la página muestra los acumulados.
 - **Los flujos que firman** (crear, unirse, pagar) no tienen pruebas automáticas contra la red real: la interfaz se verificó con un RPC simulado y los recorridos reales se hacen a mano en testnet antes de cada demo.
 
 ## Qué hay en cada carpeta
@@ -67,6 +69,7 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 | --- | --- |
 | `contracts/tanda/src/lib.rs` | El contrato de la tanda. Todas las reglas están comentadas en español |
 | `contracts/tanda/src/test.rs` | Las 16 pruebas, incluido el escenario exacto de la demo |
+| `contracts/historial/src/lib.rs` | Historial crediticio: puntaje, niveles y reglas anti-trampa. Solo escriben los contratos de tanda autorizados |
 | `contracts/boveda_simulada/src/lib.rs` | Bóveda con rendimiento simulado (misma interfaz que tendría un adaptador a Blend) |
 | `scripts/desplegar_testnet.sh` | Crea cuentas, el token TUSD y despliega los dos contratos en testnet |
 | `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~5 min). Ver [`DEMO.md`](DEMO.md) |
