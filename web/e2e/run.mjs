@@ -389,7 +389,8 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForSelector('.estado-resumen', { timeout: 20000 })
   const t = await texto(page)
   check('Estado: todo en verde -> "Todo listo para la demo"', /Todo listo para la demo/.test(t), t.slice(0, 500))
-  check('Estado: 7 puntos revisados (5 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 7, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado: 8 puntos revisados (6 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 8, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado (M3): la web y el contrato desplegado coinciden', /Coinciden: el contrato tiene las \d+ funciones y tipos que usa esta web/.test(t), t.slice(0, 900))
   check('Estado: muestra el saldo de la bóveda', /La bóveda tiene 10[\s.\u00a0]?000 TUSD/.test(t))
   check('Estado: da los enlaces de la demo', /#\/demo/.test(t))
   await shot(page, '14-estado-ok')
@@ -421,6 +422,21 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.goto(BASE + '#/tandas')
   await page.waitForSelector('.aviso.error', { timeout: 15000 }).catch(() => {})
   check('Lobby con el contrato caído: muestra un error (no queda en blanco)', (await page.locator('.aviso.error[role=alert]').count()) >= 1)
+  await page.close()
+}
+{
+  // (M3) VITE_TANDA_ID apunta a un contrato de otra versión: le falta una función y un tipo cambió.
+  const est = nuevoEstado()
+  est.interfazSin = ['crear_tanda_avanzada', 'OpcionesTanda']
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/estado')
+  await page.waitForSelector('.estado-resumen', { timeout: 20000 })
+  const t = await texto(page)
+  check('Estado (M3): contrato de otra versión -> "Hay 1 problema"', /Hay 1 problema/.test(t), t.slice(0, 600))
+  check('Estado (M3): dice qué no coincide', /otra versión/.test(t) && /crear_tanda_avanzada/.test(t) && /OpcionesTanda/.test(t))
+  check('Estado (M3): dice qué hacer (VITE_TANDA_ID)', /VITE_TANDA_ID/.test(t))
+  await shot(page, '15b-estado-otra-version')
+  check('Estado (M3): sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 

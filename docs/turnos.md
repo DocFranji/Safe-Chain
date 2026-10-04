@@ -279,6 +279,13 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 - `Rueda.tsx` y `ListaMiembros.tsx`: "turno por sortear" o "por subastar" y el orden final.
 - `historia.ts`: frases de los eventos nuevos. `contrato.ts`: mensajes 30–39. `e2e`: `mock.mjs` con `get_estado_turnos` y `cotizar_turno`, y un escenario por modo a 390 px.
 - `scripts/demo_turnos.sh MODO=sorteo|precio|subasta|intercambio` para mostrar cada modo desde la terminal.
+- **`#/estado`: "La web y el contrato coinciden"** (mejora aprobada por ORQ para la calidad del despliegue). Si `VITE_TANDA_ID` apunta a un contrato de otra versión, la web carga igual, y lo que cambió falla recién cuando alguien lo usa. El chequeo funciona así:
+  - Baja el WASM del contrato desplegado (`contract.Client.from`).
+  - Compara su interfaz con la del cliente generado que trae la web: cada función con sus argumentos y sus resultados, y cada tipo con sus campos o casos.
+  - No cuenta los comentarios (un cambio de texto no da error) ni los eventos.
+  - Si algo falta o cambió, es un error que nombra esas partes y dice qué hacer: desplegar el contrato de esta versión y actualizar `VITE_TANDA_ID`, o volver a desplegar la web del mismo commit. Si no se puede leer el contrato, queda en aviso.
+  - Es su propio `paso(...)` en `web/src/lib/estado.ts`, sin tocar los demás.
+  - Probado contra testnet real: el contrato de producción de hoy da error (27 partes) y un contrato desechable con su propia versión de la web da "Coinciden".
 
 ## 7. Pruebas (`contracts/tanda/src/test_turnos.rs`)
 

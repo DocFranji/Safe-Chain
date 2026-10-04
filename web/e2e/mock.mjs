@@ -454,9 +454,16 @@ export function respuestaRpc(est, cuerpo) {
     case 'getLatestLedger':
       return ok({ id: 'a', protocolVersion: 25, sequence: 1000 })
     case 'getLedgerEntries': {
+      // (M3) El código del contrato (lo baja `contract.Client.from` en #/estado): un WASM con su spec.
+      if (xdr.LedgerKey.fromXDR(params.keys[0], 'base64').type === 'contractCode') {
+        const codigo = xdr.LedgerEntryData.contractCode(
+          new xdr.ContractCodeEntry({ ext: xdr.ContractCodeEntryExt.v0(), hash: HASH_WASM, code: wasmConSpec(est) }),
+        )
+        return ok({ entries: [{ key: params.keys[0], xdr: codigo.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: 100000 }], latestLedger: 1000 })
+      }
       // Instancia del contrato de la tanda: su almacenamiento guarda DataKey::Boveda -> dirección de la bóveda.
       const instancia = new xdr.ScContractInstance({
-        executable: xdr.ContractExecutable.contractExecutableStellarAsset(),
+        executable: xdr.ContractExecutable.contractExecutableWasm(HASH_WASM),
         storage: [new xdr.ScMapEntry({ key: xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Boveda')]), val: new Address(BOVEDA_ID).toScVal() })],
       })
       const dato = xdr.LedgerEntryData.contractData(new xdr.ContractDataEntry({
@@ -471,6 +478,33 @@ export function respuestaRpc(est, cuerpo) {
     default:
       return { jsonrpc: '2.0', id, error: { code: -32601, message: `mock: método no soportado ${method}` } }
   }
+}
+
+// --- M3: el WASM del contrato, para comparar la web con el contrato desplegado (#/estado) ---------
+const HASH_WASM = Buffer.alloc(32, 0xab)
+const leb128 = (n) => {
+  const b = []
+  do {
+    let x = n & 0x7f
+    n >>>= 7
+    if (n) x |= 0x80
+    b.push(x)
+  } while (n)
+  return Buffer.from(b)
+}
+/**
+ * WASM mínimo con solo la sección `contractspecv0` (la interfaz del contrato), armada con el mismo spec
+ * del cliente generado. `est.interfazSin`: nombres de funciones o tipos que le faltan (contrato viejo).
+ */
+function wasmConSpec(est) {
+  const quitar = new Set(est.interfazSin ?? [])
+  const entradas = spec.entries.filter((e) => {
+    const v = e.value
+    return !quitar.has(v && v.name ? v.name.toString() : '')
+  })
+  const nombre = Buffer.from('contractspecv0')
+  const datos = Buffer.concat([leb128(nombre.length), nombre, ...entradas.map((e) => Buffer.from(e.toXdr()))])
+  return Buffer.concat([Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00]), leb128(datos.length), datos])
 }
 
 export function cuentaHorizon(est, g) {

@@ -102,6 +102,7 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 | Síntoma | Qué hacer |
 | --- | --- |
 | `#/estado` dice que el contrato no responde | Testnet se reinició. `bash scripts/desplegar_testnet.sh` (unos minutos) escribe `web/.env.local` y **imprime las variables para Vercel**: pégalas allí y vuelve a desplegar |
+| `#/estado` dice que la web y el contrato no coinciden | La web es de una versión y el contrato de otra (pasa si se cambia el contrato sin actualizar Vercel, o al revés). Si el contrato es el nuevo, revisa que `VITE_TANDA_ID` en Vercel sea el que imprimió `desplegar_testnet.sh` y vuelve a desplegar la web; si no, despliega el contrato de esta versión con ese script |
 | Los nombres salen como `GADM…TVPD` en vez de Ana | Falta `VITE_NOMBRES` en Vercel (lo imprime el script de despliegue) |
 | El script se corta a la mitad | Corre `T --source admin -- cerrar_ronda --id <id>` (o `finalizar`) a mano, o simplemente vuelve a correr `demo.sh`: crea una tanda nueva y `#/demo` se va sola a la que está en curso |
 | Freighter da problemas | La demo proyectada **no usa billetera**: sigue igual. Solo se afecta la parte de que el jurado pruebe |
