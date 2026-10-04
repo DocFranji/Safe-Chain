@@ -4,6 +4,7 @@
 use soroban_sdk::{contractimpl, token, Address, Env};
 
 use crate::almacenamiento::*;
+use crate::requisitos;
 use crate::turnos::{self, colateral_al_unirse, colateral_para, prima_de_turno};
 use crate::{
     ganchos, Error, Estado, EstadoTurnos, EvIntercambio, EvOferta, EvOpciones, EvPropuesta,
@@ -27,7 +28,11 @@ impl TandaContract {
         cobertura_bps: u32,
         opciones: OpcionesTanda,
     ) -> Result<u32, Error> {
-        turnos::validar_opciones(&opciones)?;
+        turnos::validar_opciones(&opciones, n_miembros)?;
+        // Los primeros turnos con historial necesitan el historial de M2 conectado.
+        if opciones.primeros_con_historial > 0 && requisitos::direccion_historial(&env).is_none() {
+            return Err(Error::HistorialNoConfigurado);
+        }
         // Mismo código que `crear_tanda` (pide la firma del creador y valida los parámetros).
         let id = Self::crear_tanda(
             env.clone(),
@@ -47,6 +52,8 @@ impl TandaContract {
             permitir_intercambio: opciones.permitir_intercambio,
             prima_max_bps: opciones.prima_max_bps,
             descuento_max_bps: opciones.descuento_max_bps,
+            primeros_con_historial: opciones.primeros_con_historial,
+            puntaje_primeros: opciones.puntaje_primeros,
         }
         .publish(&env);
         Ok(id)
@@ -54,12 +61,17 @@ impl TandaContract {
 
     /// Unirse eligiendo un turno libre (modos `Eleccion` y `PrecioPorTurno`). Mismo camino que
     /// `unirse`: verificación, ganchos del historial, colateral a la bóveda y arranque al llenarse.
+    /// Si es de los primeros turnos que piden historial, se revisa el puntaje de quien se une.
     pub fn unirse_en_turno(
         env: Env,
         id: u32,
         miembro: Address,
         posicion: u32,
     ) -> Result<(), Error> {
+        let t = cargar_tanda(&env, id)?;
+        if let Some(o) = turnos::opciones(&env, &t, id) {
+            turnos::revisar_historial_turno(&env, &o, &miembro, posicion)?;
+        }
         Self::unirse_en(env, id, miembro, Some(posicion))
     }
 
@@ -118,7 +130,7 @@ impl TandaContract {
     ) -> Result<(), Error> {
         de.require_auth();
         let t = cargar_tanda(&env, id)?;
-        turnos::opciones(&env, &t, id)
+        let o = turnos::opciones(&env, &t, id)
             .filter(|o| o.permitir_intercambio)
             .ok_or(Error::ModoNoPermite)?;
         if t.estado != Estado::Activa {
@@ -132,6 +144,9 @@ impl TandaContract {
         {
             return Err(Error::IntercambioInvalido);
         }
+        // Nadie llega por un intercambio a un turno que pide más historial del que tiene.
+        turnos::revisar_historial_turno(&env, &o, &de, b.posicion)?;
+        turnos::revisar_historial_turno(&env, &o, &con, a.posicion)?;
         let mut props = turnos::propuestas(&env, &t, id);
         if props.iter().any(|p| p.de == de) {
             return Err(Error::PropuestaExistente);
@@ -179,6 +194,11 @@ impl TandaContract {
             || !turnos::intercambiable(&b, t.ronda_actual)
         {
             return Err(Error::IntercambioInvalido);
+        }
+        // Se revisa otra vez al aceptar: el puntaje pudo cambiar desde la propuesta.
+        if let Some(o) = turnos::opciones(&env, &t, id) {
+            turnos::revisar_historial_turno(&env, &o, &de, b.posicion)?;
+            turnos::revisar_historial_turno(&env, &o, &con, a.posicion)?;
         }
 
         let tok = token::Client::new(&env, &t.token);

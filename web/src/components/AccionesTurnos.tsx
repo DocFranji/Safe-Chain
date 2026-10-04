@@ -17,11 +17,14 @@ import {
   descuentoDe,
   eligeTurno,
   intercambiable,
+  pideHistorial,
   primaDeTurno,
   siguienteDelRespaldo,
   tieneTurno,
   turnosLibres,
 } from '../lib/turnos'
+import { nivelDePuntaje, puntajeDe } from '../lib/historial'
+import { useHistorialCacheado } from '../hooks/useHistorial'
 import { EXPLORADOR, SIMBOLO, TANDA_ID } from '../config'
 
 type Props = {
@@ -138,6 +141,13 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
   const p = parametros(datos)
   const primaBps = turnos?.opciones.prima_max_bps ?? 0
   const libres = turnosLibres(tanda.n_miembros, miembros.map((m) => m.posicion))
+  // M2 + M3: los primeros turnos pueden pedir historial. Si sabemos tu puntaje y no alcanza, no se eligen.
+  const opciones = turnos?.opciones
+  const primeros = opciones?.primeros_con_historial ?? 0
+  const nivel = primeros > 0 ? nivelDePuntaje(opciones?.puntaje_primeros ?? 0) : null
+  const miHistorial = useHistorialCacheado(yo ?? '')
+  const miPuntaje = yo && miHistorial ? puntajeDe(miHistorial) : null
+  const noAlcanza = (i: number) => pideHistorial(opciones, i) && miPuntaje !== null && miPuntaje < (opciones?.puntaje_primeros ?? 0)
 
   // Con billetera, el contrato dice la garantía exacta (con el descuento por historial, si aplica).
   useEffect(() => {
@@ -156,7 +166,9 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
   }, [id, yo, elegido])
 
   const local = (i: number) => ({ colateral: colateralDeTurno(p, i), prima: primaBps > 0 ? primaDeTurno(p, primaBps, i) : 0n })
-  const precio = elegido === null ? null : cotizado?.turno === elegido ? cotizado : { turno: elegido, ...local(elegido) }
+  // Si eligió un turno que pide más historial del que tiene (su historial cargó después), no cuenta.
+  const precio =
+    elegido === null || noAlcanza(elegido) ? null : cotizado?.turno === elegido ? cotizado : { turno: elegido, ...local(elegido) }
   const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
   const falta = precio && saldo !== null && saldo < precio.colateral ? precio.colateral - saldo : 0n
   // M2: el contrato ya aplicó el descuento por historial; la rejilla muestra la garantía normal.
@@ -165,6 +177,13 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
   return (
     <>
       <p className="explica">Elige tu turno antes de unirte. Cobras en la ronda de tu turno.</p>
+      {nivel && (
+        <p className="explica">
+          {primeros === 1 ? 'El turno 1 pide' : `Los turnos 1 a ${primeros} piden`} historial {nivel} o mejor (
+          {opciones?.puntaje_primeros} puntos)
+          {miPuntaje !== null && `: tienes ${miPuntaje}`}.
+        </p>
+      )}
       <div className="rejilla-turnos" role="group" aria-label="Turnos">
         {Array.from({ length: tanda.n_miembros }, (_, i) => {
           const duenio = miembros.find((m) => m.posicion === i)
@@ -174,7 +193,7 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
               key={i}
               type="button"
               className={elegido === i ? 'turno-casilla elegido' : 'turno-casilla'}
-              disabled={!libres.includes(i) || ocupado}
+              disabled={!libres.includes(i) || ocupado || noAlcanza(i)}
               aria-pressed={elegido === i}
               onClick={() => setElegido(i)}
             >
@@ -183,6 +202,7 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
                 <span className="sub">{nombreDe(duenio.direccion)}</span>
               ) : (
                 <>
+                  {nivel && pideHistorial(opciones, i) && <span className="sub etiqueta-historial">Pide {nivel}</span>}
                   <span className="sub">
                     Garantía {monto(colateral)} {SIMBOLO}
                   </span>

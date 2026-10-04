@@ -149,6 +149,9 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
             modo === 'PrecioPorTurno' ? `el primer turno paga ${pct(ev.data.prima_max_bps)} de la bolsa` : null,
             modo === 'Subasta' ? `descuento máximo ${pct(ev.data.descuento_max_bps)}` : null,
             ev.data.permitir_intercambio ? 'se pueden intercambiar turnos' : null,
+            ev.data.primeros_con_historial
+              ? `${ev.data.primeros_con_historial === 1 ? 'el turno 1 pide' : `los turnos 1 a ${ev.data.primeros_con_historial} piden`} historial de ${ev.data.puntaje_primeros} puntos o más`
+              : null,
           ]
             .filter(Boolean)
             .join(' · '),

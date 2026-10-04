@@ -25,6 +25,8 @@ Cualquiera puede cerrar una ronda vencida, así que nadie puede bloquear la tand
 - **Sorteo:** el contrato sortea el orden cuando se llena la tanda.
 - **Elegir e intercambiar:** cada quien elige su turno y lo puede cambiar con otro, con una compensación si se ponen de acuerdo.
 
+En precio por turno y en elegir turno, si la tanda usa el historial crediticio, el creador puede pedir un puntaje mínimo para tomar los primeros turnos: son los que reciben la bolsa antes de haber aportado casi nada.
+
 En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la subasta, como el turno no se conoce al unirse, todos dejan una cuota y el resto se aparta de la bolsa al cobrar.
 
 ## Qué hay construido

@@ -36,6 +36,8 @@ pub struct OpcionesTanda {
     pub permitir_intercambio: bool,
     pub prima_max_bps: u32,      // PrecioPorTurno: prima del primer turno, sobre la bolsa (máx. 2 000 = 20 %)
     pub descuento_max_bps: u32,  // Subasta: descuento máximo que se puede ofrecer (máx. 5 000 = 50 %)
+    pub primeros_con_historial: u32, // Eleccion / PrecioPorTurno: cuántos de los primeros turnos piden historial (0 = ninguno)
+    pub puntaje_primeros: u32,       // puntaje de historial (M2) que piden esos turnos
 }
 
 pub struct Oferta { pub ronda: u32, pub miembro: Address, pub descuento_bps: u32 }
@@ -84,7 +86,7 @@ Todas se renuevan con `almacenamiento::renovar_para_tanda` de M1 (ACORDADO) al l
 
 `unirse(id, miembro)` se mantiene: en `Eleccion`/`PrecioPorTurno` toma el turno libre más bajo; en `Sorteo`/`Subasta` entra sin turno.
 
-### Errores (rango 30–49; uso 30–39)
+### Errores (rango 30–49; uso 30–40)
 
 | Código | Nombre | Mensaje en la web |
 | --- | --- | --- |
@@ -98,12 +100,13 @@ Todas se renuevan con `almacenamiento::renovar_para_tanda` de M1 (ACORDADO) al l
 | 37 | `IntercambioInvalido` | Ese intercambio no es posible: los dos turnos deben ser futuros y ninguno puede estar en mora. |
 | 38 | `PropuestaExistente` | Ya tienes una propuesta de intercambio abierta. Retírala antes de hacer otra. |
 | 39 | `SinPropuesta` | No hay una propuesta de intercambio pendiente entre ustedes. |
+| 40 | `TurnoExigeHistorial` | Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en «Mi historial». |
 
 ### Eventos (bloque M3 de `eventos.rs`; todos con tópicos `[nombre, id]`, como los de hoy, para que la web los lea con el mismo filtro)
 
 | Tópico | Datos | Frase en la web |
 | --- | --- | --- |
-| `opciones` | modo, permitir_intercambio, prima_max_bps, descuento_max_bps | "Turnos: precio por turno (el primero paga 10 %)" |
+| `opciones` | modo, permitir_intercambio, prima_max_bps, descuento_max_bps, primeros_con_historial, puntaje_primeros | "Turnos: precio por turno (el primero paga 10 %; los turnos 1 a 2 piden historial de 100 puntos o más)" |
 | `sorteo` | orden: Vec<Address> | "El contrato sorteó el orden: 1 Carla, 2 Ana, 3 Beto" |
 | `oferta` | ronda, miembro, descuento_bps, descuento | "Beto ofrece recibir 8 % menos para cobrar en la ronda 2" |
 | `subasta` | ronda, ganador, descuento, dividendo, por_respaldo | "Beto ganó la ronda 2 con 8 % de descuento: cada uno recibió 12 TUSD" |
@@ -179,7 +182,7 @@ Cada quien elige un turno libre al unirse (`unirse_en_turno`), gratis, y ve la g
 - Si la bolsa de un turno queda retenida (beneficiario moroso), la prima igual se aparta, así el fondo sigue cuadrando. Por seguridad, si al final quedara algo en el fondo, pasa al retenido que se reparte en `finalizar`.
 - Ejemplo (3 personas, bolsa 300, prima máxima 8 %): turno 1 cobra **276** (paga 24), turno 2 cobra **300**, turno 3 cobra **324** (gana 24). Con 12 personas y 10 %: el turno 1 paga 120 y el 12 gana 120.
 - Si dos quieren el mismo turno, gana quien firma primero (`TurnoOcupado` para el segundo, que ve los turnos libres actualizados).
-- Extra (después del MVP): con M2, exigir un nivel mínimo para los primeros turnos, como MoneyFellows.
+- **Historial mínimo para los primeros turnos** (con M2, como MoneyFellows; ✅ aprobado por @DocFranji): ver §4.7.
 
 ### 4.4 Sorteo verificable (`Sorteo`)
 
@@ -212,6 +215,23 @@ Cada quien elige un turno libre al unirse (`unirse_en_turno`), gratis, y ve la g
 - Al cerrar cada ronda, las propuestas que ya no se pueden aceptar (un turno pasó o alguien cayó en mora) se retiran solas y la compensación guardada vuelve a quien la dejó. Así nunca queda dinero atrapado al terminar.
 
 ---
+
+### 4.7 Historial mínimo para los primeros turnos (con M2)
+
+Quien cobra primero recibe la bolsa antes de terminar de pagar: en la práctica, el grupo le presta. Por eso MoneyFellows le da los primeros turnos a quien tiene mejor historial. Aquí es opcional y viene apagado.
+
+- **Opciones:** `primeros_con_historial = k` y `puntaje_primeros = p`. Los turnos `0..k` solo los toma quien tenga al menos `p` puntos en el historial de M2 (`HistorialClient::puntaje`, el mismo que usa `puede_unirse`). La web ofrece los niveles de M2: Bronce 100, Plata 300 y Oro 600.
+- **Dónde aplica:** solo donde cada quien elige su turno (`Eleccion` y `PrecioPorTurno`). En sorteo y subasta el turno no se elige, y en llegada no tiene sentido. Al crear se valida: `k < n` (al menos un turno queda para cualquiera), los dos valores van juntos (`k > 0` ⇔ `p > 0`) y la tanda necesita el historial conectado (`HistorialNoConfigurado`, error 20 de M2).
+- **Cuándo se revisa:**
+  - `unirse_en_turno` a un turno protegido: si el puntaje no alcanza, falla con **`TurnoExigeHistorial` (40)**.
+  - `unirse` sin elegir: da el primer turno libre **que no pide historial**. Los protegidos solo se toman eligiéndolos. Si ya solo quedan protegidos, falla con 40, y lo mismo devuelve `colateral_siguiente`.
+  - Intercambios: nadie llega por un intercambio a un turno protegido sin el puntaje. Se revisa al proponer y otra vez al aceptar, porque el puntaje pudo bajar en el medio.
+- **Falla cerrado:** si el historial no responde (por ejemplo, el admin lo desconectó), no se puede comprobar el puntaje y los turnos protegidos dan `HistorialNoConfigurado`. Los demás turnos siguen abiertos.
+- **No mueve dinero.** Solo decide quién puede tomar cada turno: la garantía, las primas y todo lo demás quedan igual.
+- **Web:**
+  - Al crear, la casilla "Los primeros turnos, solo para quien tenga buen historial" (turnos 1 a k y nivel) aparece solo en "Precio por turno" y "Elegir e intercambiar", y solo si hay historial conectado. La tabla marca esos turnos con su nivel.
+  - Quien crea y se une sin alcanzar el nivel queda en el primer turno abierto, y el texto lo dice ("cobrarás en la ronda 3").
+  - En la rejilla de turnos, los protegidos dicen "Pide Bronce" y se desactivan si tu puntaje no alcanza ("tienes 110").
 
 ## 5. Seguridad, dinero y presupuesto
 
@@ -283,13 +303,13 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 | Funciones públicas y consultas | `contracts/tanda/src/turnos_acciones.rs` |
 | Tipos, errores 30–39 y eventos | bloques `// --- M3 ---` de `tipos.rs` y `eventos.rs` |
 | Flujo principal | `lib.rs`: `unirse` → `unirse_en(..., turno)`; regla 3 de `cerrar_ronda`. `consultas.rs`: `colateral_siguiente` |
-| Pruebas | `contracts/tanda/src/test_turnos.rs` (27) |
+| Pruebas | `contracts/tanda/src/test_turnos.rs` (30) |
 | Web | `web/src/lib/turnos.ts` (+ pruebas), `components/OpcionesTurnos.tsx`, `components/AccionesTurnos.tsx`, `historia.ts`, `contrato.ts`, `Rueda.tsx`, `ListaMiembros.tsx` |
 | Navegador | `web/e2e/mock.mjs` (`nuevoEstadoTurnos()`), escenarios "Turnos" en `run.mjs` |
 | Demo por terminal | `scripts/demo_turnos.sh` |
 
 ```bash
-cargo test -p tanda test_turnos -- --nocapture   # 27 pruebas de M3
+cargo test -p tanda test_turnos -- --nocapture   # 30 pruebas de M3
 bash scripts/verificar.sh                        # toda la Definición de Terminado
 MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después de desplegar_testnet.sh)
 ```
@@ -310,10 +330,12 @@ MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después 
 | **Subasta + deudas (M1) + historial (M2): `cerrar_ronda` con casi nadie al día** | **38,7 M** | **72** | **42** |
 | Subasta + historial (M2): `cerrar_ronda` con todos al día | 13,4 M | 61 | 23 |
 | Subasta + historial (M2): `finalizar` con 12 que cumplieron | 19,8 M | 64 | **43** |
+| Precio por turno con historial mínimo en 11 turnos: último `unirse_en_turno` (pregunta el puntaje) | 5,5 M | 49 | 11 |
+| Ídem: `proponer_intercambio` / `aceptar_intercambio` entre turnos protegidos | 2,3 M / 2,8 M | 16 / 17 | 4 / 7 |
 
 Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al anotar a las 12 personas en el `finalizar`, igual que en cualquier tanda de 12 con historial.
 
-**Tamaño:** `tanda.wasm` pesa 73 171 bytes con M1 + M2 + M3 (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes).
+**Tamaño:** `tanda.wasm` pesa 74 579 bytes con M1 + M2 + M3 y el historial mínimo para los primeros turnos (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes).
 
 ### Cómo se combina con M1 (deudas) y M2 (historial)
 
@@ -344,3 +366,10 @@ Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al
 - `ofertar` ([tx](https://stellar.expert/explorer/testnet/tx/01a079ceef400ba360a4b27095844628d5f6e42bce267bffa0db4b1d224988e3)).
 
 Con esto quedan probadas la codificación de `OpcionesTanda` (el enum `modo`), las firmas anidadas (la compensación sale de quien firma) y la lectura de `get_estado_turnos` y `cotizar_turno`. Lo único que no se probó es la ventana de Freighter.
+
+**Con M1 + M2 + M3 juntos y el historial mínimo, también en testnet** (dom 4 oct, contratos desechables desplegados desde esta rama):
+- `MODO=precio bash scripts/demo_turnos.sh` corrió completa con el contrato combinado. El evento `opciones` ya trae los campos nuevos y se cobró la prima de 24 ([tx](https://stellar.expert/explorer/testnet/tx/9f8c281e075185e33499b5eb1ed5701b8394115d8f7f9322068cbed4b3447e7f)).
+- Tanda de precio por turno con el turno 1 para historial Bronce ([tx](https://stellar.expert/explorer/testnet/tx/4f0de718a1205f726e4c336717cf3bfc12eea42831e5d63f326c07c99276f378)):
+  - Beto, con 80 puntos, pidió el turno 1 y la simulación falló con `Error(Contract, #40)`.
+  - Al unirse sin elegir, quedó en el turno 2 ([tx](https://stellar.expert/explorer/testnet/tx/cd20e59bea2db9948c9202822d72e89bc4b6202944807c236bcc74de227426f5)).
+  - Ana sumó 20 puntos (100 en total) y tomó el turno 1, con 200 de garantía ([tx](https://stellar.expert/explorer/testnet/tx/27439dd9c1452b7a9339b0fed54acdb5fdb3cf19b7e72a98725862f91172340f)).

@@ -47,8 +47,8 @@ cerrar() {
 }
 
 # Opciones de turnos en el JSON que entiende la CLI.
-opciones() { # modo intercambio prima_bps descuento_bps
-  printf '{"modo":"%s","permitir_intercambio":%s,"prima_max_bps":%s,"descuento_max_bps":%s}' "$1" "$2" "$3" "$4"
+opciones() { # modo intercambio prima_bps descuento_bps (sin historial mínimo en los primeros turnos)
+  printf '{"modo":"%s","permitir_intercambio":%s,"prima_max_bps":%s,"descuento_max_bps":%s,"primeros_con_historial":0,"puntaje_primeros":0}' "$1" "$2" "$3" "$4"
 }
 
 crear() { # opciones (JSON)

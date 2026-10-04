@@ -106,6 +106,9 @@ export declare const Error: {
     39: {
         message: string;
     };
+    40: {
+        message: string;
+    };
 };
 /**
  * Struct: Tanda
@@ -298,6 +301,15 @@ export interface OpcionesTanda {
      * PrecioPorTurno: prima del primer turno, en bps sobre la bolsa. El último recibe lo mismo.
      */
     prima_max_bps: number;
+    /**
+     * Elegir turno y precio por turno: cuántos de los primeros turnos piden historial (M2).
+     * 0 = ninguno. Esos turnos solo los toma quien tenga al menos `puntaje_primeros`.
+     */
+    primeros_con_historial: number;
+    /**
+     * Puntaje de historial que piden los primeros turnos (0 si `primeros_con_historial` es 0).
+     */
+    puntaje_primeros: number;
 }
 /**
  * Event: EvPago
@@ -476,6 +488,8 @@ export interface EvOpcionesEvent {
         permitir_intercambio?: boolean;
         prima_max_bps?: number;
         descuento_max_bps?: number;
+        primeros_con_historial?: number;
+        puntaje_primeros?: number;
     };
 }
 /**

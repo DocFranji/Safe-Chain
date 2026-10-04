@@ -146,6 +146,28 @@ describe('narrar: mecanismos de turnos (M3)', () => {
     expect(gana).toMatchObject({ tipo: 'ok', titulo: 'Ana ganó 24 TUSD por esperar' })
   })
 
+  it('opciones: los primeros turnos que piden historial (M2 + M3)', () => {
+    const [h] = narrar(
+      [
+        ev({
+          name: 'EvOpciones',
+          data: {
+            id: 1,
+            modo: { tag: 'PrecioPorTurno', values: undefined },
+            permitir_intercambio: false,
+            prima_max_bps: 800,
+            descuento_max_bps: 0,
+            primeros_con_historial: 2,
+            puntaje_primeros: 100,
+          },
+        }),
+      ],
+      f,
+    )
+    expect(h.titulo).toBe('Turnos: precio por turno')
+    expect(h.detalle).toBe('el primer turno paga 8 % de la bolsa · los turnos 1 a 2 piden historial de 100 puntos o más')
+  })
+
   it('garantía apartada, intercambio y turno por decidir al unirse', () => {
     const [garantia, cambio, unido] = narrar(
       [

@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, historial } from './mock.mjs'
+import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, historial } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -665,6 +665,90 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   check('Historial + turnos: el botón usa la garantía con descuento', await page.getByRole('button', { name: 'Unirme en el turno 1 y dejar 180 TUSD' }).isEnabled())
   await shot(page, 'm2m3-01-precio-con-historial')
   check('Historial + turnos: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M2 + M3: los primeros turnos piden historial
+{
+  // Crear: la opción aparece donde se elige turno (con historial activo) y marca los turnos en la tabla.
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  check('Primeros con historial: no se ofrece en orden de llegada', (await page.locator('.primeros-historial').count()) === 0)
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  await page.waitForSelector('.primeros-historial', { timeout: 15000 }).catch(() => {})
+  check('Primeros con historial: se ofrece en precio por turno', (await page.locator('.primeros-historial').count()) === 1)
+  await page.getByLabel(/Los primeros turnos, solo para quien tenga buen historial/).check()
+  const t = await texto(page)
+  check('Primeros con historial: por defecto, turnos 1 a 2 con Bronce', /Los turnos 1 a 2 solo los puede elegir quien tenga historial Bronce o mejor/.test(t), t.slice(0, 900))
+  const filas = await page.locator('.turnos-previa tbody tr').allInnerTexts()
+  check('Primeros con historial: la tabla marca los turnos 1 y 2', /Bronce/.test(filas[0] ?? '') && /Bronce/.test(filas[1] ?? '') && !/Bronce/.test(filas[2] ?? ''), JSON.stringify(filas))
+  check('Primeros con historial: con Bronce (tengo 110) me uno en el turno 1', /dejarás 200 TUSD de garantía y cobrarás en la ronda 1/.test(t))
+  await page.locator('#primeros-nivel').selectOption('300')
+  await page.getByText(/cobrarás en la ronda 3/).waitFor({ timeout: 15000 }).catch(() => {})
+  const t2 = await texto(page)
+  check('Primeros con historial: se puede pedir Plata', /historial Plata o mejor/.test(t2))
+  check('Primeros con historial: con Plata (tengo 110) me uno en el primer turno abierto: el 3', /dejarás 100 TUSD de garantía y cobrarás en la ronda 3/.test(t2), t2.slice(0, 1200))
+  check('Primeros con historial: el botón de crear sigue habilitado', !(await page.locator('button[type=submit]').isDisabled()))
+  await shot(page, 'm2m3-02-crear-primeros-con-historial')
+  check('Primeros con historial (crear): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // A 390 px, con la opción abierta, nada se desborda.
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  await page.getByLabel(/Los primeros turnos, solo para quien tenga buen historial/).check()
+  await page.waitForTimeout(400)
+  const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }))
+  check('Primeros con historial (390 px): sin desborde horizontal', ancho.sw <= ancho.cw + 1, JSON.stringify(ancho))
+  await shot(page, 'm2m3-04-crear-primeros-390')
+  check('Primeros con historial (390 px): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Sin historial conectado (contrato anterior a M2), la opción no existe.
+  const est = nuevoEstadoTurnos()
+  est.historialActivo = false
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  await page.waitForTimeout(800)
+  check('Primeros con historial: sin historial no se ofrece', (await page.locator('.primeros-historial').count()) === 0)
+  await page.close()
+}
+{
+  // Elegir turno: "yo" tengo 110 puntos y el turno 1 pide Bronce (100): lo puedo elegir.
+  const est = conPrimerosConHistorial(nuevoEstadoTurnos(), 8, 1, 100)
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  await page.getByText(/tienes 110/).waitFor({ timeout: 15000 }).catch(() => {})
+  const t = await texto(page)
+  check('Turno con historial (alcanza): lo explica con mi puntaje', /El turno 1 pide historial Bronce o mejor \(100 puntos\): tienes 110/.test(t), t.slice(0, 900))
+  const casilla = page.locator('.turno-casilla').nth(0)
+  check('Turno con historial (alcanza): la casilla dice "Pide Bronce" y se puede elegir', /Pide Bronce/.test(await casilla.innerText()) && !(await casilla.isDisabled()))
+  check('Turno con historial (alcanza): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Si pide Plata (300) y tengo 110, el turno 1 no se puede elegir; el 3 sí.
+  const est = conPrimerosConHistorial(nuevoEstadoTurnos(), 8, 1, 300)
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  await page.getByText(/tienes 110/).waitFor({ timeout: 15000 }).catch(() => {})
+  const casillas = page.locator('.turno-casilla')
+  check('Turno con historial (no alcanza): el turno 1 no se puede elegir', await casillas.nth(0).isDisabled())
+  check('Turno con historial (no alcanza): el turno 3 sí', !(await casillas.nth(2).isDisabled()))
+  check('Turno con historial (no alcanza): dice cuánto tengo', /historial Plata o mejor \(300 puntos\): tienes 110/.test(await texto(page)))
+  await shot(page, 'm2m3-03-turno-con-historial')
+  check('Turno con historial (no alcanza): sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 

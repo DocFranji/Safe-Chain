@@ -113,6 +113,7 @@ pub enum Error {
     IntercambioInvalido = 37,
     PropuestaExistente = 38,
     SinPropuesta = 39,
+    TurnoExigeHistorial = 40,
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +238,11 @@ pub struct OpcionesTanda {
     pub prima_max_bps: u32,
     /// Subasta: descuento máximo que se puede ofrecer, en bps sobre la bolsa.
     pub descuento_max_bps: u32,
+    /// Elegir turno y precio por turno: cuántos de los primeros turnos piden historial (M2).
+    /// 0 = ninguno. Esos turnos solo los toma quien tenga al menos `puntaje_primeros`.
+    pub primeros_con_historial: u32,
+    /// Puntaje de historial que piden los primeros turnos (0 si `primeros_con_historial` es 0).
+    pub puntaje_primeros: u32,
 }
 
 /// Subasta: la mejor oferta de una ronda.

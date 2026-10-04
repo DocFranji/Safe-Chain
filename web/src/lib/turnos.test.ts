@@ -9,8 +9,10 @@ import {
   descuentoDe,
   esClasica,
   intercambiable,
+  pideHistorial,
   primaDeTurno,
   siguienteDelRespaldo,
+  turnoAlCrear,
   turnosLibres,
   validarOpciones,
   vistaPrevia,
@@ -75,12 +77,16 @@ describe('opciones', () => {
       permitir_intercambio: true,
       prima_max_bps: 800,
       descuento_max_bps: 0,
+      primeros_con_historial: 0,
+      puntaje_primeros: 0,
     })
     expect(aContrato(con({ modo: 'Subasta', descuentoPct: 30, intercambio: true }))).toEqual({
       modo: { tag: 'Subasta', values: undefined },
       permitir_intercambio: false,
       prima_max_bps: 0,
       descuento_max_bps: 3000,
+      primeros_con_historial: 0,
+      puntaje_primeros: 0,
     })
   })
 
@@ -91,6 +97,41 @@ describe('opciones', () => {
     expect(validarOpciones(con({ modo: 'Subasta', descuentoPct: 51 }))).not.toBeNull()
     expect(validarOpciones(con({ modo: 'Subasta', descuentoPct: 50 }))).toBeNull()
     expect(validarOpciones(con({ modo: 'Sorteo', primaPct: 99 }))).toBeNull()
+  })
+})
+
+describe('los primeros turnos piden historial (M2 + M3)', () => {
+  const protegida = con({ modo: 'PrecioPorTurno', primaPct: 8, primeros: 2, puntajePrimeros: 100 })
+
+  it('solo donde se elige turno; en los demás modos no se manda', () => {
+    expect(aContrato(protegida)).toMatchObject({ primeros_con_historial: 2, puntaje_primeros: 100 })
+    expect(aContrato({ ...protegida, modo: 'Eleccion' })).toMatchObject({ primeros_con_historial: 2, puntaje_primeros: 100 })
+    for (const modo of ['Llegada', 'Sorteo', 'Subasta'] as const) {
+      expect(aContrato({ ...protegida, modo })).toMatchObject({ primeros_con_historial: 0, puntaje_primeros: 0 })
+    }
+    expect(esClasica({ ...protegida, modo: 'Llegada' })).toBe(true)
+  })
+
+  it('deja al menos un turno para cualquiera y pide un puntaje', () => {
+    expect(validarOpciones(protegida, 3)).toBeNull()
+    expect(validarOpciones({ ...protegida, primeros: 3 }, 3)).toMatch(/al menos un turno/)
+    expect(validarOpciones({ ...protegida, puntajePrimeros: 0 }, 3)).not.toBeNull()
+    // En sorteo no aplica, así que no molesta.
+    expect(validarOpciones({ ...protegida, modo: 'Sorteo', primeros: 9 }, 3)).toBeNull()
+  })
+
+  it('qué turnos piden historial y dónde queda quien crea', () => {
+    const o = { primeros_con_historial: 2 }
+    expect([0, 1, 2].map((i) => pideHistorial(o, i))).toEqual([true, true, false])
+    expect(pideHistorial(null, 0)).toBe(false)
+    expect(turnoAlCrear(protegida, 110)).toBe(0)
+    expect(turnoAlCrear(protegida, 50)).toBe(2)
+    expect(turnoAlCrear({ ...protegida, modo: 'Sorteo' }, 0)).toBe(0)
+  })
+
+  it('la vista previa marca los turnos que piden historial', () => {
+    expect(vistaPrevia(base, protegida).map((f) => f.pideHistorial)).toEqual([true, true, false])
+    expect(vistaPrevia(base, { ...protegida, primeros: 0 }).some((f) => f.pideHistorial)).toBe(false)
   })
 })
 

@@ -127,6 +127,7 @@ export interface Client {
     /**
      * Unirse eligiendo un turno libre (modos `Eleccion` y `PrecioPorTurno`). Mismo camino que
      * `unirse`: verificación, ganchos del historial, colateral a la bóveda y arranque al llenarse.
+     * Si es de los primeros turnos que piden historial, se revisa el puntaje de quien se une.
      */
     unirse_en_turno(args: {
         id: number;

@@ -58,6 +58,7 @@ const MENSAJES: Record<number, string> = {
   37: 'Ese intercambio no es posible: los dos turnos deben ser futuros y nadie puede estar en mora.',
   38: 'Ya tienes una propuesta de intercambio abierta. Retírala antes de hacer otra.',
   39: 'No hay una propuesta de intercambio pendiente entre ustedes.',
+  40: 'Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en «Mi historial».',
   // M1: pagar deudas
   14: 'Esa persona no tiene deuda en esta tanda.',
   15: 'Ese monto es mayor que la deuda. Revisa cuánto falta por pagar.',
@@ -96,6 +97,7 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   IntercambioInvalido: 37,
   PropuestaExistente: 38,
   SinPropuesta: 39,
+  TurnoExigeHistorial: 40,
   SinDeuda: 14,
   PagoExcesivo: 15,
   MontoInvalido: 16,

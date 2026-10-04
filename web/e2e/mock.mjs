@@ -91,7 +91,8 @@ export function nuevoEstado() {
 /** `Miembro.posicion` de quien todavía no tiene turno (u32::MAX en el contrato). */
 export const SIN_TURNO = 4_294_967_295
 const opcionesTurnos = (tag, o = {}) => ({
-  modo: { tag, values: undefined }, permitir_intercambio: false, prima_max_bps: 0, descuento_max_bps: 0, ...o,
+  modo: { tag, values: undefined }, permitir_intercambio: false, prima_max_bps: 0, descuento_max_bps: 0,
+  primeros_con_historial: 0, puntaje_primeros: 0, ...o,
 })
 const estadoTurnos = (opciones, o = {}) => ({
   opciones, mejor_postor: null, mejor_oferta_bps: 0, respaldo: [], propuestas: [], fondo_primas: 0n, ...o,
@@ -135,6 +136,12 @@ export function nuevoEstadoTurnos() {
       propuestas: [{ de: CARLA, con: ME, compensacion: 10n * U }],
     }),
   }
+  return e
+}
+
+/** M2 + M3: los primeros `k` turnos de la tanda `id` piden `puntaje` de historial. */
+export function conPrimerosConHistorial(e, id, k, puntaje) {
+  e.tandas[id].turnos.opciones = { ...e.tandas[id].turnos.opciones, primeros_con_historial: k, puntaje_primeros: puntaje }
   return e
 }
 

@@ -189,6 +189,8 @@ pub struct EvOpciones {
     pub permitir_intercambio: bool,
     pub prima_max_bps: u32,
     pub descuento_max_bps: u32,
+    pub primeros_con_historial: u32,
+    pub puntaje_primeros: u32,
 }
 
 /// El contrato sorteó el orden de cobro: `orden[i]` cobra en la ronda `i`.

@@ -11,7 +11,7 @@ use crate::*;
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
     token::StellarAssetClient,
-    Address, Map,
+    vec, Address, Map, Vec,
 };
 use std::vec::Vec as SVec;
 
@@ -25,6 +25,17 @@ fn opciones(modo: ModoTurnos) -> OpcionesTanda {
         permitir_intercambio: false,
         prima_max_bps: 0,
         descuento_max_bps: 0,
+        primeros_con_historial: 0,
+        puntaje_primeros: 0,
+    }
+}
+
+/// Los primeros `k` turnos piden `puntaje` de historial (M2).
+fn primeros(o: OpcionesTanda, k: u32, puntaje: u32) -> OpcionesTanda {
+    OpcionesTanda {
+        primeros_con_historial: k,
+        puntaje_primeros: puntaje,
+        ..o
     }
 }
 
@@ -926,6 +937,212 @@ fn intercambio_pide_las_firmas_correctas() {
 }
 
 // ===========================================================================
+// Historial mínimo para los primeros turnos (con el historial de M2)
+// ===========================================================================
+
+type Hist = historial::HistorialContractClient<'static>;
+
+/// Conecta a la tanda un historial nuevo (nativo), con la tanda como emisor autorizado.
+fn conectar_historial(c: &Ctx) -> Hist {
+    let dir = c.env.register(historial::HistorialContract, ());
+    let h = historial::HistorialContractClient::new(&c.env, &dir);
+    h.inicializar(&Address::generate(&c.env));
+    h.autorizar_emisor(&c.tanda_addr);
+    c.tanda.configurar_historial(&Some(dir));
+    h
+}
+
+/// `quien` suma 10 puntos por cuota, como si viniera de otras tandas (10 cuotas = Bronce).
+fn dar_puntos(c: &Ctx, h: &Hist, quien: &Address, cuotas: u32) {
+    let otra = Address::generate(&c.env);
+    h.autorizar_emisor(&otra);
+    let mut lote = Vec::new(&c.env);
+    for _ in 0..cuotas {
+        lote.push_back(historial::HechoMiembro {
+            miembro: quien.clone(),
+            hecho: historial::Hecho::CuotaATiempo,
+            monto: CUOTA,
+        });
+    }
+    h.registrar_lote(&otra, &1_000, &CUOTA, &lote);
+}
+
+/// `quien` queda en mora en otra tanda: pierde 100 puntos.
+fn quitar_puntos(c: &Ctx, h: &Hist, quien: &Address) {
+    let otra = Address::generate(&c.env);
+    h.autorizar_emisor(&otra);
+    let lote = vec![
+        &c.env,
+        historial::HechoMiembro {
+            miembro: quien.clone(),
+            hecho: historial::Hecho::Moroso,
+            monto: CUOTA,
+        },
+    ];
+    h.registrar_lote(&otra, &2_000, &CUOTA, &lote);
+}
+
+/// Precio por turno, 4 personas, los turnos 1 y 2 piden Bronce (100 puntos). Solo Ana lo tiene.
+/// Elegir un turno protegido pide el puntaje; `unirse` sin elegir salta los protegidos; cuando
+/// solo quedan protegidos, nadie sin historial entra. La tanda corre completa y el dinero cuadra.
+#[test]
+fn primeros_turnos_piden_historial() {
+    let c = setup();
+    let h = conectar_historial(&c);
+    let id = c.crear_con(4, 10_000, &primeros(precio(1_000), 2, 100));
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    dar_puntos(&c, &h, ana, 10);
+    assert_eq!(h.puntaje(ana), 100);
+
+    // Beto no tiene historial: los turnos 1 y 2 no son para él; el 4 sí.
+    for turno in [0, 1] {
+        assert_eq!(
+            c.tanda.try_unirse_en_turno(&id, beto, &turno),
+            Err(Ok(Error::TurnoExigeHistorial))
+        );
+    }
+    c.tanda.unirse_en_turno(&id, beto, &3);
+    c.tanda.unirse_en_turno(&id, ana, &0);
+    // Sin elegir, `unirse` da el primer turno libre que no pide historial: el 3.
+    assert_eq!(c.tanda.colateral_siguiente(&id), colateral_de(&c, id, 2));
+    c.tanda.unirse(&id, carla);
+    assert_eq!(c.turno(id, carla), 2);
+    // Solo queda el turno 2, que pide historial: Dani no entra (ni eligiéndolo ni sin elegir).
+    assert_eq!(
+        c.tanda.try_unirse(&id, dani),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    assert_eq!(
+        c.tanda.try_unirse_en_turno(&id, dani, &1),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    assert_eq!(
+        c.tanda.try_colateral_siguiente(&id),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    // Con historial, entra.
+    dar_puntos(&c, &h, dani, 10);
+    c.tanda.unirse_en_turno(&id, dani, &1);
+    assert_eq!(c.tanda.get_tanda(&id).estado, Estado::Activa);
+
+    // De aquí en adelante, una tanda de precio por turno como cualquier otra.
+    for _ in 0..4 {
+        c.pagan_todos(id, &gente);
+        c.cerrar(id);
+        c.conservacion(&gente);
+    }
+    c.al_final(id, &gente);
+}
+
+/// Colateral de entrada del turno `posicion` (sin descuentos).
+fn colateral_de(c: &Ctx, id: u32, posicion: u32) -> i128 {
+    let t = c.tanda.get_tanda(&id);
+    let restantes = (t.n_miembros - 1 - posicion) as i128;
+    (t.cuota * restantes * t.cobertura_bps as i128 / 10_000).max(t.cuota)
+}
+
+/// Elegir + intercambio, 4 personas, los turnos 1 y 2 piden Bronce. Nadie llega por un intercambio
+/// a un turno protegido sin el puntaje: se revisa al proponer y otra vez al aceptar.
+#[test]
+fn intercambio_no_salta_el_historial_minimo() {
+    let c = setup();
+    let h = conectar_historial(&c);
+    let id = c.crear_con(
+        4,
+        10_000,
+        &primeros(con_intercambio(opciones(ModoTurnos::Eleccion)), 2, 100),
+    );
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    dar_puntos(&c, &h, ana, 10);
+    dar_puntos(&c, &h, beto, 10);
+    for (p, turno) in [(ana, 0), (beto, 1), (carla, 2), (dani, 3)] {
+        c.tanda.unirse_en_turno(&id, p, &turno);
+    }
+    // Ronda 1 en curso. Carla (sin historial) no puede pasar al turno 2 de Beto, ni proponiéndolo
+    // ella ni aceptándolo como contraparte de Beto.
+    assert_eq!(
+        c.tanda.try_proponer_intercambio(&id, carla, beto, &0),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    assert_eq!(
+        c.tanda
+            .try_proponer_intercambio(&id, beto, carla, &(10 * U)),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    // Entre turnos que no piden historial, como siempre.
+    c.tanda.proponer_intercambio(&id, dani, carla, &0);
+    c.tanda.aceptar_intercambio(&id, carla, dani);
+    assert_eq!((c.turno(id, carla), c.turno(id, dani)), (3, 2));
+    // Dani consigue el historial y propone a Beto (con 10 de compensación guardada)...
+    dar_puntos(&c, &h, dani, 10);
+    c.tanda.proponer_intercambio(&id, dani, beto, &(10 * U));
+    // ...pero cae en mora en otra tanda antes de que Beto acepte: ya no le alcanza.
+    quitar_puntos(&c, &h, dani);
+    assert_eq!(
+        c.tanda.try_aceptar_intercambio(&id, beto, dani),
+        Err(Ok(Error::TurnoExigeHistorial))
+    );
+    // Beto la rechaza y Dani recupera su compensación.
+    let antes = c.saldo(dani);
+    c.tanda.cancelar_propuesta(&id, dani, beto);
+    assert_eq!(c.saldo(dani), antes + 10 * U);
+    assert_eq!((c.turno(id, beto), c.turno(id, dani)), (1, 2));
+    c.conservacion(&gente);
+}
+
+/// Las opciones del historial mínimo se validan al crear, y sin historial que responda no se puede
+/// comprobar el puntaje: falla cerrado (como el requisito de M2).
+#[test]
+fn historial_minimo_opciones_y_falla_cerrado() {
+    let c = setup();
+    let crear = |o: &OpcionesTanda| {
+        c.tanda.try_crear_tanda_avanzada(
+            &c.creador,
+            &c.token.address,
+            &CUOTA,
+            &3,
+            &PERIODO,
+            &1_000,
+            &10_000,
+            o,
+        )
+    };
+    // Sin historial conectado no se puede pedir.
+    assert_eq!(
+        crear(&primeros(precio(1_000), 1, 100)),
+        Err(Ok(Error::HistorialNoConfigurado))
+    );
+    let h = conectar_historial(&c);
+    let malas = [
+        primeros(opciones(ModoTurnos::Sorteo), 1, 100),
+        primeros(subasta(1_000), 1, 100),
+        primeros(opciones(ModoTurnos::Llegada), 1, 100),
+        // Al menos un turno tiene que quedar para cualquiera.
+        primeros(precio(1_000), 3, 100),
+        // Los dos valores van juntos.
+        primeros(precio(1_000), 1, 0),
+        primeros(precio(1_000), 0, 100),
+    ];
+    for o in malas {
+        assert_eq!(crear(&o), Err(Ok(Error::OpcionesInvalidas)), "{o:?}");
+    }
+    let id = c.crear_con(3, 10_000, &primeros(opciones(ModoTurnos::Eleccion), 1, 100));
+    assert_eq!(c.tanda.get_opciones(&id).puntaje_primeros, 100);
+    dar_puntos(&c, &h, &c.ana, 10);
+    // El admin desconecta el historial: el turno protegido ya no se puede comprobar.
+    c.tanda.configurar_historial(&None);
+    assert_eq!(
+        c.tanda.try_unirse_en_turno(&id, &c.ana, &0),
+        Err(Ok(Error::HistorialNoConfigurado))
+    );
+    // Los demás turnos siguen abiertos.
+    c.tanda.unirse_en_turno(&id, &c.beto, &1);
+    assert_eq!(c.turno(id, &c.beto), 1);
+}
+
+// ===========================================================================
 // Peor caso con los contratos compilados a WASM (costo real de la VM)
 // ===========================================================================
 
@@ -1010,6 +1227,42 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     c.cerrar(id);
     medir(&c, "precio: cerrar_ronda (prima)", &mut peor);
 
+    // Precio por turno con historial mínimo en 11 de los 12 turnos (M2 en WASM): cada unirse y cada
+    // intercambio a un turno protegido le pregunta el puntaje al historial.
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    c.env.cost_estimate().budget().reset_unlimited();
+    let h = conectar_historial_wasm(&c);
+    let id = c.crear_con(
+        12,
+        10_000,
+        &primeros(con_intercambio(precio(2_000)), 11, 100),
+    );
+    let gente = c.personas(12);
+    for p in &gente {
+        dar_puntos(&c, &h, p, 10);
+    }
+    for (i, p) in gente.iter().enumerate() {
+        c.tanda.unirse_en_turno(&id, p, &(11 - i as u32));
+    }
+    medir(
+        &c,
+        "precio + historial mínimo: último unirse_en_turno",
+        &mut peor,
+    );
+    c.tanda
+        .proponer_intercambio(&id, &gente[1], &gente[2], &(10 * U));
+    medir(
+        &c,
+        "precio + historial mínimo: proponer_intercambio",
+        &mut peor,
+    );
+    c.tanda.aceptar_intercambio(&id, &gente[2], &gente[1]);
+    medir(
+        &c,
+        "precio + historial mínimo: aceptar_intercambio",
+        &mut peor,
+    );
+
     // Lo más pesado combinado con M1: subasta con garantía mínima donde casi nadie paga (deudas en
     // cada ronda), con una oferta y dividendos en cada cierre. Se mide sin y con el historial de M2
     // conectado (en WASM), que suma sus escrituras a cada cierre.
@@ -1084,7 +1337,7 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
 }
 
 /// (M2) Conecta el historial compilado a WASM, como en testnet.
-fn conectar_historial_wasm(c: &Ctx) {
+fn conectar_historial_wasm(c: &Ctx) -> Hist {
     let ruta = std::format!(
         "{}/../../target/wasm32v1-none/release/historial.wasm",
         env!("CARGO_MANIFEST_DIR")
@@ -1095,6 +1348,7 @@ fn conectar_historial_wasm(c: &Ctx) {
     h.inicializar(&Address::generate(&c.env));
     h.autorizar_emisor(&c.tanda_addr);
     c.tanda.configurar_historial(&Some(dir));
+    h
 }
 
 // ===========================================================================
