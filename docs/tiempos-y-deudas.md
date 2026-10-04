@@ -4,7 +4,7 @@ Rama `mision/m1-tiempos-deudas` · Tablero: issue #4 · Instrucciones: `.claude/
 
 Objetivo: que una tanda de **rondas mensuales y hasta 12 meses** funcione de verdad en testnet, y que un **moroso pueda pagar su deuda** y volver a estar al día.
 
-Estado: **MVP implementado** (dom 4 oct). Las decisiones marcadas con ❓ se llevaron a las personas en el resumen de ORQ (issue #4). Se implementó la recomendación de cada una, y todas son reversibles hasta el despliegue v2. Lo que quedó fuera del MVP está en §5.
+Estado: **MVP implementado** (dom 4 oct). Las decisiones marcadas con ❓ las **decidió @DocFranji el sáb 3 a las 18:50 CR, todas como se recomendó** (resumen de ORQ en el issue #4): dos bóvedas, ronda máxima de 90 días, calendario anclado y deudas B1–B6. Lo que quedó fuera del MVP está en §5.
 
 ---
 
