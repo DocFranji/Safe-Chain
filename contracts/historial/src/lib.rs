@@ -18,7 +18,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, Map, Vec,
 };
 
 #[cfg(test)]
@@ -144,8 +144,9 @@ enum Clave {
     // persistent
     Emisor(Address),
     Hist(Address),
-    /// Puntos positivos que `miembro` ya ganó en la tanda `id` del emisor (para el tope).
-    PuntosTanda(Address, u32, Address),
+    /// Puntos positivos que cada miembro ya ganó en la tanda `id` del emisor (para el tope).
+    /// Una sola entrada por tanda (máx. 12 miembros): así un lote escribe una vez, no 12.
+    PuntosTanda(Address, u32),
 }
 
 #[contracterror]
@@ -375,6 +376,8 @@ impl HistorialContract {
         let reglas = cargar_reglas(&env)?;
         let elegible = cuota >= reglas.cuota_minima;
         let ahora = env.ledger().timestamp();
+        let clave_tanda = Clave::PuntosTanda(emisor.clone(), tanda_id);
+        let mut por_tanda: Option<Map<Address, u32>> = None; // se lee solo si hace falta
 
         for hm in hechos.iter() {
             if hm.monto < 0 {
@@ -384,13 +387,15 @@ impl HistorialContract {
             // Positivos: solo en tandas elegibles y hasta el tope por tanda. Negativos: siempre.
             let puntos: i32 = if base > 0 {
                 if elegible {
-                    let clave = Clave::PuntosTanda(emisor.clone(), tanda_id, hm.miembro.clone());
-                    let usados: u32 = env.storage().persistent().get(&clave).unwrap_or(0);
+                    let mapa = por_tanda.get_or_insert_with(|| {
+                        env.storage()
+                            .persistent()
+                            .get(&clave_tanda)
+                            .unwrap_or_else(|| Map::new(&env))
+                    });
+                    let usados = mapa.get(hm.miembro.clone()).unwrap_or(0);
                     let dar = (base as u32).min(reglas.tope_por_tanda.saturating_sub(usados));
-                    if dar > 0 {
-                        env.storage().persistent().set(&clave, &(usados + dar));
-                        renovar(&env, &clave);
-                    }
+                    mapa.set(hm.miembro.clone(), usados + dar);
                     dar as i32
                 } else {
                     0
@@ -439,6 +444,10 @@ impl HistorialContract {
             }
             .publish(&env);
         }
+        if let Some(mapa) = por_tanda {
+            env.storage().persistent().set(&clave_tanda, &mapa);
+            renovar(&env, &clave_tanda);
+        }
         renovar_instancia(&env);
         Ok(())
     }
@@ -480,7 +489,8 @@ impl HistorialContract {
     pub fn puntos_en_tanda(env: Env, emisor: Address, tanda_id: u32, miembro: Address) -> u32 {
         env.storage()
             .persistent()
-            .get(&Clave::PuntosTanda(emisor, tanda_id, miembro))
+            .get::<_, Map<Address, u32>>(&Clave::PuntosTanda(emisor, tanda_id))
+            .and_then(|m| m.get(miembro))
             .unwrap_or(0)
     }
 }

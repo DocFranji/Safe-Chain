@@ -485,7 +485,7 @@ fn renueva_la_vida_de_los_datos() {
         assert_eq!(s.persistent().get_ttl(&Clave::Hist(ana.clone())), max);
         assert_eq!(
             s.persistent()
-                .get_ttl(&Clave::PuntosTanda(c.tanda.clone(), 1, ana.clone())),
+                .get_ttl(&Clave::PuntosTanda(c.tanda.clone(), 1)),
             max
         );
         assert_eq!(s.persistent().get_ttl(&Clave::Emisor(c.tanda.clone())), max);

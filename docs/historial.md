@@ -1,7 +1,6 @@
 # M2 · Historial crediticio on-chain
 
-> Estado: **diseño propuesto** (sáb 3 oct 2026). Pendiente de ACORDADO de M1 y M3 en el tablero (issue #4).
-> Lo que está marcado como *decisión abierta* puede cambiar; el resto es la interfaz que voy a implementar.
+> Estado: **contratos implementados** (dom 4 oct 2026): `contracts/historial/` y la conexión en `tanda` (ganchos + `requisitos.rs`), con pruebas. Decisiones §7 aprobadas por @DocFranji (como se recomendó). Falta: web, cliente TS y scripts de despliegue.
 
 ## Cómo explicarlo en 20 segundos
 
@@ -48,6 +47,7 @@ pub struct Historial {
     pub deudas_saldadas: u32,
     pub tandas_cumplidas: u32,      // sin atrasos
     pub tandas_con_atrasos: u32,
+    pub cobros: u32,                // bolsas recibidas (0 puntos)
     pub monto_pagado: i128,         // suma de cuotas pagadas por el propio miembro
     pub puntos_positivos: u32,      // ya con topes aplicados
     pub puntos_negativos: u32,      // nunca bajan
@@ -79,6 +79,7 @@ pub struct Reglas {                 // parámetros anti-inflado (ver §3)
 | `nivel(dir) -> Nivel` | cualquiera | Según el puntaje (§2) |
 | `beneficio_colateral_bps(dir) -> u32` | cualquiera | Descuento de colateral (§4). 0 si no aplica |
 | `es_emisor(dir) -> bool`, `reglas() -> Reglas` | cualquiera | Transparencia |
+| `puntos_en_tanda(emisor, tanda_id, miembro) -> u32` | cualquiera | Puntos positivos que ya ganó en esa tanda (para entender el tope) |
 
 No hay `editar`, `borrar` ni `reiniciar`: no existen.
 
@@ -176,6 +177,8 @@ Si `puntaje_minimo > 0` y `puntaje(miembro) < puntaje_minimo` → `Error::Puntaj
 | `al_pagar_deuda` (M1) | `DeudaSaldada` cuando `deuda_restante == 0` | Una llamada |
 | **`al_fin_operacion(env, t, id)` (nuevo)** | — | Envía el búfer en **una sola** `try_registrar_lote` |
 
+**Firma:** `ajustar_colateral(env, t, id, miembro, colateral)` recibe ahora `id` (los requisitos son por tanda).
+
 **Presupuesto:** `cerrar_ronda` y `finalizar` recorren hasta 12 miembros. En vez de 12 llamadas entre contratos, los ganchos acumulan los hechos en un búfer en memoria temporal (`DataKey::HechosPendientes`, storage `temporary`) y `al_fin_operacion` hace **una** llamada. Habrá una prueba con 12 miembros que mida el costo de `cerrar_ronda` y `finalizar` con el historial configurado.
 
 **Cambio mínimo en `lib.rs` (aviso en el tablero):** dos líneas, `ganchos::al_fin_operacion(&env, &t, id);` al final de `cerrar_ronda` y de `finalizar`. Es un gancho vacío si no hay historial. M1 y M3: si tocan esas funciones, por favor dejen esas líneas al final.
@@ -203,13 +206,32 @@ Si `puntaje_minimo > 0` y `puntaje(miembro) < puntaje_minimo` → `Error::Puntaj
 
 ---
 
-## 7. Decisiones abiertas (para el tablero)
+## 7. Decisiones (DECIDIDAS por @DocFranji, sáb 3 oct, como se recomendó)
 
-1. **Fórmula y niveles** (§2): ¿convencen? (reversible).
-2. **Cuota mínima para sumar puntos** = 10 TUSD y **tope** = 150 por tanda (reversible, son parámetros del admin).
-3. **Tope por tiempo** (puntos positivos por mes): lo dejo **fuera** del MVP porque rompería la demo acelerada. Propongo documentarlo como trabajo futuro.
+1. **Fórmula y niveles** (§2).
+2. **Cuota mínima para sumar puntos** = 10 TUSD y **tope** = 150 por tanda (parámetros del admin, solo afectan hechos futuros).
+3. **Sin tope por tiempo** en el MVP (rompería la demo acelerada). Trabajo futuro.
 4. **Puntaje mínimo falla cerrado** si el historial no responde (§4).
 5. **Descuento por nivel** 10 / 25 / 50 %, nunca menos de una cuota.
+
+## 7b. Detalles de implementación
+
+- El tope por tanda se guarda en **una sola entrada por tanda** (`PuntosTanda(emisor, id)`: mapa miembro → puntos), no una por persona: así `finalizar` con 12 cumplidos escribe 1 entrada en vez de 12 (quedaba en 54 escrituras, sobre el límite de 50 de mainnet).
+- Un hecho que no suma por la cuota mínima o por el tope **igual se anota** en los contadores (el desglose es fiel); el evento dice cuántos puntos dio (`puntos`).
+- Quien queda moroso en una ronda donde su garantía cubrió una parte recibe los dos hechos: `CuotaCubierta` (−15) y `Moroso` (−100).
+- Todo lo del historial (instancia, emisores, acumulados y topes) vive lo máximo de la red y se renueva en cada escritura (como mucho una vez al día).
+
+### Costo medido (peor caso, 12 miembros, WASM con la VM; límites de mainnet: 100 M instrucciones, 100 lecturas, 50 escrituras)
+
+| Operación | Sin historial (M1) | Con historial |
+| --- | --- | --- |
+| `unirse` (con descuento) | 3,8 M · 40 L · 10 E | 4,4 M · 43 L · 10 E |
+| `pagar_cuota` | 1,2 M · 10 L · 4 E | 2,0 M · 15 L · 6 E |
+| `cerrar_ronda` (12 hechos en un lote) | 22,5 M · 49 L · 28 E | 27,8 M · 64 L · 41 E |
+| `pagar_deuda` | 6,2 M · 37 L · 16 E | 7,3 M · 42 L · 18 E |
+| `finalizar` (12 cumplidos, nativo) | — | 14,1 M · 64 L · 43 E |
+
+`historial.wasm`: 14 533 bytes · `tanda.wasm`: 48 242 bytes (límite 131 072).
 
 ## 8. Pruebas previstas
 
