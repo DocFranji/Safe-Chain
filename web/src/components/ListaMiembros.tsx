@@ -4,6 +4,7 @@ import { monto } from '../lib/formato'
 import { saldoSuDeuda } from '../lib/deudas'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { EXPLORADOR, SIMBOLO } from '../config'
+import { tieneTurno, turnosLibres } from '../lib/turnos'
 import { InsigniaNivel } from './InsigniaNivel'
 
 type Props = { datos: DatosTanda; yo: string | null }
@@ -12,6 +13,12 @@ export function ListaMiembros({ datos, yo }: Props) {
   const { tanda, miembros, pagaron } = datos
   const activa = tanda.estado.tag === 'Activa'
   const libres = tanda.n_miembros - miembros.length
+  // (M3) Con turnos elegidos, los lugares libres no son necesariamente los últimos.
+  const turnosSinDuenio = turnosLibres(
+    tanda.n_miembros,
+    miembros.map((m) => m.posicion),
+  )
+  const hayPorDecidir = miembros.some((m) => !tieneTurno(m.posicion))
 
   return (
     <section className="miembros" aria-labelledby="miembros-titulo">
@@ -33,7 +40,7 @@ export function ListaMiembros({ datos, yo }: Props) {
               const usada = m.colateral !== m.colateral_inicial
               return (
                 <tr key={m.direccion} className={m.direccion === yo ? 'fila-yo' : undefined}>
-                  <td className="turno">{m.posicion + 1}</td>
+                  <td className="turno">{tieneTurno(m.posicion) ? m.posicion + 1 : '?'}</td>
                   <td>
                     <a href={`${EXPLORADOR}/account/${m.direccion}`} target="_blank" rel="noreferrer" title={m.direccion}>
                       {nombreDe(m.direccion)}
@@ -70,7 +77,7 @@ export function ListaMiembros({ datos, yo }: Props) {
             })}
             {Array.from({ length: libres }, (_, i) => (
               <tr key={`libre-${i}`} className="fila-libre">
-                <td className="turno">{miembros.length + i + 1}</td>
+                <td className="turno">{hayPorDecidir ? '?' : (turnosSinDuenio[i] ?? miembros.length + i) + 1}</td>
                 <td colSpan={activa ? 4 : 3}>Lugar libre</td>
               </tr>
             ))}
@@ -88,6 +95,7 @@ function estadoMiembro(
 ): string {
   if (m.moroso) return `Debe ${monto(m.deuda)} ${SIMBOLO}`
   if (m.cobro) return 'Ya cobró'
+  if (!tieneTurno(m.posicion)) return 'Turno por decidir'
   if (activa && m.posicion === ronda) return 'Cobra esta ronda'
   return `Cobra en la ronda ${m.posicion + 1}`
 }

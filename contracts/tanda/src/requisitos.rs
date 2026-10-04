@@ -9,7 +9,7 @@
 use soroban_sdk::{contractclient, contractimpl, Address, Env, Vec};
 
 use crate::almacenamiento::*;
-use crate::turnos::{colateral_para, posicion_al_unirse};
+use crate::turnos::colateral_base_siguiente;
 use crate::{
     ganchos, ClaveM2, DataKey, Error, Estado, EvHistorialConfigurado, EvRequisitos, HechoMiembro,
     Requisitos, TandaContract, TandaContractArgs, TandaContractClient,
@@ -111,16 +111,8 @@ impl TandaContract {
     /// (para mostrarla antes de firmar).
     pub fn colateral_para_miembro(env: Env, id: u32, miembro: Address) -> Result<i128, Error> {
         let t = cargar_tanda(&env, id)?;
-        let pos = posicion_al_unirse(&env, &t, &cargar_miembros(&env, id));
-        if pos >= t.n_miembros {
-            return Err(Error::TandaLlena);
-        }
-        Ok(ganchos::ajustar_colateral(
-            &env,
-            &t,
-            id,
-            &miembro,
-            colateral_para(&t, pos),
-        ))
+        // (M3) Garantía base del próximo en unirse según el modo de turnos (ACORDADO con M2).
+        let base = colateral_base_siguiente(&env, &t, id)?;
+        Ok(ganchos::ajustar_colateral(&env, &t, id, &miembro, base))
     }
 }

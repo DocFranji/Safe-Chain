@@ -1,6 +1,7 @@
 // Convierte los eventos del contrato en una historia legible ("Ana no pagó: su garantía cubrió 100 TUSD").
 // Es lógica pura, sin red ni React: la prueba (historia.test.ts) cubre cada tipo de evento.
 import type { ContractEvent } from 'tanda'
+import { SIN_TURNO, tituloModo } from './turnos'
 
 /** Un evento ya leído de la red, con el momento en que se cerró su ledger. */
 export type EventoTanda = {
@@ -38,6 +39,7 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
   const dinero = (v: bigint | undefined) => (v === undefined ? '—' : `${f.monto(v)} ${f.simbolo}`)
   const quien = (d: string | undefined) => (d === undefined ? 'Alguien' : f.nombre(d))
   const ronda = (r: number | undefined) => (r === undefined ? '' : `Ronda ${r + 1}`)
+  const pct = (bps: number | undefined) => (bps === undefined ? '—' : `${bps / 100} %`)
 
   return ordenar(eventos).map((e): EntradaHistoria => {
     const base = { id: e.id, cerradoEn: e.cerradoEn }
@@ -61,7 +63,11 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
           tipo: 'info',
           titulo: `${quien(ev.data.miembro)} se unió`,
           detalle: [
-            ev.data.posicion !== undefined ? `Turno ${ev.data.posicion + 1}` : null,
+            ev.data.posicion === undefined
+              ? null
+              : ev.data.posicion === SIN_TURNO
+                ? 'turno por decidir'
+                : `Turno ${ev.data.posicion + 1}`,
             ev.data.colateral !== undefined ? `dejó ${dinero(ev.data.colateral)} de garantía` : null,
           ]
             .filter(Boolean)
@@ -131,6 +137,109 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
         }
       case 'EvCancelada':
         return { ...base, tipo: 'alerta', titulo: 'La tanda se canceló', detalle: 'Se devolvieron las garantías' }
+
+      // --- M3: turnos ---
+      case 'EvOpciones': {
+        const modo = ev.data.modo?.tag
+        return {
+          ...base,
+          tipo: 'info',
+          titulo: modo ? `Turnos: ${tituloModo(modo).toLowerCase()}` : 'Se eligió cómo se reparten los turnos',
+          detalle: [
+            modo === 'PrecioPorTurno' ? `el primer turno paga ${pct(ev.data.prima_max_bps)} de la bolsa` : null,
+            modo === 'Subasta' ? `descuento máximo ${pct(ev.data.descuento_max_bps)}` : null,
+            ev.data.permitir_intercambio ? 'se pueden intercambiar turnos' : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }
+      }
+      case 'EvSorteo':
+        return {
+          ...base,
+          tipo: 'clave',
+          titulo: 'El contrato sorteó el orden de cobro',
+          detalle: (ev.data.orden ?? []).map((d, i) => `${i + 1}. ${quien(d)}`).join(' · ') || undefined,
+        }
+      case 'EvOferta':
+        return {
+          ...base,
+          tipo: 'info',
+          titulo: `${quien(ev.data.miembro)} ofrece recibir ${pct(ev.data.descuento_bps)} menos`,
+          detalle: `Para cobrar en la ${ronda(ev.data.ronda).toLowerCase() || 'ronda'}: ${dinero(ev.data.descuento)} menos si todos pagan`,
+        }
+      case 'EvSubasta': {
+        const descuento = ev.data.descuento ?? 0n
+        return ev.data.por_respaldo || descuento === 0n
+          ? {
+              ...base,
+              tipo: 'info',
+              titulo: `${ronda(ev.data.ronda) || 'Esta ronda'}: cobra ${quien(ev.data.ganador)}`,
+              detalle: 'Nadie ofertó: le tocó según el orden sorteado al empezar',
+            }
+          : {
+              ...base,
+              tipo: 'clave',
+              titulo: `${quien(ev.data.ganador)} ganó la subasta de la ${ronda(ev.data.ronda).toLowerCase() || 'ronda'} con ${dinero(descuento)} de descuento`,
+              detalle: `Cada uno de los demás recibió ${dinero(ev.data.dividendo)} en su garantía`,
+            }
+      }
+      case 'EvPrima': {
+        const prima = ev.data.prima ?? 0n
+        return prima >= 0n
+          ? {
+              ...base,
+              tipo: 'info',
+              titulo: `${quien(ev.data.miembro)} pagó ${dinero(prima)} por cobrar antes`,
+              detalle: `${ronda(ev.data.ronda)}: es para quienes cobran al final`.replace(/^: /, ''),
+            }
+          : {
+              ...base,
+              tipo: 'ok',
+              titulo: `${quien(ev.data.miembro)} ganó ${dinero(-prima)} por esperar`,
+              detalle: `${ronda(ev.data.ronda)}: lo pagaron quienes cobraron antes`.replace(/^: /, ''),
+            }
+      }
+      case 'EvGarantia':
+        return {
+          ...base,
+          tipo: 'info',
+          titulo: `De la bolsa de ${quien(ev.data.miembro)} se apartaron ${dinero(ev.data.monto)} como su garantía`,
+          detalle: 'Cubren las cuotas que aún debe y vuelven al final con rendimiento',
+        }
+      case 'EvPropuesta': {
+        const c = ev.data.compensacion ?? 0n
+        return {
+          ...base,
+          tipo: 'info',
+          titulo: `${quien(ev.data.de)} propone cambiar de turno con ${quien(ev.data.con)}`,
+          detalle:
+            c > 0n
+              ? `${quien(ev.data.de)} ofrece ${dinero(c)}`
+              : c < 0n
+                ? `${quien(ev.data.de)} pide ${dinero(-c)}`
+                : 'Sin compensación',
+        }
+      }
+      case 'EvIntercambio':
+        return {
+          ...base,
+          tipo: 'ok',
+          titulo: `${quien(ev.data.de)} y ${quien(ev.data.con)} cambiaron de turno`,
+          detalle: [
+            ev.data.turno_de !== undefined ? `${quien(ev.data.de)} cobra en la ronda ${ev.data.turno_de + 1}` : null,
+            ev.data.turno_con !== undefined ? `${quien(ev.data.con)} en la ronda ${ev.data.turno_con + 1}` : null,
+          ]
+            .filter(Boolean)
+            .join(' y '),
+        }
+      case 'EvPropuestaRetirada':
+        return {
+          ...base,
+          tipo: 'info',
+          titulo: `Se retiró la propuesta de ${quien(ev.data.de)} a ${quien(ev.data.con)}`,
+          detalle: 'Si había dinero de compensación, volvió a quien propuso',
+        }
       // --- M1: pagar deudas ---
       case 'EvDeudaPagada': {
         const restante = ev.data.deuda_restante ?? 0n

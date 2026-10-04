@@ -7,6 +7,7 @@ import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import { monto, duracion } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { SIMBOLO } from '../config'
+import { tieneTurno } from '../lib/turnos'
 
 type Props = { datos: DatosTanda; ahora: number; yo: string | null }
 
@@ -22,11 +23,16 @@ export function Rueda({ datos, ahora, yo }: Props) {
   const estado = tanda.estado.tag
   const activa = estado === 'Activa'
 
+  // (M3) Quien todavía no tiene turno (sorteo antes de llenarse, subasta) ocupa un asiento libre, marcado con "?".
+  const sinTurno = miembros.filter((m) => !tieneTurno(m.posicion))
+  let k = 0
   const asientos: (MiembroConDireccion | null)[] = Array.from(
     { length: n },
-    (_, i) => miembros.find((m) => m.posicion === i) ?? null,
+    (_, i) => miembros.find((m) => m.posicion === i) ?? sinTurno[k++] ?? null,
   )
-  const beneficiario = activa ? asientos[tanda.ronda_actual] : null
+  // En la subasta, quien cobra la ronda no se sabe hasta cerrarla: el asiento puede ser de alguien sin turno.
+  const enTurno = activa ? asientos[tanda.ronda_actual] : null
+  const beneficiario = enTurno !== null && enTurno.posicion === tanda.ronda_actual ? enTurno : null
 
   const puntos = asientos.map((_, i) => {
     const ang = ((-90 + (i * 360) / n) * Math.PI) / 180
@@ -68,7 +74,7 @@ export function Rueda({ datos, ahora, yo }: Props) {
           const clases = [
             'nodo',
             m === null && 'libre',
-            activa && i === tanda.ronda_actual && 'turno',
+            beneficiario !== null && i === tanda.ronda_actual && 'turno',
             pago && 'pago',
             m?.moroso && 'moroso',
             m !== null && m.direccion === yo && 'yo',
@@ -80,7 +86,7 @@ export function Rueda({ datos, ahora, yo }: Props) {
               {pago && <circle className="nodo-anillo" cx={x} cy={y} r={31} />}
               <circle className="nodo-punto" cx={x} cy={y} r={24} />
               <text className="nodo-turno" x={x} y={y + 6}>
-                {i + 1}
+                {m !== null && !tieneTurno(m.posicion) ? '?' : i + 1}
               </text>
               {m?.cobro && (
                 <g className="nodo-cobro">
@@ -133,7 +139,10 @@ function Centro({
     case 'Activa':
       lineas = [
         { texto: monto(bolsa), clase: 'centro-grande' },
-        { texto: `${SIMBOLO} para ${beneficiario ? nombreDe(beneficiario.direccion) : '—'}`, clase: 'centro-sub' },
+        {
+          texto: beneficiario ? `${SIMBOLO} para ${nombreDe(beneficiario.direccion)}` : `${SIMBOLO} en juego`,
+          clase: 'centro-sub',
+        },
         {
           texto: restante > 0 ? `Quedan ${duracion(restante)}` : 'Plazo vencido',
           clase: restante > 0 ? 'centro-nota' : 'centro-nota alerta',
