@@ -313,3 +313,12 @@ MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después 
 - Precio por turno: el turno 1 pagó 24 y cobró 276 ([tx](https://stellar.expert/explorer/testnet/tx/b0a2aee290a5fb4026d1dd1bf748fcc4415d6b1460b78f849f3259d61caf3823)); el turno 3 cobró 324.
 - Subasta: ganó la oferta de 10 %, los otros dos recibieron 15 de dividendo y el ganador cobró 170 en efectivo ([tx](https://stellar.expert/explorer/testnet/tx/21af6e4a988aa8ba408db8bdcb2b351f15c201a10c5da668bd3410e4c19caa62)). En la ronda sin ofertas cobró el primero del orden de respaldo.
 - Intercambio: propuesta con 10 TUSD guardados y aceptación que cambió los turnos ([tx](https://stellar.expert/explorer/testnet/tx/a2790419bafe8c4485c9e2827f834a6352c8b35669c4617095c59564c2169072)).
+
+**Firmas desde el cliente de la web, también en testnet.** Usé el cliente generado (`web/packages/tanda`) con el mismo camino que `clienteFirma` + `signAndSend`, firmando con llaves de prueba en vez de Freighter. Pasaron:
+- `crear_tanda_avanzada`, con elegir + intercambio ([tx](https://stellar.expert/explorer/testnet/tx/f5bf30956868a87fecc492ab0a49249372f9258ca42e7c3cda769bfd5826bfd1)) y con subasta;
+- `unirse_en_turno`;
+- `proponer_intercambio`, con la compensación guardada ([tx](https://stellar.expert/explorer/testnet/tx/c27932331dafafdb0b54a2c8e89cbdbca8d9b62d262062b89fee6158cc64f45d));
+- `aceptar_intercambio` ([tx](https://stellar.expert/explorer/testnet/tx/3ec566a2420054d545678019e41dd3a817db49858bdfae211cb6e4c99e4460b6));
+- `ofertar` ([tx](https://stellar.expert/explorer/testnet/tx/01a079ceef400ba360a4b27095844628d5f6e42bce267bffa0db4b1d224988e3)).
+
+Con esto quedan probadas la codificación de `OpcionesTanda` (el enum `modo`), las firmas anidadas (la compensación sale de quien firma) y la lectura de `get_estado_turnos` y `cotizar_turno`. Lo único que no se probó es la ventana de Freighter.
