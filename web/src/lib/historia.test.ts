@@ -262,3 +262,11 @@ describe('narrar: historial crediticio (M2)', () => {
     expect(conectado.titulo).toBe('Se conectó el historial crediticio')
   })
 })
+
+// --- M4: bóveda por token ---
+describe('narrar: bóveda por token (M4)', () => {
+  it('cuenta el cambio de bóveda de una moneda como información', () => {
+    const [h] = narrar([ev({ name: 'EvBovedaToken', data: { token: 'CUSDC', boveda: 'CBLEND' } })], f)
+    expect(h).toMatchObject({ tipo: 'info', titulo: 'Se cambió la bóveda de una moneda para las tandas nuevas' })
+  })
+})

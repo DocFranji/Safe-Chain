@@ -44,15 +44,27 @@ pub(crate) fn direccion_boveda(env: &Env) -> Result<Address, Error> {
         .ok_or(Error::NoInicializado)
 }
 
-/// Qué bóveda le corresponde a una tanda nueva. Las tandas de prueba (rondas de hasta 10 minutos)
-/// usan la bóveda rápida si existe; las demás, la principal. (M4: aquí entra la bóveda por token.)
+/// Qué bóveda le corresponde a una tanda nueva.
+/// - M4: si el admin registró una bóveda para el token de la tanda (por ejemplo, USDC de Blend →
+///   adaptador de Blend), esa manda.
+/// - Si no, las tandas de prueba (rondas de hasta 10 minutos) usan la bóveda rápida si existe; las
+///   demás, la principal. Esas bóvedas son del token general (TUSD): si dicen guardar otro token,
+///   la tanda no se puede crear (error `TokenSinBoveda`).
 pub(crate) fn elegir_boveda(env: &Env, t: &Tanda) -> Result<Address, Error> {
-    if t.periodo_seg <= MAX_PERIODO_RAPIDO_SEG {
-        if let Some(b) = env.storage().instance().get(&ClaveM1::BovedaRapida) {
-            return Ok(b);
-        }
+    if let Some(b) = crate::bovedas_token::boveda_registrada(env, &t.token) {
+        return Ok(b);
     }
-    direccion_boveda(env)
+    let rapida = if t.periodo_seg <= MAX_PERIODO_RAPIDO_SEG {
+        env.storage().instance().get(&ClaveM1::BovedaRapida)
+    } else {
+        None
+    };
+    let b = match rapida {
+        Some(b) => b,
+        None => direccion_boveda(env)?,
+    };
+    crate::bovedas_token::revisar_token(env, &b, &t.token)?;
+    Ok(b)
 }
 
 /// Elige y guarda la bóveda de la tanda `id`. Se llama al crearla: desde ahí no cambia, aunque el

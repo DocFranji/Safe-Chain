@@ -313,6 +313,9 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
           detalle: partes.length ? `Esta tanda ${partes.join(' y ')}` : undefined,
         }
       }
+      // M4: bóveda por token (evento del admin; no lleva número de tanda)
+      case 'EvBovedaToken':
+        return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de una moneda para las tandas nuevas' }
     }
   })
 }

@@ -7,7 +7,8 @@ import { generarIcs } from '../lib/calendarioIcs'
 import { cuando } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { rutaTanda } from '../lib/rutas'
-import { SIMBOLO, TANDA_ID } from '../config'
+import { TANDA_ID } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 const DIA = 86_400
 
@@ -20,6 +21,7 @@ type Props = {
 }
 
 export function Calendario({ id, datos, ahora, yo }: Props) {
+  const SIMBOLO = useSimbolo()
   const { tanda, miembros, vence } = datos
   const periodo = Number(tanda.periodo_seg)
   if (tanda.estado.tag !== 'Activa' || periodo < DIA) return null

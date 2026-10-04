@@ -14,8 +14,8 @@ import { elegirTanda, fraccionGarantia, reloj } from '../lib/demo'
 import { claseEstado, etiquetaEstado, monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { RUTA_CREAR, RUTA_LOBBY, rutaDemo } from '../lib/rutas'
-import { SIMBOLO } from '../config'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
+import { monedaDe } from '../lib/monedas'
 
 export function Demo({ idFijo }: { idFijo: number | null }) {
   return idFijo !== null ? <DemoTanda key={idFijo} id={idFijo} fijada /> : <DemoAutomatica />
@@ -112,6 +112,7 @@ function DemoTanda({ id, fijada }: { id: number; fijada: boolean }) {
 /** El bloque grande de la derecha: qué toca ahora, con la cuenta regresiva. */
 function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
   const { tanda, miembros, vence } = datos
+  const SIMBOLO = monedaDe(tanda.token).simbolo
   const n = tanda.n_miembros
   const restante = vence - ahora
   const beneficiario = miembros.find((m) => m.posicion === tanda.ronda_actual)
@@ -184,6 +185,7 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
 /** Una tarjeta por persona: quién es, si ya pagó y cuánto le queda de garantía. */
 function Personas({ datos }: { datos: DatosTanda }) {
   const { tanda, miembros, pagaron } = datos
+  const SIMBOLO = monedaDe(tanda.token).simbolo
   const estado = tanda.estado.tag
   const activa = estado === 'Activa'
   const verGarantia = estado === 'Abierta' || activa || estado === 'PorLiquidar'

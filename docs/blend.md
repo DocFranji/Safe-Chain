@@ -1,0 +1,585 @@
+# Blend real (M4): auditoría del adaptador y recomendación
+
+**Fase 0 de la misión M4** · sáb 3 oct 2026 · rama `mision/m4-blend` (PR #8)
+
+Revisé el adaptador que ya existe (rama `blend-adaptador`, commit `b5f17e4`), lo comparé línea por
+línea con el código de Blend v2 (`blend-capital/blend-contracts-v2`, commit `ba22b48`), consulté
+el pool TestnetV2 por RPC y lo volví a probar en testnet con XLM **y con el USDC de prueba de Blend**.
+
+## Resumen
+
+- **El adaptador está bien hecho.** Cada dueño tiene su cuenta exacta de bTokens y el redondeo
+  nunca le quita bTokens a otro dueño. Le hice cuatro mejoras de robustez (sección 1.3) y le
+  escribí 13 pruebas nuevas con un pool simulado que se porta como Blend v2.
+- **Hay dos hallazgos importantes, y los dos están en la TANDA, no en el adaptador** (sección 1.4):
+  una tanda puede gastar bTokens de otra tanda del mismo contrato y dejarla trabada para siempre.
+  Pasa si el precio de la bóveda no sube (reserva de Blend sin préstamos, pérdida en Blend, o la
+  bóveda simulada con el precio topado que propone M1). El arreglo es corto: lo propongo en la sección 5.
+- **Novedad: sí se puede conseguir USDC de prueba de Blend.** Blend tiene un faucet público que en
+  una sola transacción crea las trustlines y entrega 1 000 USDC. Lo probé y una tanda en USDC
+  completa funcionó en testnet. Una tanda en **dólares** con rendimiento **real** es la mejor historia.
+- **Liquidez:** hoy el pool tiene 9,5 M XLM y 28 k USDC libres; nuestras tandas mueven decenas.
+  Si un día no hay liquidez, la tanda **se atrasa, no pierde dinero**: cualquiera reintenta después.
+- **Recomendación de producto:** opción (b), un solo contrato con una bóveda por token:
+  **TUSD → bóveda simulada** (rendimiento acelerado para la demo) y **USDC → Blend** (rendimiento
+  real). XLM queda como alternativa. Encaja con el modelo que ya acordaron M1 y ORQ (cada tanda
+  guarda su bóveda al crearse).
+- **Fase 2 (4 oct): hallazgo en el peor caso con Blend, ya arreglado** (sección 9). Una tanda en USDC de
+  12 personas con 11 morosos en la misma ronda **no se podía cerrar**: la transacción emitía 16 600 bytes
+  de eventos y la red rechaza más de 16 KiB por transacción, aunque la simulación pase. Ahora
+  `cerrar_ronda` saca de la bóveda **una sola vez** por cierre: en testnet ese cierre pasó a 12 204 bytes y
+  30,8 M instrucciones (antes 70,7 M). También baja el costo con TUSD.
+
+## 1. Hallazgos
+
+| # | Pregunta | Resultado | Severidad | Prueba |
+| --- | --- | --- | --- | --- |
+| 1.1 | ¿Un retiro puede quemar bTokens de otro dueño del adaptador? | **No.** Descartado matemáticamente y con 120 operaciones aleatorias | — | `redondeo_de_retirar_nunca_quema_de_mas`, `dos_duenios_operaciones_aleatorias_nunca_se_cruzan` |
+| 1.2 | ¿`valor()` está desactualizado? | **No.** `get_reserve` de Blend v2 calcula el interés hasta el ledger actual | — | `valor_coincide_con_lo_que_paga_retirar` |
+| 1.3 | Robustez del adaptador | 4 mejoras aplicadas (quema medida, retiro recortado, menos llamadas, errores 50–53) | Media | `si_blend_quemara_de_mas_se_revierte`, `retiro_recortado_por_blend_se_detecta` |
+| 1.4a | ¿Una TANDA puede gastar bTokens de otra tanda del mismo contrato? | **Sí** (con precio fijo): la otra tanda no puede finalizar nunca | **Alta** | `hallazgo_una_tanda_puede_gastar_btokens_de_otra` |
+| 1.4b | ¿Una pérdida en Blend traba la tanda? | **Sí:** `cerrar_ronda` falla hasta que paguen los morosos | Media (raro) | `hallazgo_perdida_en_blend_traba_cerrar_ronda` |
+| 2 | Liquidez (pool muy prestado) | La tanda se traba y se destraba sola; sin pérdida | Media | `sin_liquidez_la_tanda_se_traba_y_se_destraba` |
+| 3 | Pool congelado | No se puede **unirse**; las tandas en curso terminan bien | Baja | `pool_congelado_bloquea_unirse_pero_no_retirar` |
+| 4 | TTL | Aplicada la política de M1: máximo de la red y `renovar(dueño)` sin firma | Media | `ttl_al_maximo_y_renovar_sin_firma` |
+| 5 | Permisos | Correctos: nadie mueve lo de otro | — | `nadie_mueve_lo_de_otro_sin_su_firma` |
+| 6 | Costo del peor caso (12 retiros de Blend en un `cerrar_ronda`) | Medido en testnet (sección 3) | — | `peor_caso_12_miembros_nadie_paga` + testnet |
+| 7 | ¿El peor caso con todo (M1 + M2 + M3 + Blend) cabe en una transacción? | **No cabía:** 16 600 bytes de eventos (límite 16 384), la ronda quedaba trabada. **Arreglado:** un solo retiro por cierre (sección 9) | **Alta** | `cerrar_ronda_saca_de_la_boveda_una_sola_vez`, `test_peor_caso.rs` + `scripts/peor_caso_blend.mjs` |
+
+### 1.1 Redondeo entre dueños del adaptador: descartado
+
+El adaptador hace lo mismo que Blend:
+
+- **Depositar:** Blend acuña `floor(monto / b_rate)` bTokens. El adaptador **mide** cuántos
+  acuñó (posición antes y después) y se los anota al dueño.
+- **`retirar_monto(monto)`:** Blend quema `ceil(monto / b_rate)`. El adaptador mide cuántos
+  quemó y se los descuenta al dueño (si no le alcanzan, se revierte todo).
+- **`retirar(shares)`:** el adaptador pide `monto = floor(shares × b_rate)`, y Blend quema
+  `ceil(monto / b_rate)`. Como `monto ≤ shares × b_rate`, se cumple `ceil(monto / b_rate) ≤ shares`:
+  **nunca se quema más de lo que se descuenta.** Lo que sobra (a lo más 1 bToken por retiro) queda
+  como "polvo" del adaptador, que no es de nadie.
+
+Esto solo vale si el `b_rate` que lee el adaptador es el mismo con el que Blend quema. En Blend v2
+lo es: `get_reserve` y `submit` usan `Reserve::load`, que es determinista para el mismo ledger.
+
+**Invariante:** la suma de las participaciones de todos los dueños ≤ bTokens del adaptador en Blend.
+La prueba `dos_duenios_operaciones_aleatorias_nunca_se_cruzan` lo revisa después de cada una de
+120 operaciones con montos y tiempos raros; al final, los dos dueños salen con todo y quedan 0 bTokens.
+
+### 1.2 `valor()` no está desactualizado
+
+`get_reserve` de Blend v2 (`pool/src/contract.rs`) llama `Reserve::load`, que **acumula el interés
+hasta el ledger actual** antes de devolver la reserva (no lo guarda, pero lo calcula). Por eso:
+
+- `valor(shares)` es exactamente lo que pagaría `retirar(shares)` en ese mismo ledger (prueba
+  `valor_coincide_con_lo_que_paga_retirar`, con 6 horas sin que nadie toque la reserva).
+- `finalizar` no usa `valor()`: usa lo que `retirar` devuelve de verdad. No hay riesgo.
+- La web (`Rendimiento.tsx`) simula `valor()` contra el último ledger: muestra el número correcto.
+
+### 1.3 Mejoras aplicadas al adaptador (`contracts/adaptador_blend/src/lib.rs`)
+
+1. **Retiro recortado por Blend.** Blend **no falla** si se pide más de lo que hay: recorta el
+   retiro a todos los bTokens del usuario y entrega menos (`apply_withdraw` en `actions.rs`).
+   Antes, el adaptador lo aceptaba y la tanda creía haber recibido el monto completo. Ahora, si el
+   adaptador quedó en 0, comprueba que lo entregado alcanzó; si no, error 51 y se revierte todo.
+2. **Quema medida en `retirar`.** Defensa en profundidad: mide los bTokens quemados y, si fueran
+   más que los descontados (no pasa en Blend v2), error 53 `QuemaInesperada` y se revierte.
+3. **Menos llamadas a Blend.** El índice de la reserva se lee una vez al desplegar (el constructor
+   además valida que el token sea una reserva del pool) y se usan las posiciones que devuelve
+   `submit`. `retirar_monto` pasó de 5 llamadas a Blend a 2.
+4. **Errores en el rango de M4 (50–53).** Los errores del adaptador llegan tal cual a quien firma
+   la transacción de la tanda; con los códigos viejos (1, 2, 3) la web los confundía con errores de
+   la tanda ("ya inicializado", "no encontrada"). Ver la tabla de códigos en la sección 6.
+
+El pool simulado de las pruebas (`test.rs`) ahora se porta como Blend v2: mismos códigos de error,
+recorte al retirar, utilización < 100 % al retirar, pool congelado, reserva deshabilitada, tope de
+depósitos, acuñar 0 bTokens falla, y pérdidas por deuda incobrable (el `b_rate` baja).
+
+### 1.4 Hallazgos en la tanda
+
+**a) Una tanda puede gastar bTokens de otra tanda del mismo contrato (severidad alta).**
+
+El adaptador lleva la cuenta **por dueño**, y el dueño es el **contrato** de la tanda: todas las
+tandas de ese contrato comparten una sola cuenta. La separación entre tandas la hace la tanda con
+`t.shares_boveda`, pero `cerrar_ronda` hace
+
+```rust
+let quemadas = boveda.retirar_monto(&yo, &cubierto);
+t.shares_boveda -= quemadas; // sin revisar que alcancen
+```
+
+Cada depósito redondea hacia abajo y cada retiro hacia arriba. Si se consume **todo** el colateral
+de una tanda (rondas sin pagar) y el precio no subió lo suficiente para tapar esos redondeos, la
+tanda termina con participaciones **negativas**: gastó bTokens de otra tanda. La otra tanda luego
+no puede finalizar (`SharesInsuficientes`) y queda trabada **para siempre**.
+
+La prueba `hallazgo_una_tanda_puede_gastar_btokens_de_otra` lo reproduce: tanda A con 3 miembros que
+no pagan y cuota de 10,0000001; termina con `shares_boveda = -3` y la tanda B ya no puede finalizar.
+
+¿Cuándo pasa de verdad? Cuando el precio de la bóveda queda **fijo** o **baja**:
+- una reserva de Blend sin préstamos (utilización 0: Blend no acumula interés);
+- una pérdida en Blend (ver b);
+- **la bóveda simulada con el precio topado que propone M1** (`saldo / participaciones`): si se
+  acaba el fondeo, el precio se detiene y aparece este mismo cruce. **Afecta también a TUSD.**
+
+Con interés normal no pasa: la prueba `con_interes_el_mismo_escenario_termina_bien` corre el mismo
+escenario con el `b_rate` subiendo y termina bien. Por eso la demo actual no lo ha mostrado.
+
+**b) Una pérdida en Blend traba `cerrar_ronda` (severidad media, poco probable).**
+
+En Blend v2 el `b_rate` **puede bajar**: si el backstop no alcanza a cubrir una deuda incobrable,
+`default_liabilities` (`pool/src/pool/user.rs`) la reparte entre los depositantes. Entonces el
+colateral anotado vale menos de lo que dice la tanda. La prueba
+`hallazgo_perdida_en_blend_traba_cerrar_ronda` lo muestra: con una pérdida del 50 %, cubrir tres
+cuotas impagas falla y la ronda no avanza hasta que los morosos paguen. Si nunca pagan, la tanda
+queda trabada. (Si hubiera otra tanda en el mismo contrato, en vez de fallar le gastaría sus bTokens.)
+
+**Arreglo propuesto para a) y b): sección 5.**
+
+## 2. Liquidez, estado del pool y TTL
+
+### 2.1 Liquidez
+
+Un retiro de Blend falla con el error **1207** (`InvalidUtilRate`) si deja la reserva al 100 % de
+utilización (`apply_withdraw` llama `require_utilization_below_100`). No importa el `max_util` del
+95 %: ese límite es solo para pedir prestado.
+
+Medido por RPC el sáb 3 oct (ledger 5 009 543):
+
+| Reserva | Depositado | Prestado | Utilización | Libre para retirar |
+| --- | --- | --- | --- | --- |
+| XLM | 116,5 M | 107,0 M | 91,8 % | **9,5 M XLM** |
+| USDC (prueba de Blend) | 130 354 | 101 901 | 78,2 % | **28 453 USDC** |
+
+Una tanda de la demo mueve 40 unidades; una de 12 personas con cuota de 100, unas 6 700. El riesgo
+real para el hackathon es muy bajo.
+
+**Qué pasa si falta liquidez** (prueba `sin_liquidez_la_tanda_se_traba_y_se_destraba`):
+- `cerrar_ronda` con impagos y `finalizar` fallan con 1207 y se **revierten**: no se pierde nada.
+- Mientras tanto, los miembros todavía pueden pagar tarde; si todos pagan, la ronda cierra sin tocar Blend.
+- Cuando vuelve la liquidez, **cualquiera** reintenta y todo termina bien. En Blend, una utilización
+  alta dispara la tasa de interés (curva `r_three`), lo que empuja a los prestatarios a devolver.
+- La tanda trabada sigue "corriendo el reloj" del TTL: por eso la renovación de M1 (al máximo de la
+  red en cada operación) importa también aquí. Y nada se pierde aunque se archive: se restaura.
+
+**✅ DECIDIDO por @DocFranji (sáb 3, 19:00): A + indicador.** Sin colchón; si Blend no tiene liquidez la
+operación falla sin perder dinero, con mensaje claro y reintento. **Además, la web muestra la liquidez
+libre de Blend** en `#/estado` y en las tandas en USDC ("Blend tiene 28 453 USDC libres para retirar").
+El colchón (B) queda como plan de producción. La lógica del indicador y los mensajes están en
+`web/src/lib/blend.ts` (con pruebas sobre una lectura real del pool).
+
+**Mitigaciones evaluadas:**
+- **A) Sin colchón + error claro + reintento (elegida, con el indicador).** Mensaje en la web para
+  1207: "Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta en unos minutos."
+- **B) Colchón en el adaptador** (un % del colateral fuera de Blend). Exige convertir el adaptador en
+  una bóveda con participaciones propias (estilo ERC-4626): más código y más riesgo de redondeo.
+  **Plan de producción:** colchón de 10–20 % que cubra las coberturas de las próximas rondas, con
+  participaciones propias del adaptador y el saldo líquido llevado en una cuenta interna (no por
+  `balance`, para que nadie infle el precio donando tokens).
+- **C) Cubrir con lo que haya.** Es parte del arreglo de la sección 5 para pérdidas; para liquidez
+  no ayuda (el retiro mismo es lo que falla).
+
+### 2.2 Estado del pool
+
+Blend v2 (`Pool::require_action_allowed`, `Reserve::require_action_allowed` y `apply_supply`):
+
+| Situación | Depositar (unirse) | Retirar (cerrar ronda, finalizar, cancelar) |
+| --- | --- | --- |
+| Activo (estado 0–1) | sí | sí |
+| "On ice" (2–3): solo bloquea pedir prestado | sí | sí |
+| **Congelado (4–5)** o en configuración (6) | **no (error 1206)** | **sí** |
+| Reserva deshabilitada | **no (1223)** | sí |
+| Tope de depósitos lleno | **no (1220)** | sí |
+
+Con el pool congelado nadie puede **unirse** a una tanda en Blend, pero las tandas en curso cierran
+sus rondas y terminan bien (prueba `pool_congelado_bloquea_unirse_pero_no_retirar`). El dinero
+nunca queda atrapado por el estado del pool, solo por falta de liquidez (2.1). La web debe explicar
+1206, 1220 y 1223 ("Blend no está aceptando depósitos ahora").
+
+Otros riesgos externos: si Blend reinicia su despliegue de testnet, el pool viejo sigue existiendo
+(los contratos no se borran) y las tandas en curso pueden terminar; las nuevas usarían el pool nuevo.
+
+### 2.3 TTL
+
+El adaptador renueva hoy a ~30 días, y como explica M1, en testnet un dato nuevo nace con 7 días y
+solo se renueva si le queda menos de 1 día. Lo que vive en Blend no es problema: el pool lo usa todo
+el mundo (instancia ~31 días, reservas ~46 días) y la posición del adaptador se renueva a ~120 días
+en cada operación nuestra.
+
+**Política (ACORDADA con M1) y ya aplicada:** la instancia del adaptador y la cuenta de cada dueño se
+renuevan al máximo de la red (`max_ttl()`, hoy ~180 días) en cada operación, como mucho una vez al
+día. Además, el adaptador tiene `renovar(dueño)`, igual que la bóveda simulada de M1: no pide firma
+ni mueve dinero, y la tanda de M1 la llama en cada ronda (con `try`), así que nada se archiva aunque
+nadie retire en meses. Prueba: `ttl_al_maximo_y_renovar_sin_firma` (60 días sin tocar el adaptador y
+`renovar` lo vuelve al máximo). Desde el protocolo 23, además, un dato archivado no se pierde: la
+transacción que lo usa lo restaura.
+
+### 2.4 Permisos
+
+| Función | Quién firma | Qué puede hacer otro |
+| --- | --- | --- |
+| `depositar(desde, monto)` | `desde` | Nada: sin la firma de `desde` falla, aunque `desde` haya dado permiso de gasto al adaptador |
+| `retirar(hacia, shares)` / `retirar_monto(hacia, monto)` | `hacia` | Nada: solo se gastan las participaciones de `hacia` y el dinero va a `hacia` |
+| `valor`, `shares_de`, `pool`, `token` | nadie (lectura) | — |
+| `renovar(dueño)` | nadie | Solo alarga la vida de datos existentes; no crea ni mueve nada |
+| Constructor | quien despliega | Fija pool y token para siempre: **no hay admin** ni forma de cambiarlos |
+
+Sin admin no hay llave que pueda vaciar el adaptador; la contracara es que no hay forma de "rescatar"
+el polvo de redondeo (centavos de centavo) ni de migrar a otro pool. Es lo correcto para este caso.
+Blend no permite depositar a nombre de otro (`from` debe firmar) ni transferir bTokens, así que
+nadie puede inflar o mover la posición del adaptador. Prueba: `nadie_mueve_lo_de_otro_sin_su_firma`.
+
+## 3. Validación en testnet (3 oct 2026)
+
+Identidades propias desechables, XLM de Friendbot y USDC del faucet de Blend. Pool TestnetV2
+`CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF`.
+
+Contratos desplegados desde esta rama (desechables, no oficiales):
+
+| Qué | Dirección |
+| --- | --- |
+| Adaptador XLM | `CDGSGYHBEYKEYATVVKZ66BLRBKPZELSDNR35RJVTOCDEPH6L42QEKFG2` |
+| Tanda XLM | `CDAQ7S2WZ2RPXV3NYHCPD7WBQSHQO647OMYJIMAPKUA5TDBMCBRZQR5F` |
+| Adaptador USDC | `CAHCWYLGQOJW7NPCKIKSZY6MEGQWD3EZE27VJVIJLKEGZ4VX5ZK63JZ7` |
+| Tanda USDC | `CD5JSW5Z5TTCINR4DCKSUTOKJNGEPR32YEY3KXFRPK7YRL3RDFHYYAYE` |
+| Tanda del peor caso (12 miembros, usa el adaptador XLM) | `CCZNLSV5WP2PXJBJMLLAUXK4RA2DDE3PZLSYYE7N6SGD3OBL4EKOWOMB` |
+
+El despliegue del adaptador ya prueba el constructor nuevo: lee `get_reserve` del pool real
+(XLM: `b586f5f0cebc7218d5e1cb0084f267d72777a6344ba72df619bee8d0cb7c6e25`).
+
+**Demo completa en XLM** (`scripts/demo_blend.sh`: cuota 10 XLM, Ana cobra y desaparece, Beto paga tarde):
+
+| Paso | Transacción |
+| --- | --- |
+| Ana se une: 20 XLM de colateral entran a Blend | `0665f3dfe39854309372295d7bca27a5005247d0758fe593037ffeb5b67f7629` |
+| Ronda 2: Ana no paga; su colateral **sale de Blend** y cubre su cuota | `60ed27bdeff4da0850869940fa04c81cd558967f6b3a5bb0f507454123ceae2a` |
+| Ronda 3: otra vez cubre el colateral de Ana; Beto paga tarde | `67550d33ac992b142bdab8bc58681e0234a62f1d886373c8fe29e0c21763ba8b` |
+| Finalizar: se retira todo de Blend y se reparte | `05598a2df9b335b0165c71f7a80a855c85cad0bab00f63a49a7becc1fd323b7c` |
+
+Resultado (evento `finalizada`): **rendimiento real 0,0008984 XLM** en ~8 minutos. Beto recibió
+9,0004255 XLM (10 − 1 de multa + rendimiento) y Carla 11,0004729 XLM (10 + 1 de premio + rendimiento).
+La tanda quedó en 0.
+
+**Demo completa en USDC de Blend** (mismo guion; cuentas fondeadas con el faucet de Blend:
+`0879be0499898f3d1da8bd459de14494cefde73b6517111230ed43a046697c14`,
+`34828c2d3c07bc7f15beebef224d6d9ebe667b98f5a2183d241e0b2d562e66cc`,
+`cb2663b72c8d81dd250caf1cb06bcd26a361db27053fde3cba433ff6f138d015`):
+
+| Paso | Transacción |
+| --- | --- |
+| Ana se une: 20 USDC de colateral entran a Blend | `acc2bf48c6788eb588f26aca4128f4afdff7e162b99b8efab978621d1e91b677` |
+| Ronda 2: el colateral de Ana sale de Blend y cubre su cuota | `8c02cdf802fbf540321c52c57a2320d377fffa1cfe397c9c84c301cc7e3c947d` |
+| Ronda 3: otra vez cubre el colateral de Ana; Beto paga tarde | `fe82461057de405fc000031213a80c56d849ace2fd4c6d5037db12c19031cb61` |
+| Finalizar: se retira todo de Blend y se reparte | `766169656ef99fe0332f6f5ec3829497ad20175cbd4f2703ee0e44f62b835f47` |
+
+El guion muestra el rendimiento real en cada ronda: "+0,0000039 USDC", "+0,0000077", "+0,0000108".
+Resultado: **rendimiento real 0,0000108 USDC**; Ana terminó con sus 1 000 USDC iniciales (cobró 30 y
+perdió su garantía: huir no le dio nada), Beto con 999,0000051 (multa de 1) y Carla con 1 001,0000057
+(premio de 1). La tanda quedó en 0. Saldos exactos: con USDC no hay comisiones que los ensucien.
+
+
+**Peor caso: 12 miembros que no pagan** (`cerrar_ronda` con 12 retiros reales de Blend), recursos
+leídos de la red:
+
+| Transacción | Instrucciones | Entradas leídas / escritas | Bytes escritos | Comisión |
+| --- | --- | --- | --- | --- |
+| `unirse` (1 depósito en Blend) · `49a3d4f7ab71aaf468aa7fd539fbe7f9970d4a1943bf899473743babeb58eb58` | 5,3 M | 22 / 12 | 3 368 | 0,086 XLM (primera vez: crea datos) |
+| `cerrar_ronda` con **12 retiros** · `00d0bc4906ca3b12320131e7bade92f550c8d5bdb59c9f6e3e06408733e560be` | **39,0 M** | 42 / 19 | 6 988 | 0,014 XLM |
+| `cerrar_ronda` con 11 retiros · `15ba51799e6f3c4199ac865cb7a826a9833fda7b7e21d6626d2f73a358267c85` | 33,6 M | 42 / 19 | 6 988 | 0,013 XLM |
+| `cerrar_ronda` con 2 retiros · `adc06e0b8b000f11069893758285c295fbe16a675bec6ca1e6c1bfda77c10e0a` | 8,7 M | 41 / 18 | 6 844 | 0,008 XLM |
+| `finalizar` (retira todo de Blend y reparte entre 12) · `63875e6f9cc57fb4bb9723163421e5fe09b6677aa96b7f2b87c15adb8d095376` | 10,0 M | 29 / 18 | 6 820 | 0,009 XLM |
+
+Límites de testnet (dato de ORQ): 400 M instrucciones, 200 entradas. El peor caso usa **~10 %** de
+las instrucciones y 21 % de las entradas: queda espacio de sobra para los ganchos del historial (M2).
+Cada retiro de Blend suma ~3 M instrucciones (de 39,0 M con 12 retiros a 8,7 M con 2). Las 12 rondas
+cerraron y `finalizar` terminó bien (estado `Finalizada`, `shares_boveda = 0`).
+
+
+**Rendimiento real medido** (dos lecturas del `b_rate` con 1 075 s de diferencia):
+- XLM: **≈ 179 % anual** (el pool está prestado al 92 %: tasas de testnet, no de mainnet). 40 XLM de
+  colateral ganan ≈ 0,0007 XLM en 5 minutos.
+- USDC de Blend: **≈ 2,2 % anual**. 40 USDC ganan ≈ 0,000004 USDC en 3 minutos.
+
+Es real y es pequeño. Hay que contarlo con honestidad: "+0,0007 XLM en 5 minutos, de verdad, en Blend".
+La bóveda simulada sigue siendo la que muestra un rendimiento grande (acelerado) en la demo.
+
+## 4. Conseguir USDC de prueba (faucet de Blend)
+
+La web de Blend (`blend-ui`, `contexts/wallet.tsx`) usa este faucet público:
+
+```
+GET https://ewqw4hx7oa.execute-api.us-east-1.amazonaws.com/getAssets?userId=<G...>
+```
+
+Devuelve (como texto JSON) una transacción **ya firmada por el emisor**
+`GATALTGTWIOT6BUDBCZM3Q4OQ4BO2COLOAZ7IYSKPLC2PMSOPPGF5V56` con 8 operaciones: crea las trustlines
+y entrega **1 000 USDC**, 5 000 BLND, 0,5 wETH y 0,05 wBTC. La cuenta solo agrega su firma y la envía.
+
+- Probado: hash `9a51909089eea911ebc397680252e89086e22ed1932fbcbe6b7d52a728962a2e` (y las tres
+  cuentas de la sección 3).
+- **Una vez por cuenta:** la segunda llamada devuelve una transacción vacía.
+- **CORS:** solo permite `https://testnet.blend.capital`. La web tendría que pedirla desde una
+  función de Vercel (como `web/api/faucet.ts`), **sin ningún secreto**: solo reenvía la transacción.
+- La cuenta necesita existir y tener 2 XLM extra de reserva (4 trustlines). Friendbot da 10 000.
+- Contrato del USDC (SAC): `CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU`.
+- Dependemos de un servicio de Blend: para la demo en vivo, las cuentas de Ana, Beto y Carla se
+  fondean antes.
+
+## 5. Arreglo propuesto en la tanda (para los hallazgos 1.4)
+
+Nunca gastar más participaciones que las propias de la tanda. Si el colateral anotado no alcanza en
+la bóveda (pérdida o redondeo), la tanda entrega lo que realmente queda:
+
+```rust
+/// Saca `monto` de la bóveda para la tanda `t` sin tocar participaciones de otras tandas.
+/// Devuelve lo que de verdad salió (menos que `monto` solo si la bóveda perdió valor).
+pub(crate) fn sacar_de_boveda(env: &Env, boveda: &BovedaClient, t: &mut Tanda, monto: i128) -> i128 {
+    if t.shares_boveda <= 0 {
+        return 0;
+    }
+    let yo = env.current_contract_address();
+    // Si valor(shares) >= monto, entonces ceil(monto / precio) <= shares: alcanza.
+    if boveda.valor(&t.shares_boveda) >= monto {
+        t.shares_boveda -= boveda.retirar_monto(&yo, &monto);
+        monto
+    } else {
+        let entregado = boveda.retirar(&yo, &t.shares_boveda);
+        t.shares_boveda = 0;
+        entregado
+    }
+}
+```
+
+y en `cerrar_ronda`, donde hoy está `retirar_monto` + `bolsa += cubierto`:
+
+```rust
+let entregado = sacar_de_boveda(&env, &boveda, &mut t, cubierto);
+bolsa += entregado;
+```
+
+- Funciona igual con la bóveda simulada y con Blend; en el caso normal no cambia nada.
+- Cuesta una lectura más (`valor`) solo cuando alguien no pagó.
+- Las pruebas de hallazgos pasan a comprobar lo contrario: B finaliza bien, y con la pérdida la
+  ronda cierra con lo que hay.
+- Toca `cerrar_ronda` (`lib.rs`), que también tocan M1 (faltantes, calendario, `boveda_de`) y M3.
+  **Propuesta:** que M1 lo incluya en su MVP, porque ya está cambiando esas mismas líneas y su tope
+  de precio vuelve el caso más probable. Si prefieren, lo hago yo después de que M1 esté en `integracion`.
+
+## 6. Decisión de producto
+
+**¿Cómo conviven TUSD (simulado) y Blend (real)?**
+
+| Opción | Qué es | Pros | Contras |
+| --- | --- | --- | --- |
+| (a) Dos contratos de tanda | TUSD/simulada y XLM o USDC/Blend | No toca el contrato | La web maneja dos contratos (lobby, rutas, eventos): caro |
+| **(b) Una bóveda por token (recomiendo)** | Un contrato; el admin registra token → bóveda; cada tanda guarda su bóveda al crearse | Un lobby, una web; encaja con `elegir_boveda` de M1 | Toca `elegir_boveda` (M1) y la web (símbolo, trustline, faucet por token) |
+| (c) Todo en XLM con Blend | Sin TUSD | Onboarding simple (Friendbot) | Ahorrar en un activo volátil suena mal para el producto |
+
+**✅ DECIDIDO por @DocFranji (sáb 3): (b) con TUSD + USDC de Blend.** Implementado en la fase 2 (sección 9).
+- Al crear: "TUSD · rendimiento simulado (rápido, para probar)" o "USDC · rendimiento real en Blend".
+- Las dos son "dólares": la historia del producto no cambia. En el pitch: "en mainnet sería el USDC
+  del pool de Blend".
+- USDC necesita trustline + faucet de Blend (una sola firma, sección 4), igual que TUSD hoy.
+- XLM: se puede registrar también (es desplegar otro adaptador y una llamada del admin). Lo dejo
+  apagado por defecto en la web salvo que lo pidan.
+
+**Cómo se ve en el contrato** (sobre el modelo ya acordado por M1 y ORQ):
+- `almacenamiento::elegir_boveda(env, t)` (de M1) consulta primero `ClaveM4::BovedaToken(t.token)`;
+  si no hay, sigue la regla de M1 (rápida o real para TUSD).
+- `registrar_boveda(token, boveda)` (solo admin, en un archivo nuevo de M4). Solo afecta tandas
+  **nuevas**: cada tanda ya guardó la suya al crearse, así que cambiar el registro no mueve dinero.
+- `crear_tanda` con un token sin bóveda: error 55 `TokenSinBoveda` (rango de M4).
+
+**Códigos de error de M4:**
+
+| Código | Contrato | Nombre | Mensaje en la web (`web/src/lib/contrato.ts`) |
+| --- | --- | --- | --- |
+| 50 | adaptador | `MontoInvalido` | El monto debe ser mayor que cero. |
+| 51 | adaptador | `SharesInsuficientes` | La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar. |
+| 52 | adaptador | `ReservaNoEncontrada` | Blend no tiene una reserva para esta moneda. |
+| 53 | adaptador | `QuemaInesperada` | Blend respondió algo inesperado y no se movió dinero. Intenta de nuevo en un momento. |
+| 55 | tanda | `TokenSinBoveda` | Esa moneda todavía no se puede usar en tandas. |
+| 56 | tanda | `BovedaDeOtroToken` | Esa bóveda guarda otra moneda: no se puede usar para esta. |
+| 1206 | Blend | `InvalidPoolStatus` | Blend no está aceptando depósitos ahora. Prueba más tarde. |
+| 1207 | Blend | `InvalidUtilRate` | Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta de nuevo en unos minutos. |
+| 1220 | Blend | `ExceededSupplyCap` | Blend alcanzó su límite de depósitos para esta moneda. |
+| 1223 | Blend | `ReserveDisabled` | Blend no está aceptando depósitos de esta moneda. |
+
+## 7. Plan B (si Blend no queda sólido para el paso a producción)
+
+La entrega se movió al lunes 12 de octubre; la integración de M4 está prevista para el miércoles 7–jueves 8.
+
+- La demo usa la versión simulada (TUSD) y **Blend no entra a `main`**.
+- Blend se muestra con transacciones reales: `bash scripts/desplegar_blend.sh` y
+  `bash scripts/demo_blend.sh` (XLM) o `ACTIVO=usdc ...` (USDC), y los enlaces de stellar.expert
+  de la sección 3.
+- En el pitch: "el contrato ya habla con Blend; aquí está una tanda completa en testnet".
+
+## 8. Cómo reproducir
+
+```bash
+cargo test -p adaptador_blend                     # 23 pruebas (6 originales + 15 de auditoría + 2 de peor caso)
+cargo test -p adaptador_blend test_peor_caso -- --nocapture   # peor caso con eventos de Blend: lecturas, escrituras, bytes de eventos
+node scripts/peor_caso_blend.mjs                  # el mismo peor caso en testnet con Blend real (~35 min)
+stellar keys generate admin --network testnet --fund
+bash scripts/desplegar_blend.sh && bash scripts/demo_blend.sh                  # XLM
+ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_blend.sh   # USDC (ver sección 4)
+```
+
+## 9. Fase 2: bóveda por token, integrada sobre M1 + M2 + M3
+
+### Contrato de la tanda (`contracts/tanda/src/bovedas_token.rs`)
+
+- `registrar_boveda(token, Option<bóveda>)` (solo el admin) y `get_boveda_token(token)`.
+- `almacenamiento::elegir_boveda` (M1) consulta primero `ClaveM4::BovedaToken(t.token)`; si no hay registro,
+  sigue la regla de M1 (bóveda rápida para rondas de hasta 10 minutos, principal para el resto).
+- Cada tanda guarda su bóveda **al crearse** (`fijar_boveda`, M1): cambiar o quitar un registro solo afecta a
+  las tandas nuevas y nunca mueve dinero de las que ya existen.
+- Errores: 55 `TokenSinBoveda` (crear una tanda en un token sin bóveda cuando la bóveda general dice guardar
+  otro) y 56 `BovedaDeOtroToken` (registrar una bóveda que guarda otro token). Ambos usan la lectura `token()`
+  que tiene el adaptador; la bóveda simulada no la tiene, así que para TUSD no cambia nada.
+- Evento `bov_token`. Las pruebas (`test_blend.rs` y `test_auditoria.rs`) cubren dos monedas a la vez con
+  conservación por moneda, permisos, solo tandas nuevas, los errores 55 y 56, el adaptador real registrado
+  para USDC con la tanda completa y el peor caso de 12 miembros en la bóveda registrada.
+
+### Adaptador
+
+- TTL con la política de M1 (`max_ttl()`, a lo más una vez al día) y `renovar(dueño)` con la misma firma que la
+  bóveda simulada: la tanda de M1 la llama en cada ronda.
+- Lecturas `pool()` y `token()` (la web detecta así que la bóveda es Blend).
+
+### Web
+
+| Pieza | Archivo | Qué hace |
+| --- | --- | --- |
+| Moneda de cada tanda | `lib/monedas.ts`, `hooks/useMoneda.ts` | La página de la tanda y "Crear" ponen la moneda en un contexto; los componentes usan `useSimbolo()`. Toda una tanda en USDC dice USDC |
+| Elegir moneda al crear | `components/OpcionesMoneda.tsx` | TUSD (simulado, rápido) o USDC (real en Blend). Solo aparece si el contrato tiene USDC registrado (`get_boveda_token`) |
+| USDC en la cuenta | `components/CuentaUsdc.tsx`, `lib/usdc.ts`, `api/faucet-blend.ts` | Saldo en USDC y "Recibir USDC de prueba": una firma (Freighter o Google), la función de Vercel revisa la transacción del faucet de Blend antes de dártela |
+| Rendimiento real | `components/Rendimiento.tsx` | "El rendimiento es real", con decimales finos (`+0,0000039 USDC`) y enlace a la garantía en stellar.expert |
+| Liquidez (DECIDIDO: A + indicador) | `components/LiquidezBlend.tsx`, `lib/blend.ts`, `lib/estado.ts` | "Blend tiene 28 453 USDC libres para retirar" en la tanda y en `#/estado`; avisa si no alcanzaría para la garantía de la tanda |
+| Errores | `lib/contrato.ts` | Mensajes de 55, 56, 50–53 y de Blend (1206, 1207, 1220, 1223) |
+| Saldo por moneda | `hooks/useMoneda.ts` (`useSaldoEn`) | "Te faltan X" usa el saldo en la moneda de la tanda (USDC desde Horizon) |
+
+Pruebas de navegador (`web/e2e`): el mock simula la bóveda registrada, el adaptador, el pool (con la reserva
+real de testnet), el USDC en Horizon y el faucet. Cubren la barra de cuenta, la tanda en USDC sin ningún "TUSD"
+fuera de la barra, la tarjeta del lobby, "Crear" con USDC, poca liquidez, un contrato sin USDC y 390 px.
+
+### Despliegue
+
+`bash scripts/desplegar_testnet.sh` hace todo (paso 9, salvo `SIN_BLEND=1`):
+
+1. despliega el adaptador de Blend para el USDC de prueba de Blend (pool TestnetV2);
+2. lo registra en la tanda: `registrar_boveda --token $USDC --boveda "\"$ADAPTADOR_USDC\""`;
+3. pide USDC de prueba para Ana, Beto y Carla al faucet de Blend (`scripts/usdc_blend.mjs`, necesita `web/node_modules`).
+
+No hace falta ninguna variable nueva en Vercel: `VITE_USDC_ID` tiene por defecto el USDC de testnet y la web
+pregunta al contrato si acepta USDC. `/api/faucet-blend` no usa secretos.
+
+Demo en vivo: `PRINCIPAL=1 bash scripts/demo_blend.sh` (tanda en USDC en el contrato principal).
+
+### Hallazgo de la fase 2: el límite de 16 KiB de eventos (arreglado)
+
+**Qué pasó.** Al medir en testnet el peor caso de M3 con todo conectado (subasta, garantía mínima,
+casi nadie paga, historial de M2) en una tanda **en USDC**, el cierre de la ronda 2 (11 personas caen
+en mora a la vez) fue rechazado por la red con `resource_limit_exceeded`
+([`d0390b62…48a3`](https://stellar.expert/explorer/testnet/tx/d0390b628759561fce550ea2b89491ff76fd8c55044f5e7680bfaac775c348a3)).
+No fueron las instrucciones (usó 64,8 M de 70,7 M declaradas), ni la memoria (13,8 MB), ni las
+entradas (77 · 43): fueron los **eventos**, 16 600 bytes cuando la red acepta como máximo **16 384 por
+transacción** (`txMaxContractEventsSizeBytes`, igual en testnet y mainnet). La simulación del RPC no revisa
+ese límite, así que la web (o la CLI) arma la transacción sin problema y la red la rechaza. Volver a
+intentarlo da lo mismo: **la ronda queda trabada para siempre**.
+
+| Quién emitió | Eventos | Bytes |
+| --- | --- | --- |
+| historial (`hist_hecho`) | 22 | 6 952 |
+| tanda (`moroso`, `cubierto`, `subasta`, `ronda`) | 24 | 4 808 |
+| USDC (`transfer`, un retiro por moroso) | 11 | 2 640 |
+| Blend (`withdraw`, un retiro por moroso) | 11 | 2 200 |
+| **Total** | 68 | **16 600** |
+
+**Por qué no lo vimos antes.** Las pruebas de peor caso miden instrucciones, lecturas y escrituras, pero
+no `contract_events_size_bytes`. Medido en local con la bóveda simulada (TUSD), ese mismo cierre ya
+usaba **14 172 bytes (86 % del límite)**; Blend suma un evento `withdraw` (200 bytes) por retiro y lo pasa.
+
+**Arreglo (`lib.rs::cerrar_ronda`, cambio mínimo).** Lo que cubren las garantías se suma en el bucle y se
+saca de la bóveda en **un solo** `sacar_de_boveda` después del bucle (antes, uno por moroso, cada uno con
+`valor` + `retirar_monto`: 22 llamadas a la bóveda con 11 morosos). El reparto no cambia: entra a la bolsa
+lo que de verdad salió de la bóveda y cada miembro sigue con su evento `cubierto` y su hecho en el historial.
+
+| El peor cierre (12 personas, 11 caen en mora, historial) | Antes | Después |
+| --- | --- | --- |
+| USDC con Blend, **testnet** | 70,7 M · 77 · 43 · **16 600 B: rechazada** | **30,8 M · 77 · 43 · 12 204 B** |
+| USDC con Blend, local (pool con los eventos de Blend v2) | 16 372 B | 12 012 B |
+| TUSD con la bóveda simulada, local (WASM) | 38,97 M · 70 · 42 · 14 172 B | 23,8 M · 70 · 42 · 11 812 B |
+
+(Instrucciones · lecturas · escrituras · bytes de eventos.)
+
+**Pruebas nuevas.**
+- `tanda/src/test_blend.rs::cerrar_ronda_saca_de_la_boveda_una_sola_vez`: 11 garantías cubren en el mismo
+  cierre y la bóveda hace **un** `transfer` (sin el arreglo hace 11), la bolsa sale completa y el dinero
+  cuadra hasta `finalizar`.
+- `adaptador_blend/src/test_peor_caso.rs`: los dos escenarios más pesados de M3 con el historial, el
+  adaptador y un pool simulado que emite **los mismos eventos que Blend v2**; revisa lecturas, escrituras y
+  bytes de eventos con 1 KiB de margen (el token de prueba tiene un nombre más corto que `USDC:GATAL…`).
+- `scripts/peor_caso_blend.mjs`: los mismos escenarios en testnet con Blend real; lee de la red lo que de
+  verdad usó cada transacción (`core_metrics`), incluido el tamaño de los eventos.
+
+**Peor caso con Blend real en testnet, después del arreglo** (`node scripts/peor_caso_blend.mjs`, contratos
+desechables con el código de esta rama, 12 personas en cada escenario, rondas de 2 minutos):
+
+| Operación (USDC, garantía en Blend, historial conectado) | Instrucciones | Lecturas | Escrituras | Bytes de eventos | Transacción |
+| --- | --- | --- | --- | --- | --- |
+| A: `cerrar_ronda` 1 (11 garantías cubren) | 28,8 M | **83** | 37 | 8 504 | [`132e23f5…21cc`](https://stellar.expert/explorer/testnet/tx/132e23f5cd9dfc62a0ffee346fc125e8ca7f2668c7eb102b84e29ec610e621cc) |
+| A: `cerrar_ronda` 2 (11 caen en mora: la que antes se trababa) | **30,8 M** | 77 | **43** | **12 204** | [`55f3820c…168d`](https://stellar.expert/explorer/testnet/tx/55f3820c7d8b8488ef5ccea0474f94ead7fcee4df665438eae09471b215c168d) |
+| A: `cerrar_ronda` 3 a 12 | 14,8–16,2 M | 52–53 | 26 | 500 | |
+| A: `finalizar` | 13,6 M | 48 | 21 | 3 516 | [`607a440a…53d0`](https://stellar.expert/explorer/testnet/tx/607a440a327acf2e1945d559c067d6e83f7e007e3f9c5542b05c93e5d68f53d0) |
+| B: `cerrar_ronda` (todos cumplen, oferta y dividendos para 11) | 20,8 M | 72 | 26 | 3 664 | [`7ed25e58…36a2`](https://stellar.expert/explorer/testnet/tx/7ed25e58db16ccc819bab9a7dadb9e35823dcaceaebbc8bfdbaba93c704836a2) |
+| B: `finalizar` (12 cumplidos: 12 garantías de Blend y 12 tandas en el historial) | 20,7 M | 70 | **43** | 9 720 | [`84cce90d…35f0`](https://stellar.expert/explorer/testnet/tx/84cce90dc5d578d9450640bd39e2bb8ea0088685f03c80d398031e9b33f635f0) |
+| **Máximo** | **30,8 M** | **83** | **43** | **12 204** | límites de mainnet: 100 M · 100 · 50 · 16 384 |
+
+Con Blend, lo más justo son las **lecturas** (83 de 100: además del adaptador, Blend lee la configuración
+del pool, la reserva y las posiciones) y las **escrituras** (43 de 50; con TUSD el mismo peor caso da 42–43:
+las entradas de Blend reemplazan a las de la bóveda simulada). Si algo nuevo agrega eventos,
+lecturas o escrituras en `cerrar_ronda` o `finalizar`, conviene medirlo también con
+`cargo test -p adaptador_blend test_peor_caso` (local, en segundos) o con este script (testnet, ~35 min).
+
+**Recomendación para el equipo** (avisada en el tablero): sumar `contract_events_size_bytes ≤ 16 384` a las
+pruebas de peor caso de la tanda (`test_deudas.rs`, `test_historial.rs`, `test_turnos.rs`). El que más
+bytes emite es el historial: 22 eventos `hist_hecho` (6 952 bytes) en el peor cierre.
+
+### Validación en testnet (4 de octubre)
+
+Con el código de esta rama (M1 + M2 + M3 + M4), en contratos de prueba desechables (no son los de producción):
+
+1. `bash scripts/desplegar_testnet.sh` terminó bien, paso 9 incluido.
+2. `PRINCIPAL=1 ADMIN=admin MIEMBROS="ana beto carla" bash scripts/demo_blend.sh` terminó bien: una tanda en
+   USDC de 3 miembros, completa, en el contrato principal.
+
+| Qué | Transacción o valor |
+| --- | --- |
+| Tanda (contrato principal) | [`CDVATPBS…LZD6`](https://stellar.expert/explorer/testnet/contract/CDVATPBSBYEDV5QLOPXXFVAYZGYHGQ2ZCYUAQQF4BVKQPEIMDYYELZD6) |
+| Adaptador de Blend para USDC | [`CA4C2IYP…DR7A`](https://stellar.expert/explorer/testnet/contract/CA4C2IYP2JTPTWD2OQTYZVZ4NO6BCTGQO6ZI4VXCHDJGAFVAT7FUDR7A) ([despliegue](https://stellar.expert/explorer/testnet/tx/02aa22928ce0873472f9d9e38a65ada9b748e3c91b67dd3c319f8fd1f3e67031)) |
+| `registrar_boveda(USDC, adaptador)` | [`55aae1e7…d699`](https://stellar.expert/explorer/testnet/tx/55aae1e7c9fef6a9ffb4bf065c9ff0f172692a4dc5909a697e1f507df976d699) (evento `bov_token`) |
+| USDC de prueba para Ana, Beto y Carla | [`abb3967e…784b`](https://stellar.expert/explorer/testnet/tx/abb3967ebbb4549de02a72f12723dbb37d97403f91d1ce4328a4bf09981f784b), [`1b9dce79…31be`](https://stellar.expert/explorer/testnet/tx/1b9dce799026e2bf67978e89c241e9e701ca5eb1007ced85a35df872450031be), [`956b5db8…aa74`](https://stellar.expert/explorer/testnet/tx/956b5db8579143f241bafb5cd7ae68b608a7229ab3d60805900f749bff87aa74) |
+| Crear la tanda en USDC | [`5710296f…aae1`](https://stellar.expert/explorer/testnet/tx/5710296f3df513acd96afd9662c4fa9d2b3881213ccf9e813ad2c91ce0d6aae1) |
+| Ana se une (su garantía entra a Blend) | [`c8c921c8…2309`](https://stellar.expert/explorer/testnet/tx/c8c921c82ee12ccc3317c26e98c129d2934b719d27a857e85065b10940cc2309) |
+| Cerrar ronda 2 (sale garantía de Blend) | [`94107890…35c4`](https://stellar.expert/explorer/testnet/tx/941078905aca5c3a144bd20d90925df2d64cbb352d41dab034cde71221de35c4) |
+| Cerrar ronda 3 | [`afe6b875…e462`](https://stellar.expert/explorer/testnet/tx/afe6b87526b31334cb30c6183fd3bd240913ada73291510c606acffc1a4fe462) |
+| Finalizar (devuelve garantías con rendimiento) | [`11591510…1171`](https://stellar.expert/explorer/testnet/tx/1159151003470b5bf47a94111b7d38c7b407474e213ffe95d037feec407a1171) |
+
+**Rendimiento real:** `+0,0000040`, `+0,0000077` y `+0,0000108` USDC acumulados al cerrar cada ronda
+(108 unidades en total, en minutos). Saldos finales: Ana 1 000 USDC, Beto 999,0000051, Carla 1 001,0000057
+(cada quien según su turno, igual que con TUSD).
+
+**Lecturas después de la demo:** `get_boveda(1)` = el adaptador; `get_boveda_token(USDC)` = el adaptador;
+`get_boveda_token(TUSD)` = nada (TUSD sigue la regla de M1); `pool()` y `token()` del adaptador correctos;
+`shares_de(tanda)` = 0 después de finalizar (no queda nada de la tanda en Blend).
+
+**Tamaños:** `tanda.wasm` 74 806 bytes en esa validación (81 718 hoy, con las ofertas selladas de M3 y el arreglo de abajo); `adaptador_blend.wasm` 10 756 bytes. El peor caso de 12 miembros en la
+bóveda registrada usa como máximo ~10,1 M de instrucciones en `cerrar_ronda` y ~4,9 M en `finalizar` (prueba
+`peor_caso_12_miembros_en_la_boveda_registrada`, con el adaptador real sobre el pool simulado).
+
+**Qué no se probó en testnet:** el error 1207 de verdad (no se puede dejar sin liquidez el pool de Blend a
+voluntad; está cubierto en las pruebas con el pool simulado y en las de navegador con poca liquidez) y el
+faucet de USDC desde la web desplegada en Vercel (se probó la misma transacción desde el script y la función
+con pruebas unitarias; se valida en el preview de Vercel de `integracion`).

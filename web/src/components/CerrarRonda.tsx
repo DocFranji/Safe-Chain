@@ -6,7 +6,7 @@ import type { MiembroConDireccion } from '../lib/lectura'
 import { faltantesAlCerrar } from '../lib/deudas'
 import { monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
-import { SIMBOLO } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   miembros: MiembroConDireccion[]
@@ -27,6 +27,7 @@ function nombres(direcciones: string[]): string {
 }
 
 export function CerrarRonda({ miembros, pagaron, cuota, beneficiario, yo, ocupado, cerrar }: Props) {
+  const SIMBOLO = useSimbolo()
   const soyYo = beneficiario !== undefined && beneficiario.direccion === yo
   const nombre = beneficiario ? nombreDe(beneficiario.direccion) : null
   const retenida = beneficiario?.moroso === true

@@ -12,6 +12,10 @@
 #     rondas de 10 minutos o menos, para que el rendimiento se note en la demo. Para no crearla:
 #     SIN_BOVEDA_RAPIDA=1. Para cambiarla por una nueva antes de la presentación (la acelerada rinde
 #     menos cuanto más vieja es): bash scripts/renovar_boveda_rapida.sh
+#
+# USDC de Blend con rendimiento real (misión M4, docs/blend.md): despliega el adaptador de Blend para el USDC
+# de prueba de Blend y lo registra en la tanda (registrar_boveda). Las tandas en USDC guardan su garantía en
+# el pool TestnetV2 de Blend. Ana, Beto y Carla reciben USDC de prueba del faucet de Blend. Sin Blend: SIN_BLEND=1.
 set -euo pipefail
 NET="--network testnet"
 
@@ -78,12 +82,32 @@ if [ "${SIN_HISTORIAL:-0}" != "1" ]; then
   stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_historial --historial "\"$HISTORIAL\""
 fi
 
+echo "== 9. USDC de Blend con rendimiento real (misión M4, docs/blend.md) =="
+POOL_BLEND=CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF   # pool TestnetV2 de Blend
+USDC=CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU         # USDC de prueba de Blend (SAC)
+ADAPTADOR_USDC=""
+if [ "${SIN_BLEND:-0}" != "1" ]; then
+  # El constructor lee la reserva del pool: si Blend no tuviera USDC, el despliegue falla aquí.
+  ADAPTADOR_USDC=$(stellar contract deploy --wasm target/wasm32v1-none/release/adaptador_blend.wasm \
+    --source admin $NET -- --pool "$POOL_BLEND" --token "$USDC")
+  echo "   ADAPTADOR_USDC=$ADAPTADOR_USDC"
+  # Argumento opcional: va como JSON (entre comillas), igual que configurar_boveda_rapida.
+  stellar contract invoke --id "$TANDA" --source admin $NET -- registrar_boveda --token "$USDC" --boveda "\"$ADAPTADOR_USDC\""
+  echo "   USDC de prueba para las cuentas de la demo (faucet de Blend, una vez por cuenta):"
+  for p in ana beto carla; do
+    SECRETO="$(stellar keys show "$p")" node scripts/usdc_blend.mjs || echo "   ($p: no se pudo; pídelo después desde la web)"
+  done
+fi
+
 cat > scripts/.contratos <<EOF
 TOKEN=$TOKEN
 BOVEDA=$BOVEDA
 BOVEDA_RAPIDA=$BOVEDA_RAPIDA
 TANDA=$TANDA
 HISTORIAL=$HISTORIAL
+USDC=$USDC
+POOL_BLEND=$POOL_BLEND
+ADAPTADOR_USDC=$ADAPTADOR_USDC
 EOF
 echo "Listo. Direcciones guardadas en scripts/.contratos"
 

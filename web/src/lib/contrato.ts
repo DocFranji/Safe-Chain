@@ -73,6 +73,19 @@ const MENSAJES: Record<number, string> = {
   20: 'El historial crediticio no está disponible en este momento. Intenta de nuevo en unos minutos.',
   21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en «Mi historial».',
   22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
+  // M4: bóveda por token (contrato de la tanda)
+  55: 'Esa moneda todavía no se puede usar en tandas.',
+  56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
+  // M4: adaptador de Blend (contrato aparte; sus errores llegan tal cual al firmar)
+  50: 'El monto debe ser mayor que cero.',
+  51: 'La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar.',
+  52: 'Blend no tiene una reserva para esta moneda.',
+  53: 'Blend respondió algo inesperado y no se movió dinero. Intenta de nuevo en un momento.',
+  // M4: errores de Blend v2 que pueden llegar al unirse, cerrar una ronda o finalizar
+  1206: 'Blend no está aceptando depósitos ahora. Prueba más tarde.',
+  1207: 'Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta de nuevo en unos minutos.',
+  1220: 'Blend alcanzó su límite de depósitos para esta moneda.',
+  1223: 'Blend no está aceptando depósitos de esta moneda.',
 }
 
 // A veces el SDK entrega el NOMBRE del error del contrato en vez del código.
@@ -110,6 +123,8 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   HistorialNoConfigurado: 20,
   PuntajeInsuficiente: 21,
   RequisitosBloqueados: 22,
+  TokenSinBoveda: 55,
+  BovedaDeOtroToken: 56,
 }
 
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */

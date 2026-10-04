@@ -14,6 +14,11 @@ export const BOVEDA_ID = StrKey.encodeContract(Buffer.alloc(32, 7))
 export const BOVEDA_REAL = StrKey.encodeContract(Buffer.alloc(32, 8))
 /** M2: contrato de historial crediticio (la tanda simulada lo devuelve en `get_historial`). */
 export const HISTORIAL_ID = StrKey.encodeContract(Buffer.alloc(32, 9))
+/** M4: USDC de prueba de Blend (el de testnet, el valor por defecto de la web), su adaptador y el pool. */
+export const USDC_ID = 'CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU'
+export const EMISOR_BLEND = 'GATALTGTWIOT6BUDBCZM3Q4OQ4BO2COLOAZ7IYSKPLC2PMSOPPGF5V56'
+export const ADAPTADOR_USDC = StrKey.encodeContract(Buffer.alloc(32, 10))
+export const POOL_BLEND = StrKey.encodeContract(Buffer.alloc(32, 11))
 export const ANA = 'GADMQOSHB74SMBATS6IF67ZKS2KJPQC4FOM6NDGGWADEUT253XCATVPD'
 export const BETO = 'GBPDH2E2EX5D7DO76YRIX477LPJWNPB7MJZRTEDJWBKZMS5KTLLRU2LO'
 export const CARLA = 'GDPIB76VVYNDJINI6BRYGVOKTPOTERZABL43OB7DIOCLTXSKEUMJWNUN'
@@ -93,6 +98,11 @@ export function nuevoEstado() {
       [ME]: historial({ cuotas_a_tiempo: 6, tandas_cumplidas: 1, cobros: 1, puntos_positivos: 110 }),
     },
     faucetStatus: null,
+    // M4: el contrato tiene el adaptador de Blend registrado para USDC (false = contrato sin USDC).
+    // `reservaUsdc` = reserva de Blend (la real de testnet); `faucetBlend` = respuesta de /api/faucet-blend.
+    usdcRegistrado: true,
+    reservaUsdc: { b_rate: 1_057_093_452_174n, b_supply: 1_233_144_597_233n, d_rate: 1_071_038_390_182n, d_supply: 951_428_962_745n },
+    faucetBlend: { status: 429, cuerpo: { ok: false, error: 'Esta cuenta ya recibió sus dólares de prueba de Blend.' } },
     eventosPedidos: 0,
     llamadas: [],
   }
@@ -177,6 +187,9 @@ function primaPara(t, primaBps, pos) {
 }
 
 const addr = (a) => nativeToScVal(a, { type: 'address' })
+/** Un struct de Soroban: mapa con claves Symbol ordenadas. */
+const mapa = (o) =>
+  xdr.ScVal.scvMap(Object.keys(o).sort().map((k) => new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(k), val: o[k] })))
 
 /**
  * M1: agrega la tanda 6, MENSUAL y en curso (ronda 3 de 4, le toca a Carla). "Yo" (turno 4) quedé en mora:
@@ -202,6 +215,23 @@ export function conTandaMorosa(e) {
       [CARLA, { faltantes: [], bolsa_retenida: 0n, pagado: 50n * U }],
       [ME, { faltantes: [{ ronda: 1, acreedor: BETO, monto: 100n * U }], bolsa_retenida: 0n, pagado: 0n }],
     ],
+  }
+  return e
+}
+/**
+ * M4: agrega la tanda `id` (12 por defecto), en USDC de Blend y en curso, con su garantía en el adaptador de Blend (rendimiento real).
+ * No está en `nuevoEstado()` para no cambiar los escenarios que cuentan tandas.
+ */
+export function conTandaUsdc(e, id = 12) {
+  e.tandas[id] = {
+    boveda: ADAPTADOR_USDC,
+    tanda: tanda({ creador: BETO, token: USDC_ID, estado: est('Activa'), ronda_actual: 1, inicio_ronda: BigInt(ahora() - 30), shares_boveda: 400n * U }),
+    miembros: [
+      [ANA, miembro(0, { colateral: 200n * U, colateral_inicial: 200n * U, cobro: true })],
+      [BETO, miembro(1)],
+      [CARLA, miembro(2)],
+    ],
+    pagaron: [BETO],
   }
   return e
 }
@@ -278,6 +308,8 @@ function valorSim(est, contrato, fn, args) {
   if (contrato === TANDA_ID && est.contratoCaido) return { error: { error: 'HostError: Error(Storage, MissingValue)', latestLedger: 1000 } }
   if (contrato === TANDA_ID) {
     if (fn === 'total_tandas') return u32(Object.keys(est.tandas).length)
+    // --- M4 (sin id de tanda) ---
+    if (fn === 'get_boveda_token') return est.usdcRegistrado && nativos[0] === USDC_ID ? addr(ADAPTADOR_USDC) : xdr.ScVal.scvVoid()
     // --- M2 (sin id de tanda) ---
     if (fn === 'get_historial') {
       if (!est.historialActivo) return { error: { error: 'HostError: Error(WasmVm, MissingValue)', latestLedger: 1000 } }
@@ -351,6 +383,21 @@ function valorSim(est, contrato, fn, args) {
     if (fn === 'name') return nativeToScVal(`TUSD:${EMISOR}`, { type: 'string' })
   }
   if ((contrato === BOVEDA_ID || contrato === BOVEDA_REAL) && fn === 'valor') return i128((BigInt(nativos[0]) * 103n) / 100n)
+  // --- M4: adaptador de Blend (USDC) y pool de Blend ---
+  if (contrato === ADAPTADOR_USDC) {
+    if (fn === 'pool') return addr(POOL_BLEND)
+    if (fn === 'token') return addr(USDC_ID)
+    if (fn === 'valor') return i128(BigInt(nativos[0]) + 39n) // rendimiento real: muy poco
+  }
+  if (contrato === POOL_BLEND && fn === 'get_reserve') {
+    const r = est.reservaUsdc
+    return mapa({
+      asset: addr(USDC_ID),
+      config: mapa({ decimals: u32(7), enabled: xdr.ScVal.scvBool(true), index: u32(3) }),
+      data: mapa({ b_rate: i128(r.b_rate), b_supply: i128(r.b_supply), d_rate: i128(r.d_rate), d_supply: i128(r.d_supply) }),
+      scalar: i128(10_000_000n),
+    })
+  }
   if (contrato === BOVEDA_ID && fn === 'acelerador') return u32(52_560)
   if (est.bovedas[contrato] && fn === 'total_shares') return i128(est.bovedas[contrato].total)
   if (contrato === BOVEDA_REAL && fn === 'acelerador') return u32(1)
@@ -451,6 +498,11 @@ const HISTORIAS = {
   10: [
     ['creada', { creador: CARLA, cuota: 100n * U, n_miembros: 3 }],
     ['inter_prop', { de: CARLA, con: ME, compensacion: 10n * U }],
+  ],
+  // M4: tanda en USDC de Blend (ver conTandaUsdc).
+  12: [
+    ['creada', { creador: BETO, cuota: 100n * U, n_miembros: 3 }],
+    ['ronda', { ronda: 0, beneficiario: ANA, monto_pagado: 300n * U }],
   ],
   // M1: tanda mensual donde "yo" quedé en mora y Carla ya saldó su deuda (ver conTandaMorosa).
   6: [
@@ -582,6 +634,13 @@ export function cuentaHorizon(est, g) {
   if (c.trustline) {
     balances.unshift({
       asset_type: 'credit_alphanum4', asset_code: 'TUSD', asset_issuer: EMISOR, balance: (Number(c.saldo) / 1e7).toFixed(7), limit: '922337203685.4775807',
+      buying_liabilities: '0.0000000', selling_liabilities: '0.0000000', is_authorized: true, is_authorized_to_maintain_liabilities: true,
+    })
+  }
+  // M4: USDC de prueba de Blend (solo si la cuenta lo aceptó: `usdc` es su saldo).
+  if (c.usdc !== undefined) {
+    balances.unshift({
+      asset_type: 'credit_alphanum4', asset_code: 'USDC', asset_issuer: EMISOR_BLEND, balance: (Number(c.usdc) / 1e7).toFixed(7), limit: '922337203685.4775807',
       buying_liabilities: '0.0000000', selling_liabilities: '0.0000000', is_authorized: true, is_authorized_to_maintain_liabilities: true,
     })
   }

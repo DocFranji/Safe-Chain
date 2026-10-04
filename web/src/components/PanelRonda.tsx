@@ -14,8 +14,8 @@ import { useGarantiaConHistorial } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { monto, duracion, porcentaje } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
-import { SIMBOLO } from '../config'
 import { SIN_TURNO, eligeTurno, type Modo } from '../lib/turnos'
+import { comoConseguir, useMoneda, useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   id: number
@@ -30,6 +30,7 @@ type Props = {
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
 
 export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Props) {
+  const SIMBOLO = useSimbolo()
   const [aviso, setAviso] = useState<Aviso>(null)
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false)
   const ocupado = aviso?.tipo === 'esperando'
@@ -103,7 +104,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
         )}
       </dl>
 
-      {mio && <p className="mi-situacion">{miSituacion(estado, mio, yaPague, tanda.ronda_actual)}</p>}
+      {mio && <p className="mi-situacion">{miSituacion(estado, mio, yaPague, tanda.ronda_actual, SIMBOLO)}</p>}
 
       <div className="acciones">
         {!yo ? (
@@ -269,9 +270,11 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
 }
 
 function FaltaSaldo({ falta }: { falta: bigint }) {
+  const SIMBOLO = useSimbolo()
+  const moneda = useMoneda()
   return (
     <p className="aviso nota">
-      Te faltan {monto(falta)} {SIMBOLO}. Usa el botón "Pedir {SIMBOLO} de prueba" de arriba para recibir más.
+      Te faltan {monto(falta)} {SIMBOLO}. {comoConseguir(moneda)} para recibir más.
     </p>
   )
 }
@@ -305,6 +308,7 @@ function miSituacion(
   m: { posicion: number; cobro: boolean; moroso: boolean; deuda: bigint },
   yaPague: boolean,
   ronda: number,
+  SIMBOLO: string,
 ): string {
   if (m.moroso) return `Tienes una deuda de ${monto(m.deuda)} ${SIMBOLO} en esta tanda.`
   const turno = m.posicion === SIN_TURNO

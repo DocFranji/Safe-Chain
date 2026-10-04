@@ -118,6 +118,12 @@ export declare const Error: {
     43: {
         message: string;
     };
+    55: {
+        message: string;
+    };
+    56: {
+        message: string;
+    };
 };
 /**
  * Struct: Tanda
@@ -586,6 +592,16 @@ export interface EvRequisitosEvent {
     };
 }
 /**
+ * El admin registró (o quitó) la bóveda de un token. Solo afecta a las tandas que se creen después.
+ */
+export interface EvBovedaTokenEvent {
+    name: "EvBovedaToken";
+    data: {
+        token: string;
+        boveda?: string | null;
+    };
+}
+/**
  * Alguien pagó (toda o una parte) la deuda de `miembro`. Puede ser el miembro u otra persona.
  */
 export interface EvDeudaPagadaEvent {
@@ -655,4 +671,4 @@ export interface EvHistorialConfiguradoEvent {
         historial?: string | null;
     };
 }
-export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
+export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;

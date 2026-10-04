@@ -6,8 +6,8 @@
 import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import { monto, duracion } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
-import { SIMBOLO } from '../config'
 import { tieneTurno } from '../lib/turnos'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = { datos: DatosTanda; ahora: number; yo: string | null }
 
@@ -124,6 +124,7 @@ function Centro({
   beneficiario: MiembroConDireccion | null
   restante: number
 }) {
+  const SIMBOLO = useSimbolo()
   const { tanda, miembros } = datos
   const n = tanda.n_miembros
   const bolsa = tanda.cuota * BigInt(n)

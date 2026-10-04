@@ -34,5 +34,7 @@ export const Error = {
     40: { message: "TurnoExigeHistorial" },
     41: { message: "FaseEquivocada" },
     42: { message: "SelloInvalido" },
-    43: { message: "SelloRepetido" }
+    43: { message: "SelloRepetido" },
+    55: { message: "TokenSinBoveda" },
+    56: { message: "BovedaDeOtroToken" }
 };

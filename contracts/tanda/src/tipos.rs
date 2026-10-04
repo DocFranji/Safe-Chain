@@ -117,6 +117,9 @@ pub enum Error {
     FaseEquivocada = 41,
     SelloInvalido = 42,
     SelloRepetido = 43,
+    // --- M4: bóveda por token (50–59; el adaptador de Blend usa 50–53 con sus propios nombres) ---
+    TokenSinBoveda = 55,    // no hay bóveda para el token de esta tanda
+    BovedaDeOtroToken = 56, // la bóveda que se quiere registrar guarda otro token
 }
 
 // ---------------------------------------------------------------------------
@@ -290,4 +293,15 @@ pub struct EstadoTurnos {
     /// Subasta sellada en curso: hasta este momento se sella; después, hasta que vence, se revela
     /// (0 si no aplica).
     pub fin_sellado: u64,
+}
+
+// --- M4: bóveda por token ---
+
+/// Claves de la misión M4 (enum propio para no tocar `DataKey`).
+#[contracttype]
+#[derive(Clone)]
+pub enum ClaveM4 {
+    /// (instancia) Bóveda para las tandas nuevas en ese token. Por ejemplo, USDC de Blend → adaptador
+    /// de Blend (rendimiento real). Los tokens sin bóveda propia siguen la regla de M1.
+    BovedaToken(Address),
 }

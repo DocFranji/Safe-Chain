@@ -1653,3 +1653,76 @@ td .dir {
   display: block;
   color: var(--pago-texto);
 }
+
+/* --- M4: USDC de Blend (barra de cuenta) e indicador de liquidez --- */
+.cuenta-usdc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--linea);
+}
+.cuenta-usdc p {
+  margin: 0;
+}
+.cuenta-usdc .aviso {
+  flex-basis: 100%;
+}
+.liquidez-blend.alerta {
+  color: var(--alerta-texto);
+}
+
+/* --- M4: selector de moneda al crear (mismo aspecto que las tarjetas de turnos) --- */
+.opciones-moneda {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.opciones-moneda > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.monedas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.moneda {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--linea);
+  border-radius: 12px;
+  background: var(--papel);
+  cursor: pointer;
+}
+.moneda:hover {
+  border-color: var(--borde);
+}
+.moneda.elegida {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+}
+.moneda input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.moneda:has(input:focus-visible) {
+  outline: 3px solid var(--turno);
+  outline-offset: 2px;
+}
+.moneda-titulo {
+  font-weight: 800;
+}
+.moneda-lema {
+  font-size: 14px;
+  color: var(--tinta-2);
+}

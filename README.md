@@ -36,7 +36,8 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 | Contrato de la tanda | Reglas, garantías, multas, rondas, liquidación y eventos | `contracts/tanda/` |
 | Mecanismos de turnos | Precio por turno, subasta, sorteo, elegir turno e intercambio (`crear_tanda_avanzada`) | `contracts/tanda/src/turnos*.rs`, `docs/turnos.md` |
 | Historial crediticio | Puntaje público e inmutable por dirección (cuotas a tiempo, atrasos, mora, deudas saldadas); da descuento de garantía y acceso a tandas exigentes. Ver [`docs/historial.md`](docs/historial.md) | `contracts/historial/`, `web/src/pages/Historial.tsx` |
-| Bóveda simulada | Rendimiento de ejemplo con la misma interfaz que tendría un adaptador a Blend | `contracts/boveda_simulada/` |
+| Rendimiento real en Blend | Las tandas en USDC de prueba de Blend guardan su garantía en el pool real de [Blend](https://blend.capital) y ganan intereses de verdad (una bóveda por moneda en el mismo contrato). Ver [`docs/blend.md`](docs/blend.md) | `contracts/adaptador_blend/`, `contracts/tanda/src/bovedas_token.rs` |
+| Bóveda simulada | Rendimiento de ejemplo para las tandas en TUSD (acelerado en las tandas de prueba) | `contracts/boveda_simulada/` |
 | Web (React) | Landing, lobby, crear tanda, invitaciones, resultados, demo en vivo y estado del sistema | `web/` |
 | Entrar con Google | Billetera Stellar creada y firmada por [Privy](https://privy.io); también funciona Freighter | `web/src/cuentas/`, `web/src/lib/firmante.ts` |
 | Faucet de TUSD | Función serverless de Vercel que regala TUSD de prueba | `web/api/faucet.ts` |
@@ -59,7 +60,8 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 ## Límites actuales (dichos con claridad)
 
 - **No está auditado** y solo corre en testnet.
-- **La bóveda es simulada.** Las tandas reales (días, semanas o meses) rinden 5 % anual al ritmo de la vida real; las tandas de prueba (rondas de hasta 10 minutos) usan una bóveda acelerada para que el rendimiento se note en una demo. La interfaz de la bóveda permite cambiarla por un adaptador a Blend sin tocar el contrato de la tanda (ver más abajo).
+- **En TUSD la bóveda es simulada.** Las tandas reales (días, semanas o meses) rinden 5 % anual al ritmo de la vida real; las tandas de prueba (rondas de hasta 10 minutos) usan una bóveda acelerada para que el rendimiento se note en una demo.
+- **En USDC el rendimiento es real, pero es testnet.** La garantía está en el pool TestnetV2 de Blend: los intereses son los de sus prestatarios de prueba. Si Blend se queda sin liquidez, cerrar una ronda con impagos o finalizar espera (sin perder dinero); el USDC de prueba lo regala el faucet de Blend, una vez por cuenta.
 - **Las billeteras de Google las custodia Privy.** Es cómodo para probar, pero en producción habría que decidir el modelo de custodia.
 - **El faucet regala dinero de prueba:** nunca debe apuntar a una cuenta con valor real.
 - **El historial crediticio no prueba identidad.** Es evidencia pública de cumplimiento; para tandas grandes conviene combinarlo con verificación (el contrato ya tiene el gancho `marcar_verificado`). Los eventos hecho por hecho solo los guarda el RPC unos días: la página muestra los acumulados.
@@ -72,7 +74,8 @@ En todos, quien cobra deja la misma garantía de siempre. En el sorteo y la suba
 | `contracts/tanda/src/lib.rs` | El contrato de la tanda. Todas las reglas están comentadas en español |
 | `contracts/tanda/src/test.rs` | Las 16 pruebas, incluido el escenario exacto de la demo |
 | `contracts/historial/src/lib.rs` | Historial crediticio: puntaje, niveles y reglas anti-trampa. Solo escriben los contratos de tanda autorizados |
-| `contracts/boveda_simulada/src/lib.rs` | Bóveda con rendimiento simulado (misma interfaz que tendría un adaptador a Blend) |
+| `contracts/boveda_simulada/src/lib.rs` | Bóveda con rendimiento simulado (misma interfaz que el adaptador a Blend) |
+| `contracts/adaptador_blend/src/lib.rs` | Adaptador a Blend: deposita la garantía en el pool y lleva la cuenta exacta de cada contrato de tanda. Auditoría en [`docs/blend.md`](docs/blend.md) |
 | `scripts/desplegar_testnet.sh` | Crea cuentas, el token TUSD y despliega los dos contratos en testnet |
 | `scripts/demo.sh` | Corre el guion de la demo desde la terminal (~5 min). Ver [`DEMO.md`](DEMO.md) |
 | `scripts/preparar_entorno.sh` | Instala el target WASM, la CLI de Stellar y las dependencias (también lo usan las sesiones de Claude Code en la nube) |
@@ -188,12 +191,12 @@ Todo lo de la especificación está implementado. Agregué esto porque la interf
 - **Error 13 `NoInicializado`:** evita crear tandas antes de configurar el contrato.
 - **Eventos `liquidado`** (cuánto recibió cada miembro al final) y **`cancelada`**.
 
-## Cambiar la bóveda simulada por Blend (P3, máximo 4 horas)
+## Blend: rendimiento real (misión M4)
 
-La tanda solo usa 4 funciones de la bóveda: `depositar`, `retirar`, `retirar_monto` y `valor`. Para usar Blend:
+Hecho. El contrato de la tanda tiene **una bóveda por moneda**: TUSD usa la bóveda simulada y el USDC de prueba de
+Blend usa el **adaptador de Blend**, que deposita la garantía en el pool TestnetV2 (`submit` con supply/withdraw) y
+la valora con la `b_rate` de `get_reserve`. El admin registra la bóveda de cada moneda con `registrar_boveda`, y cada
+tanda guarda la suya al crearse. `scripts/desplegar_testnet.sh` lo deja todo configurado (paso 9).
 
-1. Creen un contrato adaptador nuevo con esas mismas 4 funciones, que por dentro llame al pool de Blend (`submit` con supply/withdraw, y la b-rate de `get_reserve` para `valor`).
-2. Despliéguenlo.
-3. Hagan un deploy nuevo de la tanda e inicialícenla con la dirección del adaptador como `boveda`.
-
-El contrato de la tanda **no se toca**. Si no funciona a tiempo, se quedan con la simulada y lo dicen en la presentación.
+La auditoría (redondeo, liquidez, pool congelado, TTL, permisos y costo con 12 miembros, validado en testnet con
+hashes) y cómo mostrarlo en vivo están en [`docs/blend.md`](docs/blend.md), [`BLEND.md`](BLEND.md) y [`DEMO.md`](DEMO.md).

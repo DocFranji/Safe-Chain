@@ -5,7 +5,8 @@ import type { EventoTanda } from '../lib/historia'
 import { resultadosDesdeEventos } from '../lib/rpc'
 import { monto } from '../lib/formato'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
-import { EXPLORADOR, SIMBOLO, TANDA_ID } from '../config'
+import { EXPLORADOR, TANDA_ID } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   datos: DatosTanda
@@ -16,6 +17,7 @@ type Props = {
 }
 
 export function Resultados({ datos, yo, eventos, error }: Props) {
+  const SIMBOLO = useSimbolo()
   const r = eventos === null ? null : resultadosDesdeEventos(eventos)
   const recibio = new Map<string, bigint>()
   if (r) for (const p of r.pagos) recibio.set(p.miembro, p.monto)
@@ -96,7 +98,7 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                       </td>
                       <td className="num">{monto(m.colateral_inicial)}</td>
                       <td className="num">{hayPagos ? monto(final) : '—'}</td>
-                      <td>{hayPagos ? comoLeFue(m, final) : '—'}</td>
+                      <td>{hayPagos ? comoLeFue(m, final, SIMBOLO) : '—'}</td>
                     </tr>
                   )
                 })}
@@ -113,7 +115,7 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
   )
 }
 
-function comoLeFue(m: DatosTanda['miembros'][number], final: bigint): string {
+function comoLeFue(m: DatosTanda['miembros'][number], final: bigint, SIMBOLO: string): string {
   if (m.moroso) return `Quedó debiendo ${monto(m.deuda)} ${SIMBOLO}`
   if (m.colateral_inicial > 0n && final === 0n) return 'Su garantía cubrió sus cuotas'
   if (m.atrasos === 0) return 'Siempre pagó a tiempo'

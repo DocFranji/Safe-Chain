@@ -4,8 +4,8 @@ import { bolsa, colateralDeTurno } from '../lib/colateral'
 import { claseEstado, duracion, etiquetaEstado, monto } from '../lib/formato'
 import { rutaTanda } from '../lib/rutas'
 import { bolsaListaParaCobrar } from '../lib/cobro'
-import { SIMBOLO } from '../config'
 import { tituloModo } from '../lib/turnos'
+import { monedaDe } from '../lib/monedas'
 
 type Props = {
   resumen: ResumenTanda
@@ -16,6 +16,7 @@ type Props = {
 
 export function TarjetaTanda({ resumen, yo, ahora }: Props) {
   const { id, tanda, miembros, modo } = resumen
+  const SIMBOLO = monedaDe(tanda.token).simbolo
   const estado = tanda.estado.tag
   const n = tanda.n_miembros
   const params = { cuota: tanda.cuota, nMiembros: n, coberturaBps: tanda.cobertura_bps }

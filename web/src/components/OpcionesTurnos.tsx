@@ -6,7 +6,7 @@ import { MAX_DESCUENTO_BPS, MAX_PRIMA_BPS, MODOS, eligeTurno, vistaPrevia, type 
 import { NIVELES, nivelDePuntaje } from '../lib/historial'
 import { useDireccionHistorial } from '../hooks/useHistorial'
 import { monto } from '../lib/formato'
-import { SIMBOLO } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   /** Parámetros ya válidos de la tanda (null mientras el formulario tenga errores). */
@@ -188,6 +188,7 @@ function PrimerosConHistorial({ params, valor, alCambiar }: Omit<Props, 'error'>
 }
 
 function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: OpcionesForm }) {
+  const SIMBOLO = useSimbolo()
   const filas = vistaPrevia(params, valor)
   const conPrima = valor.modo === 'PrecioPorTurno'
   const conApartado = filas.some((f) => f.apartado > 0n)

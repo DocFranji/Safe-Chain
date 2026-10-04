@@ -100,6 +100,21 @@ export interface Client {
         miembro: string | Address;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<bigint, Error>>>;
     /**
+     * La bóveda registrada para `token`, o `None` si ese token sigue la regla general.
+     */
+    get_boveda_token(args: {
+        token: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<string | null>>;
+    /**
+     * (Solo el admin) Bóveda para las tandas nuevas en `token`. `None` quita el registro y el token
+     * vuelve a la regla general. Si la bóveda dice qué token guarda (el adaptador de Blend lo dice),
+     * tiene que ser `token`.
+     */
+    registrar_boveda(args: {
+        token: string | Address;
+        boveda: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
      * Subasta: ofrecer recibir `descuento_bps` menos de la bolsa para cobrar en la ronda en
      * curso. Debe superar la mejor oferta y se acepta solo hasta que vence la ronda.
      */
@@ -297,6 +312,8 @@ export declare class Client extends ContractClient {
         configurar_historial: (json: string) => AssembledTransaction<Result<null, Error>>;
         configurar_requisitos: (json: string) => AssembledTransaction<Result<null, Error>>;
         colateral_para_miembro: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda_token: (json: string) => AssembledTransaction<string | null>;
+        registrar_boveda: (json: string) => AssembledTransaction<Result<null, Error>>;
         ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
         cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
@@ -334,6 +351,8 @@ export declare class Client extends ContractClient {
         configurar_historial: (json: string) => AssembledTransaction<Result<null, Error>>;
         configurar_requisitos: (json: string) => AssembledTransaction<Result<null, Error>>;
         colateral_para_miembro: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda_token: (json: string) => AssembledTransaction<string | null>;
+        registrar_boveda: (json: string) => AssembledTransaction<Result<null, Error>>;
         ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
         cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
@@ -479,6 +498,12 @@ export declare class Client extends ContractClient {
      */
     evRequisitosEventFilter(topicValues?: {
         id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvBovedaToken" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBovedaTokenEventFilter(topicValues?: {
+        token?: string | Address;
     }): string[];
     /**
      * Build a topics filter row for the "EvDeudaPagada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
