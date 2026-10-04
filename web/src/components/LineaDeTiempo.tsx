@@ -4,7 +4,7 @@ import type { EventoTanda } from '../lib/historia'
 import { narrar } from '../lib/historia'
 import { monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
-import { SIMBOLO } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   /** null = todavía leyendo. */
@@ -16,7 +16,6 @@ type Props = {
   limite?: number
 }
 
-const formato = { nombre: nombreDe, monto, simbolo: SIMBOLO }
 
 function hora(iso: string): string {
   const d = new Date(iso)
@@ -24,6 +23,7 @@ function hora(iso: string): string {
 }
 
 export function LineaDeTiempo({ eventos, error, recientePrimero = true, limite }: Props) {
+  const formato = { nombre: nombreDe, monto, simbolo: useSimbolo() }
   if (eventos === null) {
     return <p className="explica">{error ? 'No pudimos leer la historia ahora mismo.' : 'Leyendo la historia desde la red…'}</p>
   }

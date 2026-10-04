@@ -872,6 +872,68 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.close()
 }
 {
+  // Tanda en USDC: TODA la página habla en USDC (rueda, panel, lista, historia); solo la barra de la cuenta dice TUSD.
+  const est = conTandaUsdc(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/12')
+  await page.waitForSelector('.historia-item', { timeout: 20000 }).catch(() => {})
+  await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
+  const principal = await page.evaluate(() => {
+    const quitar = document.querySelectorAll('.barra-cuenta, footer')
+    const copia = document.body.cloneNode(true)
+    copia.querySelectorAll('.barra-cuenta, footer').forEach((n) => n.remove())
+    return quitar.length >= 0 ? copia.innerText : ''
+  })
+  check('M4: tanda USDC: la rueda dice "USDC para Beto"', /USDC para Beto/.test(principal), principal.slice(0, 300))
+  check('M4: tanda USDC: el panel dice "Bolsa 300 USDC"', /Bolsa\s*300 USDC/.test(principal))
+  check('M4: tanda USDC: la lista dice "Garantía (USDC)"', /Garantía \(USDC\)/.test(principal))
+  check('M4: tanda USDC: la historia dice "Ana cobró 300 USDC"', /Ana cobró 300 USDC/.test(principal))
+  check('M4: tanda USDC: ningún "TUSD" fuera de la barra de la cuenta', !/TUSD/.test(principal), (principal.match(/.{0,40}TUSD.{0,40}/) ?? [''])[0])
+  check('M4: tanda USDC (página completa) sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // En el lobby (que muestra las tandas 1..N), la tarjeta de una tanda en USDC habla en USDC.
+  const est = conTandaUsdc(nuevoEstado(), 6)
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  const tarjeta = await page.locator('.tarjeta', { hasText: 'Tanda 6' }).innerText({ timeout: 15000 }).catch(() => '')
+  check('M4: la tarjeta de la tanda USDC en el lobby dice USDC', /300 USDC/.test(tarjeta) && /cuota 100 USDC/.test(tarjeta), tarjeta)
+  await page.close()
+}
+{
+  // Crear: elegir USDC cambia el símbolo en todo el formulario y el saldo que se revisa es el de USDC.
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.opciones-moneda', { timeout: 15000 }).catch(() => {})
+  check('M4: crear ofrece TUSD y USDC', (await page.locator('.opciones-moneda .moneda').count()) === 2)
+  check('M4: crear empieza en TUSD', /Para unirte|TUSD/.test(await texto(page)) && (await page.locator('.con-sufijo span').first().innerText()) === 'TUSD')
+  await page.locator('.opciones-moneda .moneda', { hasText: 'USDC' }).click()
+  // El saldo en USDC se lee de Horizon al elegir la moneda: esperamos a que llegue.
+  await page.waitForFunction(() => /te faltan 200 USDC/.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {})
+  const t = await texto(page)
+  check('M4: con USDC, la cuota se escribe en USDC', (await page.locator('.con-sufijo span').first().innerText()) === 'USDC')
+  check('M4: con USDC, la tabla dice "Garantía (USDC)"', /Garantía \(USDC\)/.test(t))
+  check('M4: con USDC explica el rendimiento real en Blend', /gana intereses de verdad/.test(t))
+  check('M4: con USDC revisa el saldo en USDC (te faltan 200 USDC)', /te faltan 200 USDC/.test(t), t.slice(0, 1500))
+  await shot(page, 'm4-04-crear-usdc')
+  check('M4: crear con USDC sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Sin USDC registrado en el contrato, crear no muestra el selector (todas las tandas son en TUSD).
+  const est = nuevoEstado()
+  est.usdcRegistrado = false
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.vista-previa table', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(800)
+  check('M4: sin USDC registrado, crear no muestra el selector de moneda', (await page.locator('.opciones-moneda').count()) === 0)
+  await page.close()
+}
+{
   // 390 px
   const est = conTandaUsdc(nuevoEstado())
   const { page } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
@@ -884,6 +946,9 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.waitForSelector('.cuenta-usdc', { timeout: 15000 }).catch(() => {})
   check('Móvil (390px): la barra con USDC no se desborda', !(await desborde()))
   await shot(page, 'm4-03-barra-usdc-390')
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.opciones-moneda', { timeout: 15000 }).catch(() => {})
+  check('Móvil (390px): crear con el selector de moneda no se desborda', !(await desborde()))
   await page.close()
 }
 

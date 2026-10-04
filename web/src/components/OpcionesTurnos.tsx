@@ -4,7 +4,7 @@
 import type { ParametrosTanda } from '../lib/colateral'
 import { MAX_DESCUENTO_BPS, MAX_PRIMA_BPS, MODOS, vistaPrevia, type Modo, type OpcionesForm } from '../lib/turnos'
 import { monto } from '../lib/formato'
-import { SIMBOLO } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   /** Parámetros ya válidos de la tanda (null mientras el formulario tenga errores). */
@@ -105,6 +105,7 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
 }
 
 function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: OpcionesForm }) {
+  const SIMBOLO = useSimbolo()
   const filas = vistaPrevia(params, valor)
   const conPrima = valor.modo === 'PrecioPorTurno'
   const conApartado = filas.some((f) => f.apartado > 0n)

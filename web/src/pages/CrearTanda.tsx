@@ -21,7 +21,9 @@ import {
 import { aSegundos, parseMonto, type UnidadPeriodo } from '../lib/entradas'
 import { duracion, fechaLarga, monto } from '../lib/formato'
 import { RUTA_LOBBY, irA, rutaTanda } from '../lib/rutas'
-import { SIMBOLO, TOKEN_ID } from '../config'
+import { OpcionesMoneda } from '../components/OpcionesMoneda'
+import { MonedaContexto, useSaldoEn, useSimbolo } from '../hooks/useMoneda'
+import { TUSD, type Moneda } from '../lib/monedas'
 import { OPCIONES_CLASICAS, aContrato, esClasica, garantiaAlUnirse, validarOpciones, type OpcionesForm } from '../lib/turnos'
 
 type Formulario = {
@@ -71,8 +73,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const [turnos, setTurnos] = useState<OpcionesForm>(OPCIONES_CLASICAS)
   const [requisitos, setRequisitos] = useState(SIN_REQUISITOS)
   const [progreso, setProgreso] = useState<Progreso>({ tipo: 'ninguno' })
+  // M4: moneda de la tanda (TUSD simulado o USDC de Blend con rendimiento real).
+  const [moneda, setMoneda] = useState<Moneda>(TUSD)
+  const SIMBOLO = moneda.simbolo
 
   const yo = billetera.direccion
+  const saldoMoneda = useSaldoEn(moneda, yo, saldo)
   const cuota = parseMonto(f.cuota)
   const periodoSeg = aSegundos(Number(f.periodo), f.unidad)
 
@@ -90,7 +96,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const trabajando = progreso.tipo === 'trabajando'
   // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
   const garantiaPropia = params ? garantiaAlUnirse(params, turnos.modo, 0) : 0n
-  const faltaSaldo = unirmeYo && saldo !== null && saldo < garantiaPropia ? garantiaPropia - saldo : 0n
+  const faltaSaldo = unirmeYo && saldoMoneda !== null && saldoMoneda < garantiaPropia ? garantiaPropia - saldoMoneda : 0n
 
   const duracionTotal = params ? params.periodoSeg * params.nMiembros : 0
   const [hoy] = useState(() => Math.floor(Date.now() / 1000))
@@ -110,7 +116,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
     try {
       const datos = {
         creador: yo,
-        token: TOKEN_ID,
+        token: moneda.token,
         cuota: params.cuota,
         n_miembros: params.nMiembros,
         periodo_seg: BigInt(params.periodoSeg),
@@ -163,277 +169,282 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   }
 
   return (
-    <section className="crear" aria-labelledby="crear-titulo">
-      <p className="migas">
-        <a href={RUTA_LOBBY}>← Todas las tandas</a>
-      </p>
-      <div className="selector">
-        <h1 id="crear-titulo">Crear una tanda</h1>
-      </div>
-      <p className="explica lobby-intro">
-        Defines las reglas una sola vez y el contrato las cumple solo. Después compartes el link para que se unan.
-      </p>
+    <MonedaContexto.Provider value={moneda}>
+      <section className="crear" aria-labelledby="crear-titulo">
+        <p className="migas">
+          <a href={RUTA_LOBBY}>← Todas las tandas</a>
+        </p>
+        <div className="selector">
+          <h1 id="crear-titulo">Crear una tanda</h1>
+        </div>
+        <p className="explica lobby-intro">
+          Defines las reglas una sola vez y el contrato las cumple solo. Después compartes el link para que se unan.
+        </p>
 
-      <div className="presets" role="group" aria-label="Empezar desde un ejemplo">
-        <span className="presets-titulo">Empezar desde un ejemplo:</span>
-        {PRESETS.map((p) => (
-          <button key={p.nombre} type="button" className="boton chico" onClick={() => setF(p.valores)} title={p.detalle}>
-            {p.nombre}
-          </button>
-        ))}
-      </div>
+        <div className="presets" role="group" aria-label="Empezar desde un ejemplo">
+          <span className="presets-titulo">Empezar desde un ejemplo:</span>
+          {PRESETS.map((p) => (
+            <button key={p.nombre} type="button" className="boton chico" onClick={() => setF(p.valores)} title={p.detalle}>
+              {p.nombre}
+            </button>
+          ))}
+        </div>
 
-      <div className="escenario crear-columnas">
-        <form
-          className="panel formulario"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void crear()
-          }}
-        >
-          <div className="campo">
-            <label htmlFor="cuota">Cuota por ronda</label>
-            <div className="con-sufijo">
-              <input
-                id="cuota"
-                inputMode="decimal"
-                value={f.cuota}
-                onChange={(e) => cambiar('cuota', e.target.value)}
-                aria-invalid={errores.cuota ? true : undefined}
-                aria-describedby="cuota-ayuda"
-              />
-              <span>{SIMBOLO}</span>
-            </div>
-            <p id="cuota-ayuda" className={errores.cuota ? 'ayuda error' : 'ayuda'}>
-              {errores.cuota ?? 'Lo que paga cada persona en cada ronda.'}
-            </p>
-          </div>
+        <div className="escenario crear-columnas">
+          <form
+            className="panel formulario"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void crear()
+            }}
+          >
+            <OpcionesMoneda valor={moneda} alCambiar={setMoneda} />
 
-          <div className="campo">
-            <label htmlFor="n">
-              Personas: <strong>{f.n}</strong>
-            </label>
-            <input
-              id="n"
-              type="range"
-              min={MIN_MIEMBROS}
-              max={MAX_MIEMBROS}
-              value={f.n}
-              onChange={(e) => cambiar('n', Number(e.target.value))}
-            />
-            <p className="ayuda">
-              Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}. Hay una ronda por persona.
-            </p>
-          </div>
-
-          <div className="campo">
-            <label htmlFor="periodo">Duración de cada ronda</label>
-            <div className="fila-campo">
-              <input
-                id="periodo"
-                inputMode="numeric"
-                value={f.periodo}
-                onChange={(e) => cambiar('periodo', e.target.value)}
-                aria-invalid={errores.periodoSeg ? true : undefined}
-                aria-describedby="periodo-ayuda"
-              />
-              <select
-                aria-label="Unidad de tiempo"
-                value={f.unidad}
-                onChange={(e) => cambiar('unidad', e.target.value as UnidadPeriodo)}
-              >
-                <option value="minutos">minutos</option>
-                <option value="horas">horas</option>
-                <option value="dias">días</option>
-                <option value="semanas">semanas</option>
-                <option value="meses">meses</option>
-              </select>
-            </div>
-            <p id="periodo-ayuda" className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-              {errores.periodoSeg ??
-                `Quien paga después de este plazo cuenta como atrasado. Hasta 3 meses por ronda${
-                  f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''
-                }.`}
-            </p>
-          </div>
-
-          <div className="campo">
-            <label htmlFor="multa">
-              Multa por atraso: <strong>{f.multa} %</strong> de la cuota
-            </label>
-            <input
-              id="multa"
-              type="range"
-              min={0}
-              max={MAX_PENALIDAD_BPS / 100}
-              value={f.multa}
-              onChange={(e) => cambiar('multa', Number(e.target.value))}
-            />
-            <p className="ayuda">
-              Se descuenta de la garantía al final y se reparte entre quienes nunca se atrasaron.
-              {cuota !== null && f.multa > 0 && (
-                <>
-                  {' '}
-                  Con tu cuota son {monto((cuota * BigInt(f.multa)) / 100n)} {SIMBOLO} por atraso.
-                </>
-              )}
-            </p>
-          </div>
-
-          <div className="campo">
-            <label htmlFor="cobertura">
-              Garantía: <strong>{f.cobertura} %</strong> de lo que aún se debe
-            </label>
-            <input
-              id="cobertura"
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={f.cobertura}
-              onChange={(e) => cambiar('cobertura', Number(e.target.value))}
-            />
-            <p className="ayuda">
-              Quien cobra antes deja más garantía. Con 100 % nadie gana nada huyendo; con menos es más barato entrar, pero
-              el grupo asume algo de riesgo.
-            </p>
-          </div>
-
-          <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
-          <OpcionesHistorial valor={requisitos} alCambiar={setRequisitos} yo={yo} unirmeYo={unirmeYo} />
-
-          <label className="casilla">
-            <input type="checkbox" checked={unirmeYo} onChange={(e) => setUnirmeYo(e.target.checked)} />
-            <span>
-              Unirme yo también, como primera persona
-              {params && unirmeYo && (
-                <span className="ayuda">
-                  {' '}
-                  (dejarás {monto(garantiaPropia)} {SIMBOLO} de garantía
-                  {turnos.modo === 'Sorteo'
-                    ? '; tu turno se sortea al llenarse'
-                    : turnos.modo === 'Subasta'
-                      ? '; tu turno se decide en las subastas'
-                      : ' y cobrarás en la ronda 1'}
-                  )
-                </span>
-              )}
-            </span>
-          </label>
-
-          <div className="acciones">
-            {!yo ? (
-              <>
-                <p>Entra o conecta tu billetera para crear la tanda.</p>
-                <BotonesEntrar billetera={billetera} />
-              </>
-            ) : !billetera.redCorrecta ? (
-              <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>
-            ) : (
-              <button
-                type="submit"
-                className="boton principal"
-                disabled={!valido || errorTurnos !== null || trabajando || faltaSaldo > 0n}
-              >
-                {trabajando ? 'Esperando…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
-              </button>
-            )}
-            {faltaSaldo > 0n && (
-              <p className="aviso nota">
-                Para unirte como primera persona necesitas {monto(garantiaPropia)} {SIMBOLO} y te faltan {monto(faltaSaldo)} {SIMBOLO}.
-                Pide más con el botón de arriba o desmarca "Unirme yo también".
+            <div className="campo">
+              <label htmlFor="cuota">Cuota por ronda</label>
+              <div className="con-sufijo">
+                <input
+                  id="cuota"
+                  inputMode="decimal"
+                  value={f.cuota}
+                  onChange={(e) => cambiar('cuota', e.target.value)}
+                  aria-invalid={errores.cuota ? true : undefined}
+                  aria-describedby="cuota-ayuda"
+                />
+                <span>{SIMBOLO}</span>
+              </div>
+              <p id="cuota-ayuda" className={errores.cuota ? 'ayuda error' : 'ayuda'}>
+                {errores.cuota ?? 'Lo que paga cada persona en cada ronda.'}
               </p>
-            )}
-            <p className="explica">
-              Cualquier persona con el link podrá unirse.{' '}
-              {turnos.modo === 'Llegada'
-                ? 'El orden de llegada decide el turno: quien entra primero cobra primero y deja más garantía.'
-                : 'El turno lo decide el mecanismo que elegiste arriba, no el orden de llegada.'}
-            </p>
-          </div>
+            </div>
 
-          {progreso.tipo === 'trabajando' && (
-            <p className="aviso esperando" role="status" aria-live="polite">
-              {progreso.texto}
-            </p>
-          )}
-          {progreso.tipo === 'error' && (
-            <p className="aviso error" role="alert">
-              {progreso.texto}
-            </p>
-          )}
-          {progreso.tipo === 'creada-sin-unirse' && (
-            <p className="aviso error" role="alert">
-              {progreso.texto}{' '}
-              <a href={rutaTanda(progreso.id)}>Ir a la tanda {progreso.id}</a>
-            </p>
-          )}
-        </form>
+            <div className="campo">
+              <label htmlFor="n">
+                Personas: <strong>{f.n}</strong>
+              </label>
+              <input
+                id="n"
+                type="range"
+                min={MIN_MIEMBROS}
+                max={MAX_MIEMBROS}
+                value={f.n}
+                onChange={(e) => cambiar('n', Number(e.target.value))}
+              />
+              <p className="ayuda">
+                Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}. Hay una ronda por persona.
+              </p>
+            </div>
 
-        <aside className="panel vista-previa" aria-labelledby="previa-titulo">
-          <h2 id="previa-titulo">Así va a funcionar</h2>
-          {params ? (
-            <>
-              <dl className="datos">
-                <div className="dato">
-                  <dt>Bolsa por ronda</dt>
-                  <dd>
-                    {monto(bolsa(params))} {SIMBOLO}
-                  </dd>
-                </div>
-                <div className="dato">
-                  <dt>Dura en total</dt>
-                  <dd>{duracion(duracionTotal)}</dd>
-                </div>
-              </dl>
-              {fechaFin && (
-                <p className="explica">
-                  Las fechas de pago quedan fijas desde que se completa el grupo. Si se llena hoy, la última ronda vence
-                  el {fechaFin}.
+            <div className="campo">
+              <label htmlFor="periodo">Duración de cada ronda</label>
+              <div className="fila-campo">
+                <input
+                  id="periodo"
+                  inputMode="numeric"
+                  value={f.periodo}
+                  onChange={(e) => cambiar('periodo', e.target.value)}
+                  aria-invalid={errores.periodoSeg ? true : undefined}
+                  aria-describedby="periodo-ayuda"
+                />
+                <select
+                  aria-label="Unidad de tiempo"
+                  value={f.unidad}
+                  onChange={(e) => cambiar('unidad', e.target.value as UnidadPeriodo)}
+                >
+                  <option value="minutos">minutos</option>
+                  <option value="horas">horas</option>
+                  <option value="dias">días</option>
+                  <option value="semanas">semanas</option>
+                  <option value="meses">meses</option>
+                </select>
+              </div>
+              <p id="periodo-ayuda" className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
+                {errores.periodoSeg ??
+                  `Quien paga después de este plazo cuenta como atrasado. Hasta 3 meses por ronda${
+                    f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''
+                  }.`}
+              </p>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="multa">
+                Multa por atraso: <strong>{f.multa} %</strong> de la cuota
+              </label>
+              <input
+                id="multa"
+                type="range"
+                min={0}
+                max={MAX_PENALIDAD_BPS / 100}
+                value={f.multa}
+                onChange={(e) => cambiar('multa', Number(e.target.value))}
+              />
+              <p className="ayuda">
+                Se descuenta de la garantía al final y se reparte entre quienes nunca se atrasaron.
+                {cuota !== null && f.multa > 0 && (
+                  <>
+                    {' '}
+                    Con tu cuota son {monto((cuota * BigInt(f.multa)) / 100n)} {SIMBOLO} por atraso.
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="cobertura">
+                Garantía: <strong>{f.cobertura} %</strong> de lo que aún se debe
+              </label>
+              <input
+                id="cobertura"
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={f.cobertura}
+                onChange={(e) => cambiar('cobertura', Number(e.target.value))}
+              />
+              <p className="ayuda">
+                Quien cobra antes deja más garantía. Con 100 % nadie gana nada huyendo; con menos es más barato entrar, pero
+                el grupo asume algo de riesgo.
+              </p>
+            </div>
+
+            <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
+            <OpcionesHistorial valor={requisitos} alCambiar={setRequisitos} yo={yo} unirmeYo={unirmeYo} />
+
+            <label className="casilla">
+              <input type="checkbox" checked={unirmeYo} onChange={(e) => setUnirmeYo(e.target.checked)} />
+              <span>
+                Unirme yo también, como primera persona
+                {params && unirmeYo && (
+                  <span className="ayuda">
+                    {' '}
+                    (dejarás {monto(garantiaPropia)} {SIMBOLO} de garantía
+                    {turnos.modo === 'Sorteo'
+                      ? '; tu turno se sortea al llenarse'
+                      : turnos.modo === 'Subasta'
+                        ? '; tu turno se decide en las subastas'
+                        : ' y cobrarás en la ronda 1'}
+                    )
+                  </span>
+                )}
+              </span>
+            </label>
+
+            <div className="acciones">
+              {!yo ? (
+                <>
+                  <p>Entra o conecta tu billetera para crear la tanda.</p>
+                  <BotonesEntrar billetera={billetera} />
+                </>
+              ) : !billetera.redCorrecta ? (
+                <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>
+              ) : (
+                <button
+                  type="submit"
+                  className="boton principal"
+                  disabled={!valido || errorTurnos !== null || trabajando || faltaSaldo > 0n}
+                >
+                  {trabajando ? 'Esperando…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
+                </button>
+              )}
+              {faltaSaldo > 0n && (
+                <p className="aviso nota">
+                  Para unirte como primera persona necesitas {monto(garantiaPropia)} {SIMBOLO} y te faltan {monto(faltaSaldo)} {SIMBOLO}.
+                  Pide más con el botón de arriba o desmarca "Unirme yo también".
                 </p>
               )}
-
-              <h3>Garantía de cada turno</h3>
-              <div className="tabla-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Turno</th>
-                      <th scope="col">Cobra</th>
-                      <th scope="col" className="num">
-                        Garantía ({SIMBOLO})
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tablaColateral(params).map((c, i) => (
-                      <tr key={i}>
-                        <td className="turno">{i + 1}</td>
-                        <td>Ronda {i + 1}</td>
-                        <td className="num">{monto(c)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
               <p className="explica">
-                La garantía se guarda en una bóveda que genera rendimiento y se devuelve al final. Si alguien desaparece,
-                su garantía paga por él.
+                Cualquier persona con el link podrá unirse.{' '}
+                {turnos.modo === 'Llegada'
+                  ? 'El orden de llegada decide el turno: quien entra primero cobra primero y deja más garantía.'
+                  : 'El turno lo decide el mecanismo que elegiste arriba, no el orden de llegada.'}
               </p>
+            </div>
 
-              <RiesgoGrupo params={params} />
+            {progreso.tipo === 'trabajando' && (
+              <p className="aviso esperando" role="status" aria-live="polite">
+                {progreso.texto}
+              </p>
+            )}
+            {progreso.tipo === 'error' && (
+              <p className="aviso error" role="alert">
+                {progreso.texto}
+              </p>
+            )}
+            {progreso.tipo === 'creada-sin-unirse' && (
+              <p className="aviso error" role="alert">
+                {progreso.texto}{' '}
+                <a href={rutaTanda(progreso.id)}>Ir a la tanda {progreso.id}</a>
+              </p>
+            )}
+          </form>
 
-            </>
-          ) : (
-            <p className="explica">Completa los datos de la izquierda para ver la vista previa.</p>
-          )}
-        </aside>
-      </div>
-    </section>
+          <aside className="panel vista-previa" aria-labelledby="previa-titulo">
+            <h2 id="previa-titulo">Así va a funcionar</h2>
+            {params ? (
+              <>
+                <dl className="datos">
+                  <div className="dato">
+                    <dt>Bolsa por ronda</dt>
+                    <dd>
+                      {monto(bolsa(params))} {SIMBOLO}
+                    </dd>
+                  </div>
+                  <div className="dato">
+                    <dt>Dura en total</dt>
+                    <dd>{duracion(duracionTotal)}</dd>
+                  </div>
+                </dl>
+                {fechaFin && (
+                  <p className="explica">
+                    Las fechas de pago quedan fijas desde que se completa el grupo. Si se llena hoy, la última ronda vence
+                    el {fechaFin}.
+                  </p>
+                )}
+
+                <h3>Garantía de cada turno</h3>
+                <div className="tabla-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Turno</th>
+                        <th scope="col">Cobra</th>
+                        <th scope="col" className="num">
+                          Garantía ({SIMBOLO})
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tablaColateral(params).map((c, i) => (
+                        <tr key={i}>
+                          <td className="turno">{i + 1}</td>
+                          <td>Ronda {i + 1}</td>
+                          <td className="num">{monto(c)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="explica">
+                  La garantía se guarda en una bóveda que genera rendimiento y se devuelve al final. Si alguien desaparece,
+                  su garantía paga por él.
+                </p>
+
+                <RiesgoGrupo params={params} />
+
+              </>
+            ) : (
+              <p className="explica">Completa los datos de la izquierda para ver la vista previa.</p>
+            )}
+          </aside>
+        </div>
+      </section>
+    </MonedaContexto.Provider>
   )
 }
 
 function RiesgoGrupo({ params }: { params: ParametrosTanda }) {
+  const SIMBOLO = useSimbolo()
   const riesgo = riesgoMaximo(params)
   if (riesgo === 0n) {
     return (

@@ -22,7 +22,8 @@ import {
   tieneTurno,
   turnosLibres,
 } from '../lib/turnos'
-import { EXPLORADOR, SIMBOLO, TANDA_ID } from '../config'
+import { EXPLORADOR, TANDA_ID } from '../config'
+import { comoConseguir, useMoneda, useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   id: number
@@ -132,6 +133,8 @@ function parametros(datos: DatosTanda): ParametrosTanda {
 // ---------------------------------------------------------------------------
 
 function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: Comun & { saldo: bigint | null }) {
+  const SIMBOLO = useSimbolo()
+  const moneda = useMoneda()
   const { tanda, miembros, turnos } = datos
   const [elegido, setElegido] = useState<number | null>(null)
   const [cotizado, setCotizado] = useState<{ turno: number; colateral: bigint; prima: bigint } | null>(null)
@@ -226,7 +229,7 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
           )}
           {falta > 0n && (
             <p className="aviso nota">
-              Te faltan {monto(falta)} {SIMBOLO}. Usa el botón "Pedir {SIMBOLO} de prueba" de arriba para recibir más.
+              Te faltan {monto(falta)} {SIMBOLO}. {comoConseguir(moneda)} para recibir más.
             </p>
           )}
         </>
@@ -240,6 +243,7 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
 // ---------------------------------------------------------------------------
 
 function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: Comun & { ahora: number }) {
+  const SIMBOLO = useSimbolo()
   const { tanda, miembros, turnos, vence } = datos
   const [texto, setTexto] = useState('')
   if (!turnos) return null
@@ -343,6 +347,7 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
 type Sentido = 'nada' | 'pago' | 'cobro'
 
 function Intercambios({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar }: Comun) {
+  const SIMBOLO = useSimbolo()
   const { tanda, miembros, turnos } = datos
   const [con, setCon] = useState('')
   const [sentido, setSentido] = useState<Sentido>('nada')

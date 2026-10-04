@@ -8,7 +8,7 @@ import { bolsaQueRecupera, errorMontoDeuda, garantiaPendiente } from '../lib/deu
 import { parseMonto } from '../lib/entradas'
 import { monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
-import { SIMBOLO } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   id: number
@@ -23,6 +23,7 @@ type Props = {
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
 
 export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
+  const SIMBOLO = useSimbolo()
   const [aviso, setAviso] = useState<Aviso>(null)
   const [parcial, setParcial] = useState('')
   const { tanda, miembros, deudas } = datos
@@ -133,6 +134,7 @@ type MiDeudaProps = {
 }
 
 function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaSaldo, parcial, setParcial, pagar }: MiDeudaProps) {
+  const SIMBOLO = useSimbolo()
   const recupera = bolsaQueRecupera(d, yo, multas, garantia)
   const montoParcial = parseMonto(parcial)
   const errorParcial = parcial.trim() === '' ? null : errorMontoDeuda(montoParcial, deuda)
@@ -165,7 +167,7 @@ function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaS
       <p className="explica">
         Al saldarla vuelves a estar al día y puedes pagar tus cuotas otra vez.
         {cobraEnRonda !== null && ` Cobras tu bolsa en la ronda ${cobraEnRonda}, como estaba previsto.`}
-        {recupera && ` Recuperas tu bolsa retenida: ${monto(recupera.neto)} ${SIMBOLO}${descuentos(recupera)}.`}
+        {recupera && ` Recuperas tu bolsa retenida: ${monto(recupera.neto)} ${SIMBOLO}${descuentos(recupera, SIMBOLO)}.`}
       </p>
 
       <button className="boton principal" disabled={ocupado || falta > 0n} onClick={() => pagar(deuda)}>
@@ -211,7 +213,7 @@ function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaS
 }
 
 /** " (se descuentan 10 TUSD de multas y 100 TUSD quedan como tu garantía...)" o "". */
-function descuentos(r: { multas: bigint; garantia: bigint }): string {
+function descuentos(r: { multas: bigint; garantia: bigint }, SIMBOLO: string): string {
   const partes = [
     r.multas > 0n ? `se descuentan ${monto(r.multas)} ${SIMBOLO} de multas` : null,
     r.garantia > 0n ? `${monto(r.garantia)} ${SIMBOLO} quedan como tu garantía para las cuotas que aún debes` : null,

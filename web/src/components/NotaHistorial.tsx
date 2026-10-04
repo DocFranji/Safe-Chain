@@ -4,7 +4,7 @@ import { useHistorialCacheado } from '../hooks/useHistorial'
 import { nivelDePuntaje, puntajeDe } from '../lib/historial'
 import { monto } from '../lib/formato'
 import { RUTA_MI_HISTORIAL } from '../lib/rutas'
-import { SIMBOLO } from '../config'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   yo: string | null
@@ -15,6 +15,7 @@ type Props = {
 }
 
 export function NotaHistorial({ yo, requisitos, normal, conDescuento }: Props) {
+  const SIMBOLO = useSimbolo()
   const h = useHistorialCacheado(yo ?? '')
   if (requisitos.puntaje_minimo === 0 && !requisitos.descuento) return null
   const puntaje = yo && h ? puntajeDe(h) : null

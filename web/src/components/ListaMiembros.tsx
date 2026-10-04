@@ -3,13 +3,15 @@ import type { DatosTanda } from '../hooks/useTanda'
 import { monto } from '../lib/formato'
 import { saldoSuDeuda } from '../lib/deudas'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
-import { EXPLORADOR, SIMBOLO } from '../config'
+import { EXPLORADOR } from '../config'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
 import { InsigniaNivel } from './InsigniaNivel'
+import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = { datos: DatosTanda; yo: string | null }
 
 export function ListaMiembros({ datos, yo }: Props) {
+  const SIMBOLO = useSimbolo()
   const { tanda, miembros, pagaron } = datos
   const activa = tanda.estado.tag === 'Activa'
   const libres = tanda.n_miembros - miembros.length
@@ -61,7 +63,7 @@ export function ListaMiembros({ datos, yo }: Props) {
                     </td>
                   )}
                   <td>
-                    {estadoMiembro(m, activa, tanda.ronda_actual)}
+                    {estadoMiembro(m, activa, tanda.ronda_actual, SIMBOLO)}
                     {saldoSuDeuda(
                       datos.deudas.find((d) => d.direccion === m.direccion),
                       m.moroso,
@@ -92,6 +94,7 @@ function estadoMiembro(
   m: { posicion: number; cobro: boolean; moroso: boolean; deuda: bigint },
   activa: boolean,
   ronda: number,
+  SIMBOLO: string,
 ): string {
   if (m.moroso) return `Debe ${monto(m.deuda)} ${SIMBOLO}`
   if (m.cobro) return 'Ya cobró'

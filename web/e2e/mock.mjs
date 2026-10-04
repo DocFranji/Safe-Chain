@@ -186,11 +186,11 @@ export function conTandaMorosa(e) {
   return e
 }
 /**
- * M4: agrega la tanda 12, en USDC de Blend y en curso, con su garantía en el adaptador de Blend (rendimiento real).
+ * M4: agrega la tanda `id` (12 por defecto), en USDC de Blend y en curso, con su garantía en el adaptador de Blend (rendimiento real).
  * No está en `nuevoEstado()` para no cambiar los escenarios que cuentan tandas.
  */
-export function conTandaUsdc(e) {
-  e.tandas[12] = {
+export function conTandaUsdc(e, id = 12) {
+  e.tandas[id] = {
     boveda: ADAPTADOR_USDC,
     tanda: tanda({ creador: BETO, token: USDC_ID, estado: est('Activa'), ronda_actual: 1, inicio_ronda: BigInt(ahora() - 30), shares_boveda: 400n * U }),
     miembros: [
