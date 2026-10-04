@@ -17,6 +17,8 @@ Después juega cientos de operaciones al azar sobre hasta 3 tandas a la vez:
 - pagos a tiempo, tarde y faltantes;
 - deudas saldadas, completas o en partes, por el moroso o por otra persona;
 - ofertas, intercambios y cancelaciones;
+- subastas selladas: se sella y se revela, con sellos copiados, empates, revelaciones fuera de fase y con la sal o el monto equivocados (M3);
+- tandas cuyos primeros turnos piden historial: al unirse, al llenarse y al intercambiar (M3);
 - cierres muy atrasados;
 - un historial que deja de aceptar hechos o se desconecta;
 - y operaciones que deben fallar, revisando el código de error exacto.
@@ -30,7 +32,7 @@ Después juega cientos de operaciones al azar sobre hasta 3 tandas a la vez:
 | 3 | Las participaciones anotadas por las tandas suman las que la bóveda reconoce. La bóveda puede pagarle a todos, y lo de cada tanda alcanza para su garantía (menos el redondeo) |
 | 4 | Nada negativo. Deuda = suma de faltantes. Moroso ⇔ debe algo. Bolsas retenidas ⊆ `retenido`. Cada turno tiene un solo dueño, y nadie cobra antes de su turno |
 | 5 | Nunca se traba: `cerrar_ronda` y `finalizar` funcionan siempre que corresponde, y al final no queda garantía ni participaciones |
-| 6 | Operación por operación, cada quien paga o recibe lo que dicen las reglas: unirse (y lo que muestra la web antes de firmar), pagar cuota, cerrar ronda, pagar deuda, intercambios, cancelar y finalizar |
+| 6 | Operación por operación, cada quien paga o recibe lo que dicen las reglas: unirse (y lo que muestra la web antes de firmar), pagar cuota, cerrar ronda, pagar deuda, intercambios, cancelar y finalizar. En la subasta cobra quien debe: la mejor oferta (en la sellada, la mayor revelada; un empate lo decide el orden de respaldo) y, si no puede, el respaldo. En la sellada, la mitad que muestra la web y quiénes sellaron son los que espera el modelo |
 | 7 | En la mitad de los escenarios (modo testnet): ningún dato de una tanda activa se archiva entre una operación y la siguiente |
 
 Cómo correrlas:
@@ -92,4 +94,4 @@ termina repartido como rendimiento.
 - Auditoría externa de los contratos y del adaptador de Blend.
 - Un sorteo con compromiso y revelación entre los miembros, o una VRF, en vez de `env.prng()`.
 - Límites a la cuota y a los montos (hoy solo se exige que sean mayores que 0; un desbordamiento hace fallar la transacción, porque `overflow-checks = true`).
-- Correr las pruebas de invariantes con miles de semillas en cada versión, y sumar las funciones nuevas a esas pruebas.
+- Correr las pruebas de invariantes con miles de semillas en cada versión, y sumar a esas pruebas cada función nueva (las ofertas selladas y los turnos con historial ya están).
