@@ -1,5 +1,5 @@
 // Lecturas del contrato (no piden firma ni cuestan nada). Las usan el lobby y la página de cada tanda.
-import type { Miembro, Tanda } from 'tanda'
+import type { EstadoTurnos, Miembro, Tanda } from 'tanda'
 import { clienteLectura, leer, revisarSimulacion } from './contrato'
 
 export type MiembroConDireccion = Miembro & { direccion: string }
@@ -24,6 +24,8 @@ export type DatosTanda = {
   vence: number
   /** Garantía que pagaría la próxima persona en unirse (solo si la tanda está abierta). */
   colateralSiguiente: bigint | null
+  /** (M3) Modo de turnos, subasta e intercambios. null si el contrato no lo tiene (versión anterior). */
+  turnos: EstadoTurnos | null
 }
 
 export function ordenarMiembros(lista: [string, Miembro][]): MiembroConDireccion[] {
@@ -54,10 +56,15 @@ export async function leerResumen(id: number): Promise<ResumenTanda> {
 
 export async function leerTandaCompleta(id: number): Promise<DatosTanda> {
   const c = clienteLectura()
-  const [tanda, lista, ronda] = await Promise.all([
+  const [tanda, lista, ronda, turnos] = await Promise.all([
     c.get_tanda({ id }).then(leer),
     c.get_miembros({ id }).then(leer),
     c.get_ronda({ id }).then(leer),
+    // Un contrato anterior a M3 no tiene esta consulta: la tanda se muestra como "por orden de llegada".
+    c
+      .get_estado_turnos({ id })
+      .then(leer)
+      .catch(() => null),
   ])
   let colateralSiguiente: bigint | null = null
   if (tanda.estado.tag === 'Abierta' && lista.length < tanda.n_miembros) {
@@ -69,5 +76,6 @@ export async function leerTandaCompleta(id: number): Promise<DatosTanda> {
     pagaron: ronda[2],
     vence: Number(ronda[1]),
     colateralSiguiente,
+    turnos,
   }
 }

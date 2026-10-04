@@ -1425,3 +1425,133 @@ td .dir {
   font-size: 16px !important;
   font-weight: 600 !important;
 }
+
+/* ---------- Mecanismos de turnos (M3) ---------- */
+.turnos-opciones {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.turnos-opciones > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.modos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.modo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--linea);
+  border-radius: 12px;
+  background: var(--papel);
+  cursor: pointer;
+}
+.modo:hover {
+  border-color: var(--borde);
+}
+.modo.elegido {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+}
+.modo input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.modo:has(input:focus-visible) {
+  outline: 3px solid var(--turno);
+  outline-offset: 2px;
+}
+.modo-titulo {
+  font-weight: 800;
+}
+.modo-lema {
+  font-size: 14px;
+  color: var(--tinta-2);
+}
+.turnos-previa h3 {
+  margin: 8px 0 6px;
+  font-size: 17px;
+}
+.turnos-previa .explica {
+  margin-top: 8px;
+}
+
+.turnos-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linea);
+}
+.turnos-acciones h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+}
+.rejilla-turnos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.turno-casilla {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--borde);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--tinta);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.turno-casilla:hover:not(:disabled) {
+  background: var(--papel);
+}
+.turno-casilla.elegido {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+}
+.turno-casilla:disabled {
+  border-style: dashed;
+  border-color: var(--linea);
+  color: var(--tinta-2);
+  cursor: not-allowed;
+}
+.turno-casilla strong {
+  font-size: 17px;
+}
+.turno-casilla .sub {
+  font-size: 13px;
+}
+.fila-oferta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.propuesta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--linea);
+  border-radius: 12px;
+}
+.propuesta.recibida {
+  border-color: var(--turno);
+  background: var(--turno-suave);
+}

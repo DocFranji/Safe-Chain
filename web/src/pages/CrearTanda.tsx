@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from '../components/BotonesEntrar'
+import { OpcionesTurnos } from '../components/OpcionesTurnos'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
   MAX_PENALIDAD_BPS,
   MIN_MIEMBROS,
   bolsa,
-  colateralDeTurno,
   riesgoMaximo,
   tablaColateral,
   validarParametros,
@@ -19,6 +19,7 @@ import { aSegundos, parseMonto, type UnidadPeriodo } from '../lib/entradas'
 import { duracion, monto } from '../lib/formato'
 import { RUTA_LOBBY, irA, rutaTanda } from '../lib/rutas'
 import { SIMBOLO, TOKEN_ID } from '../config'
+import { OPCIONES_CLASICAS, aContrato, esClasica, garantiaAlUnirse, validarOpciones, type OpcionesForm } from '../lib/turnos'
 
 /** Por encima de esto avisamos: esta versión de pruebas no se ha probado con tandas tan largas. */
 const DIAS_PROBADOS_MAX = 25
@@ -57,6 +58,7 @@ type Progreso =
 export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: bigint | null }) {
   const [f, setF] = useState<Formulario>(INICIAL)
   const [unirmeYo, setUnirmeYo] = useState(true)
+  const [turnos, setTurnos] = useState<OpcionesForm>(OPCIONES_CLASICAS)
   const [progreso, setProgreso] = useState<Progreso>({ tipo: 'ninguno' })
 
   const yo = billetera.direccion
@@ -71,10 +73,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
     coberturaBps: f.cobertura * 100,
   }
   const errores = validarParametros(parciales)
+  const errorTurnos = validarOpciones(turnos)
   const valido = Object.keys(errores).length === 0
   const params = valido ? (parciales as ParametrosTanda) : null
   const trabajando = progreso.tipo === 'trabajando'
-  const garantiaPropia = params ? colateralDeTurno(params, 0) : 0n
+  // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
+  const garantiaPropia = params ? garantiaAlUnirse(params, turnos.modo, 0) : 0n
   const faltaSaldo = unirmeYo && saldo !== null && saldo < garantiaPropia ? garantiaPropia - saldo : 0n
 
   const duracionTotal = params ? params.periodoSeg * params.nMiembros : 0
@@ -91,7 +95,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
 
     let id: number
     try {
-      const tx = await clienteFirma(yo).crear_tanda({
+      const datos = {
         creador: yo,
         token: TOKEN_ID,
         cuota: params.cuota,
@@ -99,7 +103,11 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
         periodo_seg: BigInt(params.periodoSeg),
         penalidad_bps: params.penalidadBps,
         cobertura_bps: params.coberturaBps,
-      })
+      }
+      // Por orden de llegada y sin intercambios: la tanda de siempre. Si no, con sus opciones de turnos.
+      const tx = esClasica(turnos)
+        ? await clienteFirma(yo).crear_tanda(datos)
+        : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) })
       const resultado = await enviar(tx)
       if (resultado.isErr()) throw new Error('El contrato rechazó los datos de la tanda.')
       id = resultado.unwrap()
@@ -259,6 +267,8 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
             </p>
           </div>
 
+          <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
+
           <label className="casilla">
             <input type="checkbox" checked={unirmeYo} onChange={(e) => setUnirmeYo(e.target.checked)} />
             <span>
@@ -266,7 +276,13 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               {params && unirmeYo && (
                 <span className="ayuda">
                   {' '}
-                  (dejarás {monto(colateralDeTurno(params, 0))} {SIMBOLO} de garantía y cobrarás en la ronda 1)
+                  (dejarás {monto(garantiaPropia)} {SIMBOLO} de garantía
+                  {turnos.modo === 'Sorteo'
+                    ? '; tu turno se sortea al llenarse'
+                    : turnos.modo === 'Subasta'
+                      ? '; tu turno se decide en las subastas'
+                      : ' y cobrarás en la ronda 1'}
+                  )
                 </span>
               )}
             </span>
@@ -281,7 +297,11 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
             ) : !billetera.redCorrecta ? (
               <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>
             ) : (
-              <button type="submit" className="boton principal" disabled={!valido || trabajando || faltaSaldo > 0n}>
+              <button
+                type="submit"
+                className="boton principal"
+                disabled={!valido || errorTurnos !== null || trabajando || faltaSaldo > 0n}
+              >
                 {trabajando ? 'Esperando…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
               </button>
             )}
@@ -292,8 +312,10 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               </p>
             )}
             <p className="explica">
-              Cualquier persona con el link podrá unirse. El orden de llegada decide el turno: quien entra primero cobra
-              primero y deja más garantía.
+              Cualquier persona con el link podrá unirse.{' '}
+              {turnos.modo === 'Llegada'
+                ? 'El orden de llegada decide el turno: quien entra primero cobra primero y deja más garantía.'
+                : 'El turno lo decide el mecanismo que elegiste arriba, no el orden de llegada.'}
             </p>
           </div>
 

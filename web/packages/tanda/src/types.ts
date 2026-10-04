@@ -16,7 +16,17 @@ export const Error = {
   10 : { message: "MiembroMoroso" },
   11 : { message: "NoVerificado" },
   12 : { message: "NoAutorizado" },
-  13 : { message: "NoInicializado" }
+  13 : { message: "NoInicializado" },
+  30 : { message: "OpcionesInvalidas" },
+  31 : { message: "ModoNoPermite" },
+  32 : { message: "TurnoInvalido" },
+  33 : { message: "TurnoOcupado" },
+  34 : { message: "OfertaInvalida" },
+  35 : { message: "NoPuedeOfertar" },
+  36 : { message: "SinSubasta" },
+  37 : { message: "IntercambioInvalido" },
+  38 : { message: "PropuestaExistente" },
+  39 : { message: "SinPropuesta" }
 }
 
 /**
@@ -90,6 +100,88 @@ export interface Miembro {
 }
 
 /**
+ * Intercambio pendiente: `de` propone cambiar su turno por el de `con`.
+ * `compensacion` > 0: `de` le paga a `con` (queda guardada en el contrato hasta aceptar o retirar).
+ * `compensacion` < 0: `con` le paga a `de` al aceptar.
+ */
+export interface Propuesta {
+  compensacion: bigint;
+  con: string;
+  de: string;
+}
+
+/**
+ * Union: ModoTurnos
+ */
+ export type ModoTurnos =
+  /**
+   * El orden de llegada decide el turno (como siempre).
+   */
+  { tag: "Llegada"; values: void } |
+  /**
+   * Cada quien elige un turno libre al unirse, gratis.
+   */
+  { tag: "Eleccion"; values: void } |
+  /**
+   * Cada quien elige turno: los primeros pagan una prima y los últimos la reciben.
+   */
+  { tag: "PrecioPorTurno"; values: void } |
+  /**
+   * El contrato sortea el orden cuando se llena la tanda.
+   */
+  { tag: "Sorteo"; values: void } |
+  /**
+   * Cada ronda cobra quien ofrezca el mayor descuento sobre la bolsa.
+   */
+  { tag: "Subasta"; values: void };
+
+/**
+ * Todo lo de turnos que la web necesita, en una sola lectura (`get_estado_turnos`).
+ */
+export interface EstadoTurnos {
+  /**
+   * PrecioPorTurno: primas ya cobradas que esperan a los últimos turnos.
+   */
+  fondo_primas: bigint;
+  /**
+   * Subasta: descuento de esa oferta, en bps sobre la bolsa (0 si nadie ha ofertado).
+   */
+  mejor_oferta_bps: number;
+  /**
+   * Subasta: quién hizo la mejor oferta de la ronda en curso (nadie todavía: `None`).
+   */
+  mejor_postor: string | null;
+  opciones: OpcionesTanda;
+  /**
+   * Intercambios pendientes.
+   */
+  propuestas: Array<Propuesta>;
+  /**
+   * Subasta: orden sorteado al llenarse; decide quién cobra en las rondas sin ofertas.
+   */
+  respaldo: Array<string>;
+}
+
+/**
+ * Opciones de turnos que elige el creador (`crear_tanda_avanzada`).
+ */
+export interface OpcionesTanda {
+  /**
+   * Subasta: descuento máximo que se puede ofrecer, en bps sobre la bolsa.
+   */
+  descuento_max_bps: number;
+  modo: ModoTurnos;
+  /**
+   * Dos miembros pueden cambiar sus turnos futuros (no aplica a la subasta).
+   */
+  permitir_intercambio: boolean;
+  /**
+   * PrecioPorTurno: prima del primer turno, en bps sobre la bolsa. El último recibe lo mismo.
+   */
+  prima_max_bps: number;
+}
+
+/**
  * Event: EvPago
  */
 export interface EvPagoEvent {
@@ -99,6 +191,19 @@ export interface EvPagoEvent {
     miembro?: string;
     ronda?: number;
     tarde?: boolean;
+  };
+}
+
+/**
+ * Precio por turno: `prima` > 0 la pagó quien cobró (se apartó de su bolsa); < 0 la recibió.
+ */
+export interface EvPrimaEvent {
+  name: "EvPrima";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
+    prima?: bigint;
   };
 }
 
@@ -154,6 +259,55 @@ export interface EvMorosoEvent {
 }
 
 /**
+ * Subasta: alguien ofreció recibir `descuento` menos para cobrar en esta ronda.
+ */
+export interface EvOfertaEvent {
+  name: "EvOferta";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
+    descuento_bps?: number;
+    /**
+     * En dinero, si todos pagan la ronda.
+     */
+    descuento?: bigint;
+  };
+}
+
+/**
+ * El contrato sorteó el orden de cobro: `orden[i]` cobra en la ronda `i`.
+ */
+export interface EvSorteoEvent {
+  name: "EvSorteo";
+  data: {
+    id: number;
+    orden?: Array<string>;
+  };
+}
+
+/**
+ * Subasta: quién se quedó con la bolsa de la ronda y cuánto recibió cada uno de los demás.
+ */
+export interface EvSubastaEvent {
+  name: "EvSubasta";
+  data: {
+    id: number;
+    ronda?: number;
+    ganador?: string;
+    descuento?: bigint;
+    /**
+     * Lo que se sumó a la garantía de cada uno de los demás.
+     */
+    dividendo?: bigint;
+    /**
+     * Nadie ofertó (o la oferta no valía): cobró el siguiente del orden de respaldo.
+     */
+    por_respaldo?: boolean;
+  };
+}
+
+/**
  * El momento clave de la demo: "el colateral de Ana cubrió su cuota".
  */
 export interface EvCubiertoEvent {
@@ -167,6 +321,19 @@ export interface EvCubiertoEvent {
 }
 
 /**
+ * De la bolsa de quien cobró se apartó `monto` para completar su garantía (vuelve al final).
+ */
+export interface EvGarantiaEvent {
+  name: "EvGarantia";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
+    monto?: bigint;
+  };
+}
+
+/**
  * Event: EvIniciada
  */
 export interface EvIniciadaEvent {
@@ -174,6 +341,20 @@ export interface EvIniciadaEvent {
   data: {
     id: number;
     inicio_ronda?: bigint;
+  };
+}
+
+/**
+ * La tanda se creó con opciones de turnos (`crear_tanda_avanzada`).
+ */
+export interface EvOpcionesEvent {
+  name: "EvOpciones";
+  data: {
+    id: number;
+    modo?: ModoTurnos;
+    permitir_intercambio?: boolean;
+    prima_max_bps?: number;
+    descuento_max_bps?: number;
   };
 }
 
@@ -200,6 +381,19 @@ export interface EvLiquidadoEvent {
 }
 
 /**
+ * Event: EvPropuesta
+ */
+export interface EvPropuestaEvent {
+  name: "EvPropuesta";
+  data: {
+    id: number;
+    de?: string;
+    con?: string;
+    compensacion?: bigint;
+  };
+}
+
+/**
  * Event: EvFinalizada
  */
 export interface EvFinalizadaEvent {
@@ -215,5 +409,32 @@ export interface EvFinalizadaEvent {
     sin_repartir?: bigint;
   };
 }
-    export type ContractEvent = EvPagoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent;
+
+/**
+ * Dos miembros cambiaron de turno: `de` ahora cobra en `turno_de` y `con` en `turno_con`.
+ */
+export interface EvIntercambioEvent {
+  name: "EvIntercambio";
+  data: {
+    id: number;
+    de?: string;
+    con?: string;
+    turno_de?: number;
+    turno_con?: number;
+    compensacion?: bigint;
+  };
+}
+
+/**
+ * Se retiró una propuesta de intercambio (lo guardado volvió a `de`).
+ */
+export interface EvPropuestaRetiradaEvent {
+  name: "EvPropuestaRetirada";
+  data: {
+    id: number;
+    de?: string;
+    con?: string;
+  };
+}
+    export type ContractEvent = EvPagoEvent | EvPrimaEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvIntercambioEvent | EvPropuestaRetiradaEvent;
     

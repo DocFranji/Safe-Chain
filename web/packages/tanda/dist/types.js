@@ -14,5 +14,15 @@ export const Error = {
     10: { message: "MiembroMoroso" },
     11: { message: "NoVerificado" },
     12: { message: "NoAutorizado" },
-    13: { message: "NoInicializado" }
+    13: { message: "NoInicializado" },
+    30: { message: "OpcionesInvalidas" },
+    31: { message: "ModoNoPermite" },
+    32: { message: "TurnoInvalido" },
+    33: { message: "TurnoOcupado" },
+    34: { message: "OfertaInvalida" },
+    35: { message: "NoPuedeOfertar" },
+    36: { message: "SinSubasta" },
+    37: { message: "IntercambioInvalido" },
+    38: { message: "PropuestaExistente" },
+    39: { message: "SinPropuesta" }
 };

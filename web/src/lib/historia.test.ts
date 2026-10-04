@@ -105,3 +105,61 @@ describe('narrar: la historia de la demo', () => {
     expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió —')
   })
 })
+
+describe('narrar: mecanismos de turnos (M3)', () => {
+  it('el sorteo cuenta el orden', () => {
+    const [h] = narrar([ev({ name: 'EvSorteo', data: { id: 1, orden: ['GCARLA', 'GANA', 'GBETO'] } })], f)
+    expect(h).toMatchObject({ tipo: 'clave', titulo: 'El contrato sorteó el orden de cobro' })
+    expect(h.detalle).toBe('1. Carla · 2. Ana · 3. Beto')
+  })
+
+  it('subasta: quién ganó, con cuánto descuento, y el dividendo de los demás', () => {
+    const [oferta, gano, sinOfertas] = narrar(
+      [
+        ev({ name: 'EvOferta', data: { id: 1, ronda: 1, miembro: 'GCARLA', descuento_bps: 800, descuento: 24n * U } }),
+        ev({
+          name: 'EvSubasta',
+          data: { id: 1, ronda: 1, ganador: 'GCARLA', descuento: 24n * U, dividendo: 12n * U, por_respaldo: false },
+        }),
+        ev({
+          name: 'EvSubasta',
+          data: { id: 1, ronda: 2, ganador: 'GANA', descuento: 0n, dividendo: 0n, por_respaldo: true },
+        }),
+      ],
+      f,
+    )
+    expect(oferta.titulo).toBe('Carla ofrece recibir 8 % menos')
+    expect(gano).toMatchObject({ tipo: 'clave', titulo: 'Carla ganó la subasta de la ronda 2 con 24 TUSD de descuento' })
+    expect(gano.detalle).toBe('Cada uno de los demás recibió 12 TUSD en su garantía')
+    expect(sinOfertas.titulo).toBe('Ronda 3: cobra Ana')
+  })
+
+  it('precio por turno: quien cobra antes paga y quien espera gana', () => {
+    const [paga, gana] = narrar(
+      [
+        ev({ name: 'EvPrima', data: { id: 1, ronda: 0, miembro: 'GBETO', prima: 24n * U } }),
+        ev({ name: 'EvPrima', data: { id: 1, ronda: 2, miembro: 'GANA', prima: -24n * U } }),
+      ],
+      f,
+    )
+    expect(paga.titulo).toBe('Beto pagó 24 TUSD por cobrar antes')
+    expect(gana).toMatchObject({ tipo: 'ok', titulo: 'Ana ganó 24 TUSD por esperar' })
+  })
+
+  it('garantía apartada, intercambio y turno por decidir al unirse', () => {
+    const [garantia, cambio, unido] = narrar(
+      [
+        ev({ name: 'EvGarantia', data: { id: 1, ronda: 0, miembro: 'GANA', monto: 100n * U } }),
+        ev({
+          name: 'EvIntercambio',
+          data: { id: 1, de: 'GCARLA', con: 'GBETO', turno_de: 1, turno_con: 2, compensacion: 10n * U },
+        }),
+        ev({ name: 'EvUnido', data: { id: 1, miembro: 'GANA', posicion: 4_294_967_295, colateral: 100n * U } }),
+      ],
+      f,
+    )
+    expect(garantia.titulo).toBe('De la bolsa de Ana se apartaron 100 TUSD como su garantía')
+    expect(cambio.detalle).toBe('Carla cobra en la ronda 2 y Beto en la ronda 3')
+    expect(unido.detalle).toBe('turno por decidir · dejó 100 TUSD de garantía')
+  })
+})
