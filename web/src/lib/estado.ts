@@ -2,9 +2,10 @@
 // Las funciones `evaluar...` son puras (se prueban sin red); `ejecutarChequeos` es la parte que consulta la red.
 import { contract, xdr } from '@stellar/stellar-sdk'
 import { FAUCET_URL, NETWORK_PASSPHRASE, RPC_URL, SIMBOLO, TANDA_ID } from '../config'
+import { direccionesBovedas, evaluarPrincipal, evaluarRapida, leerBoveda } from './bovedas'
 import { clienteLectura } from './contrato'
 import { leerTotal } from './lectura'
-import { activoToken, direccionBoveda, saldoToken, servidor } from './rpc'
+import { activoToken, servidor } from './rpc'
 
 export type Nivel = 'ok' | 'aviso' | 'error'
 
@@ -17,31 +18,7 @@ export type Chequeo = {
   solucion?: string
 }
 
-const U = 10_000_000n
-/** La bóveda paga los intereses con su propio saldo: si se queda corta, los retiros fallan. */
-export const BOVEDA_AVISO = 2_000n * U
-export const BOVEDA_CRITICO = 500n * U
-
 type Resultado = Pick<Chequeo, 'nivel' | 'detalle' | 'solucion'>
-
-export function evaluarBoveda(saldo: bigint, formato: (v: bigint) => string = (v) => String(v / U)): Resultado {
-  const texto = `La bóveda tiene ${formato(saldo)} ${SIMBOLO} para pagar intereses.`
-  if (saldo < BOVEDA_CRITICO) {
-    return {
-      nivel: 'error',
-      detalle: texto,
-      solucion: `Es muy poco: los retiros podrían fallar. Enviarle más ${SIMBOLO}: stellar contract invoke --id $TOKEN --source emisor --network testnet -- mint --to $BOVEDA --amount 100000000000 (10 000 ${SIMBOLO}).`,
-    }
-  }
-  if (saldo < BOVEDA_AVISO) {
-    return {
-      nivel: 'aviso',
-      detalle: texto,
-      solucion: `Alcanza para una demo corta, pero conviene recargarla (mint de ${SIMBOLO} a la bóveda con la cuenta emisora).`,
-    }
-  }
-  return { nivel: 'ok', detalle: texto }
-}
 
 /**
  * Se le manda al faucet una dirección inválida a propósito: así no entrega nada, pero según cómo
@@ -153,7 +130,11 @@ const REDESPLEGAR =
   'Si Stellar reinició testnet, hay que volver a desplegar: `bash scripts/desplegar_testnet.sh`, y actualizar VITE_TANDA_ID y VITE_TOKEN_ID (en Vercel y en web/.env.local).'
 
 /** Corre todos los chequeos de red en paralelo. */
-export function ejecutarChequeos(formatoMonto: (v: bigint) => string): Promise<Chequeo[]> {
+export function ejecutarChequeos(): Promise<Chequeo[]> {
+  const ahora = Math.floor(Date.now() / 1000)
+  // Las dos bóvedas se leen del contrato una sola vez para los dos chequeos.
+  let direcciones: ReturnType<typeof direccionesBovedas> | null = null
+  const bovedas = () => (direcciones ??= direccionesBovedas())
   return Promise.all([
     paso(
       'rpc',
@@ -196,11 +177,25 @@ export function ejecutarChequeos(formatoMonto: (v: bigint) => string): Promise<C
       },
       { nivel: 'error', solucion: `Revisa VITE_TOKEN_ID. ${REDESPLEGAR}` },
     ),
+    // M1: las dos bóvedas, con lo que de verdad les queda para pagar intereses (ver lib/bovedas.ts).
     paso(
       'boveda',
-      'Bóveda del rendimiento',
-      async () => evaluarBoveda(await saldoToken(await direccionBoveda()), formatoMonto),
+      'Bóveda del rendimiento (tandas de días, semanas o meses)',
+      async () => evaluarPrincipal(await leerBoveda((await bovedas()).principal), ahora),
       { nivel: 'error', solucion: REDESPLEGAR },
+    ),
+    paso(
+      'boveda-rapida',
+      'Bóveda rápida (tandas de prueba de minutos)',
+      async () => {
+        const { principal, rapida } = await bovedas()
+        const [datosRapida, datosPrincipal] = await Promise.all([
+          rapida === null ? null : leerBoveda(rapida),
+          leerBoveda(principal).catch(() => null),
+        ])
+        return evaluarRapida(datosRapida, datosPrincipal, ahora)
+      },
+      { nivel: 'aviso', solucion: 'Revisa tu conexión y vuelve a revisar. Si no se arregla: `bash scripts/renovar_boveda_rapida.sh`.' },
     ),
     paso(
       'faucet',

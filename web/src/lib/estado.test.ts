@@ -1,24 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { Networks, xdr } from '@stellar/stellar-sdk'
 import { Client } from 'tanda'
-import { BOVEDA_AVISO, BOVEDA_CRITICO, evaluarBoveda, evaluarFaucet, evaluarInterfaz, interfazDe } from './estado'
+import { evaluarFaucet, evaluarInterfaz, interfazDe } from './estado'
 
-const U = 10_000_000n
-
-describe('evaluarBoveda', () => {
-  it('error si casi no tiene fondos, aviso si está justa, ok si sobra', () => {
-    expect(evaluarBoveda(BOVEDA_CRITICO - 1n).nivel).toBe('error')
-    expect(evaluarBoveda(BOVEDA_CRITICO).nivel).toBe('aviso')
-    expect(evaluarBoveda(BOVEDA_AVISO - 1n).nivel).toBe('aviso')
-    expect(evaluarBoveda(BOVEDA_AVISO).nivel).toBe('ok')
-    expect(evaluarBoveda(10_000n * U).nivel).toBe('ok')
-  })
-
-  it('cuando no está en verde, explica qué hacer', () => {
-    expect(evaluarBoveda(0n).solucion).toMatch(/mint/)
-    expect(evaluarBoveda(10_000n * U).solucion).toBeUndefined()
-  })
-})
+// Las bóvedas se prueban en bovedas.test.ts (misión M1).
 
 describe('evaluarFaucet', () => {
   it('400 con JSON: la función existe y tiene llave (rechazó la dirección falsa)', () => {

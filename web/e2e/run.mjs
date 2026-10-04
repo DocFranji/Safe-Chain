@@ -389,26 +389,57 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForSelector('.estado-resumen', { timeout: 20000 })
   const t = await texto(page)
   check('Estado: todo en verde -> "Todo listo para la demo"', /Todo listo para la demo/.test(t), t.slice(0, 500))
-  check('Estado: 8 puntos revisados (6 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 8, `n=${await page.locator('.chequeo').count()}`)
+  check('Estado: 9 puntos revisados (7 de red + 2 de Freighter)', (await page.locator('.chequeo').count()) === 9, `n=${await page.locator('.chequeo').count()}`)
   check('Estado (M3): la web y el contrato desplegado coinciden', /Coinciden: el contrato tiene las \d+ funciones y tipos que usa esta web/.test(t), t.slice(0, 900))
-  check('Estado: muestra el saldo de la bóveda', /La bóveda tiene 10[\s.\u00a0]?000 TUSD/.test(t))
+  // M1: las dos bóvedas, con lo libre para intereses (no el saldo bruto, que incluye las garantías).
+  check('M1 estado: la principal rinde al ritmo real y dice lo libre y para cuánto alcanza', /Rinde al ritmo de la vida real \(5 % al año\)\. Tiene 3[\s.\u00a0\u202f]?99\d(,\d\d)? TUSD libres para pagar intereses: con las garantías de hoy alcanzan para más de 10 años/.test(t), t.slice(0, 900))
+  check('M1 estado: la rápida dice su acelerador y cuánto rinde hoy una demo de 5 minutos', /1 minuto equivale a 36,5 días de intereses\. Una demo de 5 minutos rinde hoy ~2,3\d TUSD por cada 100\. Tiene 9[\s.\u00a0\u202f]?3[67]\d(,\d\d)? TUSD libres/.test(t), t.slice(0, 900))
   check('Estado: da los enlaces de la demo', /#\/demo/.test(t))
   await shot(page, '14-estado-ok')
   check('Estado: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 {
+  // M1: a la rápida casi no le queda para intereses (700 de saldo, 600 depositados). Ya no es un "problema":
+  // con el tope de solvencia ningún retiro falla, solo se detiene el rendimiento. Es un aviso.
   const est = nuevoEstado()
-  est.cuentas[(await import('./mock.mjs')).BOVEDA_ID].saldo = 300n * 10_000_000n
+  est.cuentas[(await import('./mock.mjs')).BOVEDA_ID].saldo = 700n * 10_000_000n
   est.faucetStatus = 503
   const { page } = await nuevaPagina(browser, { est })
   await page.goto(BASE + '#/estado')
   await page.waitForSelector('.estado-resumen', { timeout: 20000 })
   const t = await texto(page)
-  check('Estado: bóveda casi vacía y faucet sin llave -> "Hay 2 problemas"', /Hay 2 problemas/.test(t), t.slice(0, 400))
-  check('Estado: explica el comando para recargar la bóveda', /mint --to \$BOVEDA/.test(t))
+  check('Estado: faucet sin llave -> "Hay 1 problema" (la bóveda corta es solo un aviso)', /Hay 1 problema/.test(t), t.slice(0, 400))
+  check('M1 estado: explica el comando para recargar la bóveda rápida', /mint --to \$BOVEDA_RAPIDA/.test(t) && /nadie pierde lo que depositó/.test(t), t.slice(0, 1200))
   check('Estado: explica que falta FAUCET_ISSUER_SECRET', /FAUCET_ISSUER_SECRET/.test(t))
   await shot(page, '15-estado-problemas')
+  await page.close()
+}
+{
+  // M1: bóveda rápida de hace 3 días: rinde poco en una demo -> aviso con el comando para cambiarla.
+  const m = await import('./mock.mjs')
+  const est = nuevoEstado()
+  est.bovedas[m.BOVEDA_ID].inicio = Math.floor(Date.now() / 1000) - 3 * 86_400
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/estado')
+  await page.waitForSelector('.estado-resumen', { timeout: 20000 })
+  const t = await texto(page)
+  check('M1 estado: rápida vieja -> "Casi listo: 1 aviso"', /Casi listo: 1 aviso/.test(t), t.slice(0, 400))
+  check('M1 estado: dice su edad y que se cambie con renovar_boveda_rapida.sh', /se desplegó hace 3 días/.test(t) && /renovar_boveda_rapida\.sh/.test(t), t.slice(0, 1200))
+  check('M1 estado: el aviso está en la bóveda rápida', (await page.locator('.chequeo.aviso', { hasText: 'Bóveda rápida' }).count()) === 1)
+  check('M1 estado (rápida vieja): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await shot(page, '15b-estado-rapida-vieja')
+  await page.close()
+}
+{
+  // M1: contrato sin bóveda rápida (desplegado con SIN_BOVEDA_RAPIDA=1) -> aviso que explica cómo crearla.
+  const est = nuevoEstado()
+  delete est.instanciaTanda.BovedaRapida
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/estado')
+  await page.waitForSelector('.estado-resumen', { timeout: 20000 })
+  const t = await texto(page)
+  check('M1 estado: sin bóveda rápida -> aviso y cómo crearla', /No hay bóveda rápida/.test(t) && /renovar_boveda_rapida\.sh/.test(t) && /Casi listo: 1 aviso/.test(t), t.slice(0, 1200))
   await page.close()
 }
 {

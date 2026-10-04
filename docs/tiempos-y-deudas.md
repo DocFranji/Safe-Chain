@@ -204,7 +204,7 @@ Límites por transacción: en mainnet, 100 M instrucciones, 100 lecturas y 50 es
 
 ## 5. Pendiente y riesgos
 
-- **Cerrador automático** (Cron de Vercel) y **`reponer_colateral`**: no entraron al MVP.
+- **Cerrador automático** (Cron de Vercel) y **`reponer_colateral`**: no entraron al MVP. En la fase 2, @DocFranji decidió que ninguno de los dos va por ahora (ver §7).
 - **Segundos por ledger:** la vida de los datos se calcula a 5 s por ledger (lo medido). Si la red se acelera, los datos viven menos en días. Sigue habiendo margen, porque cada cierre renueva todo y la ronda más larga (90 días) más el margen (30 días) cabe holgada en el máximo (~180 días). Si algo se archiva igual, se restaura solo (protocolo 23+).
 - **Participaciones en la bóveda de una tanda tranquila:** se renuevan en cada cierre con `renovar`. Una bóveda que no tenga esa función (el adaptador de Blend) depende de que haya movimiento, o de la restauración automática.
 - **Multas de un moroso que salda antes de su turno:** como no le queda garantía, sus multas pendientes no se cobran al final; solo se descuentan si recupera una bolsa retenida. El historial de M2 registra igual que estuvo en mora.
@@ -215,3 +215,18 @@ Límites por transacción: en mainnet, 100 M instrucciones, 100 lecturas y 50 es
 - `scripts/desplegar_testnet.sh` despliega dos bóvedas: la principal, con `ACELERADOR=1`, y la rápida, con `ACELERADOR_RAPIDA=52560`. Luego configura la rápida en la tanda. Con `SIN_BOVEDA_RAPIDA=1`, todo usa la principal (opción A de la decisión de la bóveda).
 - Antes de la presentación: `bash scripts/renovar_boveda_rapida.sh` cambia la rápida por una nueva, sin afectar las tandas que ya existen.
 - La web no necesita variables nuevas: lee la bóveda de cada tanda del contrato (`get_boveda`).
+
+## 7. Fase 2 (aprobada por @DocFranji el sáb 3, 23:46 CR)
+
+Cada mejora va en su propio PR hacia `integracion`. Ninguna cambia el contrato: no hace falta desplegar de nuevo.
+
+### `#/estado` revisa las dos bóvedas (`web/src/lib/bovedas.ts`)
+
+- **Antes:** se miraba solo la bóveda principal y su saldo **bruto**, que incluye las garantías depositadas. Una bóveda sin dinero para intereses, pero con 5 000 TUSD de garantías, salía "ok". Además decía que "los retiros podrían fallar", lo que dejó de ser cierto con el tope de solvencia: si se acaba, el rendimiento se detiene.
+- **Ahora hay dos chequeos**, uno por bóveda. Las direcciones salen de la instancia del contrato de la tanda (`Boveda` y `BovedaRapida`) y la configuración de cada bóveda, de su propia instancia (`AprBps`, `Acelerador`, `Inicio`). El total de participaciones sale de `total_shares()`.
+  - **Principal** (tandas de días, semanas o meses): lo **libre para intereses** (saldo menos lo que valen todas las participaciones, con el mismo precio y tope del contrato) y para cuánto alcanza con las garantías de hoy. Avisa si quedan menos de 100 TUSD o menos de un año de intereses.
+  - **Rápida** (tandas de prueba): el acelerador, lo libre y **cuánto rinde hoy una demo de 5 minutos por cada 100 TUSD**. Una rápida nueva rinde 2,50; como su interés crece en línea recta desde que se despliega, un día después rinde unas 8 veces menos. Avisa si rinde menos de 1 TUSD (con su edad y `bash scripts/renovar_boveda_rapida.sh`) o si le quedan menos de 500 TUSD libres (con el comando para recargarla).
+  - **Sin bóveda rápida** (`SIN_BOVEDA_RAPIDA=1`): aviso de que las tandas de prueba rinden al ritmo real, y cómo crear una. Con un contrato de la versión anterior (una sola bóveda acelerada) dice que no hace falta.
+- Es un aviso, no un problema: ningún retiro falla por falta de fondos.
+- **Pruebas:** `bovedas.test.ts` (la fórmula del contrato, los textos y cada caso) y 4 escenarios de navegador en `#/estado`.
+

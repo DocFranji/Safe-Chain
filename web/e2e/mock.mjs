@@ -70,7 +70,18 @@ export function nuevoEstado() {
         pagaron: [],
       },
     },
-    cuentas: { [ME]: { existe: true, trustline: true, saldo: 1000n * U }, [BOVEDA_ID]: { existe: true, trustline: true, saldo: 10000n * U } },
+    cuentas: {
+      [ME]: { existe: true, trustline: true, saldo: 1000n * U },
+      [BOVEDA_ID]: { existe: true, trustline: true, saldo: 10000n * U },
+      [BOVEDA_REAL]: { existe: true, trustline: true, saldo: 5000n * U },
+    },
+    // M1: lo que guarda la instancia del contrato de la tanda (la bóveda rápida es opcional) y la de
+    // cada bóveda (para #/estado). La rápida se desplegó hace 10 minutos; la principal, hace un mes.
+    instanciaTanda: { Boveda: BOVEDA_REAL, BovedaRapida: BOVEDA_ID },
+    bovedas: {
+      [BOVEDA_ID]: { acelerador: 52_560, inicio: ahora() - 600, total: 600n * U },
+      [BOVEDA_REAL]: { acelerador: 1, inicio: ahora() - 30 * 86_400, total: 1000n * U },
+    },
     contratoCaido: false,
     // M2: historial de cada dirección (lo que no está, vale cero). `historialActivo: false` simula un
     // contrato de tanda anterior a M2 (sin `get_historial`).
@@ -320,6 +331,7 @@ function valorSim(est, contrato, fn, args) {
   }
   if ((contrato === BOVEDA_ID || contrato === BOVEDA_REAL) && fn === 'valor') return i128((BigInt(nativos[0]) * 103n) / 100n)
   if (contrato === BOVEDA_ID && fn === 'acelerador') return u32(52_560)
+  if (est.bovedas[contrato] && fn === 'total_shares') return i128(est.bovedas[contrato].total)
   if (contrato === BOVEDA_REAL && fn === 'acelerador') return u32(1)
   return { error: { error: `mock: no sé responder ${contrato}.${fn}`, latestLedger: 1000 } }
 }
@@ -469,21 +481,40 @@ export function respuestaRpc(est, cuerpo) {
     case 'getLatestLedger':
       return ok({ id: 'a', protocolVersion: 25, sequence: 1000 })
     case 'getLedgerEntries': {
+      const lk = xdr.LedgerKey.fromXDR(params.keys[0], 'base64')
       // (M3) El código del contrato (lo baja `contract.Client.from` en #/estado): un WASM con su spec.
-      if (xdr.LedgerKey.fromXDR(params.keys[0], 'base64').type === 'contractCode') {
+      if (lk.type === 'contractCode') {
         const codigo = xdr.LedgerEntryData.contractCode(
           new xdr.ContractCodeEntry({ ext: xdr.ContractCodeEntryExt.v0(), hash: HASH_WASM, code: wasmConSpec(est) }),
         )
         return ok({ entries: [{ key: params.keys[0], xdr: codigo.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: 100000 }], latestLedger: 1000 })
       }
-      // Instancia del contrato de la tanda: su almacenamiento guarda DataKey::Boveda -> dirección de la bóveda.
-      const instancia = new xdr.ScContractInstance({
-        executable: xdr.ContractExecutable.contractExecutableWasm(HASH_WASM),
-        storage: [new xdr.ScMapEntry({ key: xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Boveda')]), val: new Address(BOVEDA_ID).toScVal() })],
-      })
+      // Instancia de un contrato: la de la tanda guarda sus bóvedas (DataKey::Boveda y, desde M1,
+      // ClaveM1::BovedaRapida); la de cada bóveda, su configuración (M1, para #/estado).
+      // (Cualquier otra clave recibe la instancia de la tanda, como antes.)
+      const contrato = lk.type === 'contractData' ? Address.fromScAddress(lk.contractData.contract).toString() : TANDA_ID
+      const clave = (nombre) => xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(nombre)])
+      let storage = []
+      if (contrato === TANDA_ID) {
+        storage = Object.entries(est.instanciaTanda).map(([k, v]) => new xdr.ScMapEntry({ key: clave(k), val: new Address(v).toScVal() }))
+      } else if (est.bovedas[contrato]) {
+        const b = est.bovedas[contrato]
+        storage = [
+          new xdr.ScMapEntry({ key: clave('Token'), val: new Address(TOKEN_ID).toScVal() }),
+          new xdr.ScMapEntry({ key: clave('AprBps'), val: u32(500) }),
+          new xdr.ScMapEntry({ key: clave('Acelerador'), val: u32(b.acelerador) }),
+          new xdr.ScMapEntry({ key: clave('Inicio'), val: u64(b.inicio) }),
+          new xdr.ScMapEntry({ key: clave('TotalShares'), val: i128(b.total) }),
+        ]
+      } else {
+        return ok({ entries: [], latestLedger: 1000 })
+      }
+      // (M3) La tanda corre un WASM (su código lo pide #/estado con HASH_WASM); las bóvedas, como antes.
+      const executable = contrato === TANDA_ID ? xdr.ContractExecutable.contractExecutableWasm(HASH_WASM) : xdr.ContractExecutable.contractExecutableStellarAsset()
+      const instancia = new xdr.ScContractInstance({ executable, storage })
       const dato = xdr.LedgerEntryData.contractData(new xdr.ContractDataEntry({
         ext: xdr.ExtensionPoint.v0(),
-        contract: new Address(TANDA_ID).toScAddress(),
+        contract: new Address(contrato).toScAddress(),
         key: xdr.ScVal.scvLedgerKeyContractInstance(),
         durability: xdr.ContractDataDurability.persistent,
         val: xdr.ScVal.scvContractInstance(instancia),
