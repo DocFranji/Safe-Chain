@@ -1477,6 +1477,10 @@ td .dir {
   font-size: 14px;
   color: var(--tinta-2);
 }
+/* La tabla de turnos puede ser más ancha que el celular: que se desplace dentro, sin ensanchar el formulario. */
+.crear-columnas > .formulario {
+  min-width: 0;
+}
 .turnos-previa h3 {
   margin: 8px 0 6px;
   font-size: 17px;

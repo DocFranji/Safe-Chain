@@ -72,7 +72,10 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <>
             <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
             {colateralSiguiente !== null && (
-              <Dato etiqueta="Garantía para unirse" valor={`${monto(colateralSiguiente)} ${SIMBOLO}`} />
+              <Dato
+                etiqueta="Garantía para unirse"
+                valor={eligeTurno(modo) ? 'Según el turno' : `${monto(colateralSiguiente)} ${SIMBOLO}`}
+              />
             )}
           </>
         )}
