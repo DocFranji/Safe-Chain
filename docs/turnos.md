@@ -294,12 +294,22 @@ bash scripts/verificar.sh                        # toda la Definición de Termin
 MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después de desplegar_testnet.sh)
 ```
 
-**Peor caso con 12 miembros** (código nativo de las pruebas; con WASM es más, ver el PR):
+**Peor caso con 12 miembros, WASM real** (`stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso_turnos -- --nocapture`). Límites de mainnet, más estrictos que los de testnet: 100 M instrucciones, 100 lecturas y 50 escrituras.
 
-| Operación | Instrucciones | Escrituras |
-| --- | --- | --- |
-| Último `unirse` de un sorteo (baraja y asigna 12 turnos) | 2,5 M | 21 |
-| `cerrar_ronda` de subasta con dividendos para 11 | 5,6 M | — |
-| `cerrar_ronda` con prima y garantía apartada | 1,3 M | — |
+| Operación | Instrucciones | Lecturas | Escrituras |
+| --- | --- | --- | --- |
+| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 4,7 M | 28 | 21 |
+| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 3,2 M | 28 | 7 |
+| Subasta: `ofertar` | 0,9 M | 8 | 2 |
+| **Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11** | **13,4 M** | **40** | **20** |
+| Precio por turno: `cerrar_ronda` con prima | 2,3 M | 24 | 5 |
+| `proponer_intercambio` / `aceptar_intercambio` | 1,2 M / 1,5 M | 12 | 4 / 7 |
 
-**Tamaño:** `tanda.wasm` pasa de 29 KB a 53 KB (límite de la red: 128 KB).
+**Tamaño:** `tanda.wasm` pasa de 29 KB a 53 KB (límite de la red: 128 KB). En el ensayo de integración con M1, el contrato combinado pesó 65 KB.
+
+**Validado en testnet** (sáb 3 oct, contratos desechables desplegados con `desplegar_testnet.sh` desde esta rama y `MODO=todos bash scripts/demo_turnos.sh`). Los cuatro modos corrieron de punta a punta, incluidos los pasos en los que el azar podría haber chocado con el *footprint*:
+
+- Sorteo: el último `unirse` barajó y asignó los turnos ([tx](https://stellar.expert/explorer/testnet/tx/39263bdcc0806dc92a5ea6e20c07a8e49f2cb6c2658a82376f464d18e43ce066)). Al cobrar, se apartaron 100 de garantía de la bolsa del primero ([tx](https://stellar.expert/explorer/testnet/tx/b46714d6e34e3713066b5ccb6b2b3bba0d3c4ddeba2e43d67f4466b5ee05cc9e)).
+- Precio por turno: el turno 1 pagó 24 y cobró 276 ([tx](https://stellar.expert/explorer/testnet/tx/b0a2aee290a5fb4026d1dd1bf748fcc4415d6b1460b78f849f3259d61caf3823)); el turno 3 cobró 324.
+- Subasta: ganó la oferta de 10 %, los otros dos recibieron 15 de dividendo y el ganador cobró 170 en efectivo ([tx](https://stellar.expert/explorer/testnet/tx/21af6e4a988aa8ba408db8bdcb2b351f15c201a10c5da668bd3410e4c19caa62)). En la ronda sin ofertas cobró el primero del orden de respaldo.
+- Intercambio: propuesta con 10 TUSD guardados y aceptación que cambió los turnos ([tx](https://stellar.expert/explorer/testnet/tx/a2790419bafe8c4485c9e2827f834a6352c8b35669c4617095c59564c2169072)).
