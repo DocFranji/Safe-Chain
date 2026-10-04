@@ -21,6 +21,16 @@ export const Error = {
     20: { message: "HistorialNoConfigurado" },
     21: { message: "PuntajeInsuficiente" },
     22: { message: "RequisitosBloqueados" },
+    30: { message: "OpcionesInvalidas" },
+    31: { message: "ModoNoPermite" },
+    32: { message: "TurnoInvalido" },
+    33: { message: "TurnoOcupado" },
+    34: { message: "OfertaInvalida" },
+    35: { message: "NoPuedeOfertar" },
+    36: { message: "SinSubasta" },
+    37: { message: "IntercambioInvalido" },
+    38: { message: "PropuestaExistente" },
+    39: { message: "SinPropuesta" },
     55: { message: "TokenSinBoveda" },
     56: { message: "BovedaDeOtroToken" }
 };

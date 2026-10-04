@@ -102,6 +102,17 @@ pub enum Error {
     HistorialNoConfigurado = 20, // no hay historial configurado o no responde
     PuntajeInsuficiente = 21,    // la tanda pide un puntaje mínimo que no alcanza
     RequisitosBloqueados = 22,   // la tanda ya no está abierta o ya tiene miembros
+    // --- M3: turnos (30–49) ---
+    OpcionesInvalidas = 30,
+    ModoNoPermite = 31,
+    TurnoInvalido = 32,
+    TurnoOcupado = 33,
+    OfertaInvalida = 34,
+    NoPuedeOfertar = 35,
+    SinSubasta = 36,
+    IntercambioInvalido = 37,
+    PropuestaExistente = 38,
+    SinPropuesta = 39,
     // --- M4: bóveda por token (50–59; el adaptador de Blend usa 50–53 con sus propios nombres) ---
     TokenSinBoveda = 55,    // no hay bóveda para el token de esta tanda
     BovedaDeOtroToken = 56, // la bóveda que se quiere registrar guarda otro token
@@ -192,6 +203,80 @@ pub enum ClaveM2 {
     Requisitos(u32),
     /// (temporal) Hechos de la operación en curso de la tanda `id`, para enviarlos en un solo lote.
     HechosPendientes(u32),
+}
+
+// ---------------------------------------------------------------------------
+// --- M3: turnos ---
+// Cómo se decide quién cobra en cada ronda (ver docs/turnos.md). Las tandas creadas con
+// `crear_tanda` no usan nada de esto: su turno sigue siendo el orden de llegada.
+// ---------------------------------------------------------------------------
+
+/// `Miembro.posicion` de quien todavía no tiene turno (sorteo antes de llenarse, subasta antes de ganar).
+pub const SIN_TURNO: u32 = u32::MAX;
+
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModoTurnos {
+    /// El orden de llegada decide el turno (como siempre).
+    Llegada,
+    /// Cada quien elige un turno libre al unirse, gratis.
+    Eleccion,
+    /// Cada quien elige turno: los primeros pagan una prima y los últimos la reciben.
+    PrecioPorTurno,
+    /// El contrato sortea el orden cuando se llena la tanda.
+    Sorteo,
+    /// Cada ronda cobra quien ofrezca el mayor descuento sobre la bolsa.
+    Subasta,
+}
+
+/// Opciones de turnos que elige el creador (`crear_tanda_avanzada`).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpcionesTanda {
+    pub modo: ModoTurnos,
+    /// Dos miembros pueden cambiar sus turnos futuros (no aplica a la subasta).
+    pub permitir_intercambio: bool,
+    /// PrecioPorTurno: prima del primer turno, en bps sobre la bolsa. El último recibe lo mismo.
+    pub prima_max_bps: u32,
+    /// Subasta: descuento máximo que se puede ofrecer, en bps sobre la bolsa.
+    pub descuento_max_bps: u32,
+}
+
+/// Subasta: la mejor oferta de una ronda.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Oferta {
+    pub ronda: u32,
+    pub miembro: Address,
+    pub descuento_bps: u32,
+}
+
+/// Intercambio pendiente: `de` propone cambiar su turno por el de `con`.
+/// `compensacion` > 0: `de` le paga a `con` (queda guardada en el contrato hasta aceptar o retirar).
+/// `compensacion` < 0: `con` le paga a `de` al aceptar.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Propuesta {
+    pub de: Address,
+    pub con: Address,
+    pub compensacion: i128,
+}
+
+/// Todo lo de turnos que la web necesita, en una sola lectura (`get_estado_turnos`).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EstadoTurnos {
+    pub opciones: OpcionesTanda,
+    /// Subasta: quién hizo la mejor oferta de la ronda en curso (nadie todavía: `None`).
+    pub mejor_postor: Option<Address>,
+    /// Subasta: descuento de esa oferta, en bps sobre la bolsa (0 si nadie ha ofertado).
+    pub mejor_oferta_bps: u32,
+    /// Subasta: orden sorteado al llenarse; decide quién cobra en las rondas sin ofertas.
+    pub respaldo: Vec<Address>,
+    /// Intercambios pendientes.
+    pub propuestas: Vec<Propuesta>,
+    /// PrecioPorTurno: primas ya cobradas que esperan a los últimos turnos.
+    pub fondo_primas: i128,
 }
 
 // --- M4: bóveda por token ---

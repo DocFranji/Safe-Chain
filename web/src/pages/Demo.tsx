@@ -15,6 +15,7 @@ import { claseEstado, etiquetaEstado, monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { RUTA_CREAR, RUTA_LOBBY, rutaDemo } from '../lib/rutas'
 import { SIMBOLO } from '../config'
+import { tieneTurno, turnosLibres } from '../lib/turnos'
 
 export function Demo({ idFijo }: { idFijo: number | null }) {
   return idFijo !== null ? <DemoTanda key={idFijo} id={idFijo} fijada /> : <DemoAutomatica />
@@ -140,7 +141,15 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
           <p className={vencida ? 'demo-reloj alerta' : 'demo-reloj'}>{vencida ? 'Plazo vencido' : reloj(restante)}</p>
           <p className="demo-sub">{vencida ? 'Falta cerrar la ronda' : 'para que venza el plazo'}</p>
           <p className="demo-cobra">
-            Cobra <strong>{beneficiario ? nombreDe(beneficiario.direccion) : '—'}</strong> · bolsa de{' '}
+            Cobra{' '}
+            <strong>
+              {beneficiario
+                ? nombreDe(beneficiario.direccion)
+                : datos.turnos?.opciones.modo.tag === 'Subasta'
+                  ? 'quien gane la subasta'
+                  : '—'}
+            </strong>{' '}
+            · bolsa de{' '}
             <strong>
               {monto(bolsa)} {SIMBOLO}
             </strong>
@@ -179,6 +188,12 @@ function Personas({ datos }: { datos: DatosTanda }) {
   const activa = estado === 'Activa'
   const verGarantia = estado === 'Abierta' || activa || estado === 'PorLiquidar'
   const libres = tanda.n_miembros - miembros.length
+  // (M3) Con turnos elegidos, los lugares libres no son necesariamente los últimos; en sorteo y subasta, aún no hay.
+  const turnosSinDuenio = turnosLibres(
+    tanda.n_miembros,
+    miembros.map((m) => m.posicion),
+  )
+  const hayPorDecidir = miembros.some((m) => !tieneTurno(m.posicion))
 
   return (
     <ul className="demo-personas">
@@ -201,7 +216,7 @@ function Personas({ datos }: { datos: DatosTanda }) {
         return (
           <li key={m.direccion} className={`demo-persona${cobraAhora ? ' turno' : ''}${m.moroso ? ' moroso' : ''}`}>
             <div className="demo-persona-cabeza">
-              <span className="demo-turno">{m.posicion + 1}</span>
+              <span className="demo-turno">{tieneTurno(m.posicion) ? m.posicion + 1 : '?'}</span>
               <span className="demo-nombre">{nombreDe(m.direccion)}</span>
               {cobraAhora && <span className="demo-cobra-ahora">cobra ahora</span>}
               <span className={`estado ${estadoClase}`}>{estadoTexto}</span>
@@ -212,7 +227,9 @@ function Personas({ datos }: { datos: DatosTanda }) {
                   <i style={{ width: `${Math.round(fraccion * 100)}%` }} />
                 </span>
                 <span className="sub">
-                  Garantía: {monto(m.colateral)} de {monto(m.colateral_inicial)} {SIMBOLO}
+                  {m.colateral > m.colateral_inicial
+                    ? `Garantía: ${monto(m.colateral)} ${SIMBOLO} (con dividendos de la subasta)`
+                    : `Garantía: ${monto(m.colateral)} de ${monto(m.colateral_inicial)} ${SIMBOLO}`}
                 </span>
               </div>
             )}
@@ -222,7 +239,7 @@ function Personas({ datos }: { datos: DatosTanda }) {
       {Array.from({ length: libres }, (_, i) => (
         <li key={`libre-${i}`} className="demo-persona libre">
           <div className="demo-persona-cabeza">
-            <span className="demo-turno">{miembros.length + i + 1}</span>
+            <span className="demo-turno">{hayPorDecidir ? '?' : (turnosSinDuenio[i] ?? miembros.length + i) + 1}</span>
             <span className="demo-nombre">Lugar libre</span>
           </div>
         </li>

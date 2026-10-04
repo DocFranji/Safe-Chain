@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, nuevoEstado, conTandaMorosa, conTandaExigente, conTandaUsdc, historial, ADAPTADOR_USDC } from './mock.mjs'
+import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conTandaUsdc, historial, ADAPTADOR_USDC } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -491,6 +491,184 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.close()
 }
 
+// ---------------------------------------------------------------- M3. Mecanismos de turnos
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  check('Turnos/crear: cinco formas de repartir los turnos', (await page.locator('.modo').count()) === 5)
+  check('Turnos/crear: por defecto, orden de llegada (sin tabla de turnos)', (await page.locator('.turnos-previa').count()) === 0)
+  await page.locator('.modo', { hasText: 'Sorteo' }).click()
+  let filas = await page.locator('.turnos-previa tbody tr').allInnerTexts()
+  check(
+    'Turnos/crear: sorteo -> todos dejan 100; al primero se le apartan 100 y recibe 200',
+    filas.length === 3 && /^1\s+100\s+100\s+200$/.test(filas[0].trim()) && /300$/.test(filas[2].trim()),
+    JSON.stringify(filas),
+  )
+  check('Turnos/crear: sorteo avisa que un validador podría influir', /un validador de la red podría influir/.test(await texto(page)))
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  filas = await page.locator('.turnos-previa tbody tr').allInnerTexts()
+  check(
+    'Turnos/crear: precio por turno 10 % -> el turno 1 paga 30 y el 3 gana 30',
+    /paga 30/.test(filas[0] ?? '') && /270$/.test((filas[0] ?? '').trim()) && /gana 30/.test(filas[2] ?? '') && /330$/.test((filas[2] ?? '').trim()),
+    JSON.stringify(filas),
+  )
+  await page.locator('.modo', { hasText: 'Subasta' }).click()
+  check('Turnos/crear: en la subasta no se ofrece intercambiar', !/Permitir intercambiar turnos/.test(await texto(page)))
+  check('Turnos/crear: muestra el descuento máximo (30 %)', /Descuento máximo por ronda:\s*30 %/.test(await texto(page)))
+  await page.locator('.modo', { hasText: 'Elegir e intercambiar' }).click()
+  check('Turnos/crear: "Elegir e intercambiar" trae el intercambio activado', await page.getByLabel(/Permitir intercambiar turnos/).isChecked())
+  check('Turnos/crear: el botón de crear sigue habilitado', !(await page.locator('button[type=submit]').isDisabled()))
+  await shot(page, 'm3-01-crear-turnos')
+  check('Turnos/crear: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/7')
+  await page.waitForSelector('.rueda svg', { timeout: 15000 })
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 }).catch(() => {})
+  const t = await texto(page)
+  check('Turnos/sorteo abierta: "El orden se sortea cuando se llene"', /El orden se sortea cuando se llene/.test(t))
+  check('Turnos/sorteo abierta: unirse pide una cuota', /Unirme y dejar 100 TUSD de garantía/.test(t))
+  check('Turnos/sorteo abierta: "Tu turno se sorteará"', /Tu turno se sorteará cuando se llene la tanda/.test(t))
+  check('Turnos/sorteo abierta: Ana con turno por decidir', /Turno por decidir/.test(t) && (await page.locator('.nodo-turno', { hasText: '?' }).count()) === 1)
+  await shot(page, 'm3-02-sorteo-abierta')
+  check('Turnos/sorteo abierta: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  const casillas = page.locator('.turno-casilla')
+  check('Turnos/precio: una casilla por turno', (await casillas.count()) === 3)
+  check('Turnos/precio: el turno 2 (de Ana) no se puede elegir', await casillas.nth(1).isDisabled())
+  check('Turnos/precio: el turno 1 muestra su precio', /Garantía 200 TUSD/.test(await casillas.nth(0).innerText()) && /Paga 24/.test(await casillas.nth(0).innerText()))
+  check('Turnos/precio: no muestra el botón de unirse sin elegir turno', (await page.getByRole('button', { name: /^Unirme y dejar/ }).count()) === 0)
+  await casillas.nth(0).click()
+  await page.waitForSelector('text=Unirme en el turno 1 y dejar 200 TUSD', { timeout: 15000 }).catch(() => {})
+  const t = await texto(page)
+  check('Turnos/precio: al elegir el turno 1 explica que recibe 276 (paga 24)', /recibes 276 TUSD \(la bolsa menos 24 por cobrar antes\)/.test(t), t.slice(0, 900))
+  check('Turnos/precio: botón "Unirme en el turno 1 y dejar 200 TUSD"', await page.getByRole('button', { name: 'Unirme en el turno 1 y dejar 200 TUSD' }).isEnabled())
+  await casillas.nth(2).click()
+  await page.waitForSelector('text=Unirme en el turno 3 y dejar 100 TUSD', { timeout: 15000 }).catch(() => {})
+  check('Turnos/precio: el turno 3 gana 24 por esperar', /recibes 324 TUSD \(la bolsa más 24 por esperar\)/.test(await texto(page)))
+  await shot(page, 'm3-03-precio-por-turno')
+  check('Turnos/precio: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  await page.waitForSelector('#oferta', { timeout: 15000 }).catch(() => {})
+  let t = await texto(page)
+  check('Turnos/subasta: mejor oferta de Beto, 5 % (15 TUSD)', /Beto: 5 % menos \(15 TUSD\)/.test(t), t.slice(0, 800))
+  check('Turnos/subasta: "Le toca cobrar: Se decide en la subasta"', /Se decide en la subasta/.test(t))
+  check('Turnos/subasta: dice quién cobra si nadie ofrece más', /Si nadie ofrece más, Beto cobra esta ronda/.test(t))
+  await page.locator('#oferta').fill('4')
+  check('Turnos/subasta: una oferta menor a la mejor no se puede enviar', await page.getByRole('button', { name: 'Ofertar' }).isDisabled())
+  await page.locator('#oferta').fill('8')
+  t = await texto(page)
+  check('Turnos/subasta: 8 % -> recibes 276 y se aparta garantía', /Si ganas recibes 276 TUSD; de ahí se apartan hasta 100/.test(t), t.slice(0, 1200))
+  check('Turnos/subasta: el botón Ofertar se habilita', await page.getByRole('button', { name: 'Ofertar' }).isEnabled())
+  await page.waitForSelector('text=ofrece recibir 5 % menos', { timeout: 15000 }).catch(() => {})
+  check('Turnos/subasta: la historia cuenta la oferta de Beto', /Beto ofrece recibir 5 % menos/.test(await texto(page)))
+  await shot(page, 'm3-04-subasta')
+  check('Turnos/subasta: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/10')
+  await page.waitForSelector('.propuesta.recibida', { timeout: 15000 })
+  const t = await texto(page)
+  check('Turnos/intercambio: propuesta recibida de Carla con 10 TUSD', /Carla te propone cambiar su turno 3 por tu turno 2 · te paga 10 TUSD/.test(t), t.slice(0, 900))
+  check('Turnos/intercambio: botones Aceptar y Rechazar', (await page.getByRole('button', { name: 'Aceptar el cambio' }).count()) === 1 && (await page.getByRole('button', { name: 'Rechazar' }).count()) === 1)
+  const opciones = await page.locator('#intercambio-con option').allInnerTexts()
+  check('Turnos/intercambio: solo se ofrece cambiar con turnos futuros (Carla, no Ana)', opciones.length === 2 && /Carla/.test(opciones[1]), JSON.stringify(opciones))
+  await page.locator('#intercambio-con').selectOption({ index: 1 })
+  await page.locator('#intercambio-sentido').selectOption('pago')
+  check('Turnos/intercambio: con compensación pide el monto', await page.getByRole('button', { name: 'Proponer intercambio' }).isDisabled())
+  await page.getByLabel('Monto de la compensación').fill('5')
+  check('Turnos/intercambio: con monto se puede proponer', await page.getByRole('button', { name: 'Proponer intercambio' }).isEnabled())
+  await shot(page, 'm3-05-intercambio')
+  check('Turnos/intercambio: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 })
+  await page.waitForFunction(() => document.querySelectorAll('.tarjeta').length === 10, null, { timeout: 15000 }).catch(() => {})
+  const tarjeta = async (n) => page.locator('.tarjeta', { has: page.locator('h2', { hasText: new RegExp(`^Tanda ${n}$`) }) }).innerText()
+  check('Turnos/lobby: sorteo abierta entra con una cuota', /Entras con 100 TUSD de garantía \(el orden se sortea\)/.test(await tarjeta(7)) && /Turnos: sorteo/.test(await tarjeta(7)))
+  check('Turnos/lobby: precio por turno -> "Eliges tu turno al entrar"', /Eliges tu turno al entrar/.test(await tarjeta(8)) && /Turnos: precio por turno/.test(await tarjeta(8)))
+  check('Turnos/lobby: la subasta muestra su modo', /Turnos: subasta/.test(await tarjeta(9)))
+  check('Turnos/lobby: las tandas de siempre no muestran modo', !/Turnos:/.test(await tarjeta(3)) && /\(turno 2\)/.test(await tarjeta(3)))
+  await shot(page, 'm3-10-lobby-turnos')
+  check('Turnos/lobby: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est, conectado: false })
+  await page.goto(BASE + '#/demo/9')
+  await page.waitForSelector('.demo-personas', { timeout: 15000 })
+  await page.waitForTimeout(500)
+  const t = await texto(page)
+  check('Turnos/demo proyectada: "Cobra quien gane la subasta"', /Cobra quien gane la subasta/.test(t), t.slice(0, 600))
+  check('Turnos/demo proyectada: turnos por decidir con "?"', (await page.locator('.demo-turno', { hasText: '?' }).count()) === 3)
+  await shot(page, 'm3-09-demo-subasta')
+  check('Turnos/demo proyectada: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm3-07-subasta-movil'], ['#/tanda/8', 'm3-08-precio-movil'], ['#/tanda/10', 'm3-11-intercambio-movil']]) {
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 800 } })
+  await page.goto(BASE + ruta)
+  if (ruta === '#/crear') {
+    await page.waitForSelector('.modos')
+    await page.locator('.modo', { hasText: 'Subasta' }).click()
+  } else {
+    await page.waitForSelector('.turnos-acciones', { timeout: 15000 }).catch(() => {})
+  }
+  await page.waitForTimeout(400)
+  const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }))
+  check(`Turnos 390 px (${ruta}): sin desborde horizontal`, ancho.sw <= ancho.cw + 1, JSON.stringify(ancho))
+  await shot(page, nombre)
+  check(`Turnos 390 px (${ruta}): sin errores de consola`, errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M2 + M3: historial donde se elige turno
+{
+  // Precio por turno (tanda 8) que pide Bronce y da descuento. "Yo" soy Bronce (110 puntos): 10 % menos.
+  const est = nuevoEstadoTurnos()
+  est.tandas[8].requisitos = { puntaje_minimo: 100, descuento: true }
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/8')
+  await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+  await page.waitForSelector('.nota-historial', { timeout: 15000 }).catch(() => {})
+  let t = await texto(page)
+  check('Historial + turnos: la nota del historial también sale donde se elige turno', /pide historial Bronce o mejor/.test(t) && /Tienes 110: puedes entrar/.test(t), t.slice(0, 900))
+  await page.locator('.turno-casilla').nth(0).click()
+  await page.getByRole('button', { name: /^Unirme en el turno 1 y dejar 180 TUSD$/ }).waitFor({ timeout: 15000 }).catch(() => {})
+  t = await texto(page)
+  check('Historial + turnos: el turno 1 cotiza la garantía con descuento (200 -> 180)', /dejas 180 TUSD de garantía \(con el descuento de tu historial\)/.test(t), t.slice(0, 900))
+  check('Historial + turnos: el botón usa la garantía con descuento', await page.getByRole('button', { name: 'Unirme en el turno 1 y dejar 180 TUSD' }).isEnabled())
+  await shot(page, 'm2m3-01-precio-con-historial')
+  check('Historial + turnos: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
 // ---------------------------------------------------------------- M2. Historial crediticio
 {
   // Página pública de otra persona
@@ -653,7 +831,7 @@ const browser = await chromium.launch(opcionesNavegador())
   // Tanda en USDC: el rendimiento es real (Blend), con la liquidez a la vista y el enlace a la garantía en Blend.
   const est = conTandaUsdc(nuevoEstado())
   const { page, errores } = await nuevaPagina(browser, { est })
-  await page.goto(BASE + '#/tanda/9')
+  await page.goto(BASE + '#/tanda/12')
   await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
   const t = await texto(page)
   check('M4: tanda USDC dice que el rendimiento es real (Blend)', /el rendimiento es real/.test(t), t.slice(0, 600))
@@ -670,7 +848,7 @@ const browser = await chromium.launch(opcionesNavegador())
   const est = conTandaUsdc(nuevoEstado())
   est.reservaUsdc = { ...est.reservaUsdc, d_supply: 1_214_280_000_000n } // quedan ~301 USDC libres; la garantía es 400
   const { page } = await nuevaPagina(browser, { est })
-  await page.goto(BASE + '#/tanda/9')
+  await page.goto(BASE + '#/tanda/12')
   await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
   check('M4: poca liquidez -> avisa que se reintenta y que el dinero está seguro', /no alcanzaría para devolver toda la garantía/.test(await texto(page)) && /Tu dinero está seguro/.test(await texto(page)))
   await page.goto(BASE + '#/estado')
@@ -697,7 +875,7 @@ const browser = await chromium.launch(opcionesNavegador())
   // 390 px
   const est = conTandaUsdc(nuevoEstado())
   const { page } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
-  await page.goto(BASE + '#/tanda/9')
+  await page.goto(BASE + '#/tanda/12')
   await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
   const desborde = async () => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
   check('Móvil (390px): tanda USDC con Blend no se desborda', !(await desborde()))

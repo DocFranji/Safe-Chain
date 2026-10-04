@@ -22,6 +22,22 @@ PUERTO=${PUERTO:-4173}
 resumen=()
 fallo=0
 
+# `desplegar_testnet.sh` escribe web/.env.local con los contratos que desplegó. Con ese archivo, la web
+# compila apuntando a otros contratos y las pruebas de navegador (que simulan los de siempre) fallan.
+# Se aparta mientras se verifica y vuelve a su lugar al terminar, pase lo que pase.
+apartado=""
+devolver_env_local() {
+  if [ -n "$apartado" ] && [ -f "$apartado" ]; then
+    mv "$apartado" web/.env.local
+  fi
+}
+if [ -f web/.env.local ]; then
+  apartado="$LOG/env.local"
+  mv web/.env.local "$apartado"
+  echo "(aparté web/.env.local mientras verifico; vuelve a su lugar al terminar)"
+fi
+trap devolver_env_local EXIT
+
 paso() {
   local nombre=$1
   shift
@@ -71,6 +87,20 @@ cliente_al_dia() {
   fi
 }
 
+clientes_subidos() {
+  # Cada cliente de web/packages debe tener su dist/ (ya compilado) EN EL REPO: CI y Vercel no tienen
+  # la CLI de Stellar para generarlo. Si solo existe en tu máquina, aquí todo pasa y allá no compila.
+  local falta=0 d
+  for p in web/packages/*/package.json; do
+    d=$(dirname "$p")
+    if ! git ls-files --error-unmatch "$d/dist/index.js" >/dev/null 2>&1; then
+      echo "$d/dist no está en el repo: corre bash scripts/generar_cliente.sh y súbelo (mira web/.gitignore)."
+      falta=1
+    fi
+  done
+  return "$falta"
+}
+
 dependencias_web() {
   (cd web && npm ci --no-audit --no-fund --loglevel=error) || return 1
   # Igual que preparar_entorno.sh: nada de node_modules dentro de web/packages/* (duplicaría el SDK).
@@ -118,6 +148,7 @@ if [ "$QUE" = "todo" ] && [ "${SIN_WASM:-}" != "1" ]; then
 fi
 
 if [ "$QUE" = "todo" ] || [ "$QUE" = "web" ]; then
+  paso "Clientes compilados en el repo (web/packages/*/dist)" clientes_subidos
   paso "web: npm ci" dependencias_web
   paso "web: lint" bash -c 'cd web && npm run lint'
   paso "web: pruebas" bash -c 'cd web && npm test'
@@ -130,6 +161,7 @@ fi
 echo
 echo "================ Resumen ($(git rev-parse --abbrev-ref HEAD) @ $(git rev-parse --short HEAD)) ================"
 for r in "${resumen[@]}"; do echo "$r"; done
+devolver_env_local
 rm -rf "$LOG"
 if [ "$fallo" = 1 ]; then
   echo "Resultado: FALLA"
