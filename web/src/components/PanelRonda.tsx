@@ -6,11 +6,13 @@ import type { contract } from '@stellar/stellar-sdk'
 import type { DatosTanda } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from './BotonesEntrar'
+import { AccionesTurnos } from './AccionesTurnos'
 import { PagarDeuda } from './PagarDeuda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { monto, duracion, porcentaje } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { SIMBOLO } from '../config'
+import { SIN_TURNO, eligeTurno, type Modo } from '../lib/turnos'
 
 type Props = {
   id: number
@@ -31,6 +33,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
 
   const { tanda, miembros, pagaron, vence, colateralSiguiente } = datos
   const estado = tanda.estado.tag
+  const modo: Modo = datos.turnos?.opciones.modo.tag ?? 'Llegada'
   const yo = billetera.direccion
   const esCreador = yo !== null && yo === tanda.creador
   const mio = miembros.find((m) => m.direccion === yo) ?? null
@@ -70,13 +73,19 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <>
             <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
             {colateralSiguiente !== null && (
-              <Dato etiqueta="Garantía para unirse" valor={`${monto(colateralSiguiente)} ${SIMBOLO}`} />
+              <Dato
+                etiqueta="Garantía para unirse"
+                valor={eligeTurno(modo) ? 'Según el turno' : `${monto(colateralSiguiente)} ${SIMBOLO}`}
+              />
             )}
           </>
         )}
         {estado === 'Activa' && (
           <>
-            <Dato etiqueta="Le toca cobrar" valor={beneficiario ? nombreDe(beneficiario.direccion) : '—'} />
+            <Dato
+              etiqueta="Le toca cobrar"
+              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '—'}
+            />
             <Dato etiqueta="Bolsa" valor={`${monto(bolsa)} ${SIMBOLO}`} />
             <Dato
               etiqueta={vencida ? 'Venció hace' : 'Vence en'}
@@ -100,7 +109,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>
         ) : (
           <>
-            {estado === 'Abierta' && !mio && colateralSiguiente !== null && (
+            {estado === 'Abierta' && !mio && colateralSiguiente !== null && !eligeTurno(modo) && (
               <>
                 <button
                   className="boton principal"
@@ -111,8 +120,12 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 </button>
                 {faltaParaUnirse > 0n && <FaltaSaldo falta={faltaParaUnirse} />}
                 <p className="explica">
-                  Tu turno será el {miembros.length + 1}. La garantía se guarda en una bóveda que genera
-                  rendimiento y se te devuelve al final, con intereses.
+                  {modo === 'Sorteo'
+                    ? 'Tu turno se sorteará cuando se llene la tanda.'
+                    : modo === 'Subasta'
+                      ? 'Tu turno se decide en las subastas de cada ronda.'
+                      : `Tu turno será el ${miembros.length + 1}.`}{' '}
+                  La garantía se guarda en una bóveda que genera rendimiento y se te devuelve al final, con intereses.
                 </p>
               </>
             )}
@@ -227,6 +240,8 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
         )}
       </div>
 
+      <AccionesTurnos id={id} datos={datos} billetera={billetera} saldo={saldo} ahora={ahora} alCambiar={alCambiar} />
+
       {(aviso || billetera.error) && (
         <p className={`aviso ${aviso?.tipo ?? 'error'}`} role="status" aria-live="polite">
           {aviso?.texto ?? billetera.error}
@@ -289,7 +304,9 @@ function miSituacion(
   ronda: number,
 ): string {
   if (m.moroso) return `Tienes una deuda de ${monto(m.deuda)} ${SIMBOLO} en esta tanda.`
-  const turno = m.cobro
+  const turno = m.posicion === SIN_TURNO
+    ? 'Tu turno todavía no está decidido.'
+    : m.cobro
     ? 'Ya cobraste tu bolsa.'
     : estado === 'Activa' && m.posicion === ronda
       ? 'Esta ronda cobras tú.'

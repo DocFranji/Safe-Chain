@@ -17,5 +17,15 @@ export const Error = {
     13: { message: "NoInicializado" },
     14: { message: "SinDeuda" },
     15: { message: "PagoExcesivo" },
-    16: { message: "MontoInvalido" }
+    16: { message: "MontoInvalido" },
+    30: { message: "OpcionesInvalidas" },
+    31: { message: "ModoNoPermite" },
+    32: { message: "TurnoInvalido" },
+    33: { message: "TurnoOcupado" },
+    34: { message: "OfertaInvalida" },
+    35: { message: "NoPuedeOfertar" },
+    36: { message: "SinSubasta" },
+    37: { message: "IntercambioInvalido" },
+    38: { message: "PropuestaExistente" },
+    39: { message: "SinPropuesta" }
 };

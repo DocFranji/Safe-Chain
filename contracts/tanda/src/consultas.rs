@@ -2,7 +2,7 @@
 use soroban_sdk::{contractimpl, Address, Env, Vec};
 
 use crate::almacenamiento::*;
-use crate::turnos::{colateral_para, posicion_al_unirse};
+use crate::turnos::colateral_base_siguiente;
 use crate::{
     DataKey, Error, Miembro, Tanda, TandaContract, TandaContractArgs, TandaContractClient,
 };
@@ -51,12 +51,9 @@ impl TandaContract {
     }
 
     /// Colateral que pagaría el próximo en unirse (para mostrarlo antes de firmar).
+    /// En los modos donde se elige turno, el del turno libre más bajo (ver `cotizar_turno`).
     pub fn colateral_siguiente(env: Env, id: u32) -> Result<i128, Error> {
         let t = cargar_tanda(&env, id)?;
-        let pos = posicion_al_unirse(&env, &t, &cargar_miembros(&env, id));
-        if pos >= t.n_miembros {
-            return Err(Error::TandaLlena);
-        }
-        Ok(colateral_para(&t, pos))
+        colateral_base_siguiente(&env, &t, id)
     }
 }

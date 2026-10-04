@@ -74,6 +74,62 @@ export function nuevoEstado() {
   }
 }
 
+// --- M3: turnos -------------------------------------------------------------
+/** `Miembro.posicion` de quien todavía no tiene turno (u32::MAX en el contrato). */
+export const SIN_TURNO = 4_294_967_295
+const opcionesTurnos = (tag, o = {}) => ({
+  modo: { tag, values: undefined }, permitir_intercambio: false, prima_max_bps: 0, descuento_max_bps: 0, ...o,
+})
+const estadoTurnos = (opciones, o = {}) => ({
+  opciones, mejor_postor: null, mejor_oferta_bps: 0, respaldo: [], propuestas: [], fondo_primas: 0n, ...o,
+})
+
+/**
+ * Las 5 tandas de siempre más una de cada modo de turnos (M3), en otro estado para no cambiar
+ * los escenarios de siempre: 7 sorteo abierta, 8 precio por turno abierta, 9 subasta en curso
+ * (ME aún sin turno, Beto ofertó 5 %), 10 elegir + intercambio en curso (Carla le propone a ME).
+ * (La 6 queda libre para otras misiones: M1 la usa para su tanda con deudas.)
+ */
+export function nuevoEstadoTurnos() {
+  const e = nuevoEstado()
+  // La 6 es una tanda de siempre (cancelada) para que los ids queden seguidos (el lobby pide 1..total).
+  e.tandas[6] = { tanda: tanda({ creador: CARLA, estado: est('Cancelada') }), miembros: [], pagaron: [] }
+  e.tandas[7] = {
+    tanda: tanda({ creador: ANA, shares_boveda: 100n * U }),
+    miembros: [[ANA, miembro(SIN_TURNO)]],
+    pagaron: [],
+    turnos: estadoTurnos(opcionesTurnos('Sorteo')),
+  }
+  e.tandas[8] = {
+    tanda: tanda({ creador: ANA, shares_boveda: 100n * U }),
+    miembros: [[ANA, miembro(1)]],
+    pagaron: [],
+    turnos: estadoTurnos(opcionesTurnos('PrecioPorTurno', { prima_max_bps: 800 })),
+  }
+  e.tandas[9] = {
+    tanda: tanda({ creador: BETO, estado: est('Activa'), inicio_ronda: BigInt(ahora() - 30), shares_boveda: 300n * U }),
+    miembros: [[ME, miembro(SIN_TURNO)], [BETO, miembro(SIN_TURNO)], [CARLA, miembro(SIN_TURNO)]],
+    pagaron: [BETO],
+    turnos: estadoTurnos(opcionesTurnos('Subasta', { descuento_max_bps: 3000 }), {
+      mejor_postor: BETO, mejor_oferta_bps: 500, respaldo: [CARLA, ME, BETO],
+    }),
+  }
+  e.tandas[10] = {
+    tanda: tanda({ creador: CARLA, estado: est('Activa'), inicio_ronda: BigInt(ahora() - 30), shares_boveda: 400n * U }),
+    miembros: [[ANA, miembro(0, { colateral: 200n * U, colateral_inicial: 200n * U })], [ME, miembro(1)], [CARLA, miembro(2)]],
+    pagaron: [],
+    turnos: estadoTurnos(opcionesTurnos('Eleccion', { permitir_intercambio: true }), {
+      propuestas: [{ de: CARLA, con: ME, compensacion: 10n * U }],
+    }),
+  }
+  return e
+}
+
+function primaPara(t, primaBps, pos) {
+  const n = BigInt(t.n_miembros)
+  return (t.cuota * n * BigInt(primaBps) * (n - 1n - 2n * BigInt(pos))) / ((n - 1n) * 10000n)
+}
+
 const addr = (a) => nativeToScVal(a, { type: 'address' })
 
 /**
@@ -132,9 +188,24 @@ function valorSim(est, contrato, fn, args) {
     if (fn === 'get_ronda') {
       return xdr.ScVal.scvVec([u32(t.tanda.ronda_actual), u64(t.tanda.inicio_ronda + t.tanda.periodo_seg), xdr.ScVal.scvVec(t.pagaron.map(addr))])
     }
+    const turnos = t.turnos ?? estadoTurnos(opcionesTurnos('Llegada'))
+    const modo = turnos.opciones.modo.tag
     if (fn === 'colateral_siguiente') {
       if (t.miembros.length >= t.tanda.n_miembros) return { error: erroresContrato(6) }
-      return i128(colateralPara(t.tanda, t.miembros.length))
+      if (modo === 'Sorteo' || modo === 'Subasta') return i128(t.tanda.cuota)
+      const tomados = t.miembros.map(([, m]) => m.posicion)
+      const libre = [...Array(t.tanda.n_miembros).keys()].find((i) => !tomados.includes(i))
+      return i128(colateralPara(t.tanda, modo === 'Llegada' ? t.miembros.length : libre))
+    }
+    // M3
+    if (fn === 'get_estado_turnos') return spec.nativeToUdt(turnos, 'EstadoTurnos')
+    if (fn === 'get_opciones') return spec.nativeToUdt(turnos.opciones, 'OpcionesTanda')
+    if (fn === 'cotizar_turno') {
+      const pos = Number(nativos[2])
+      if (pos >= t.tanda.n_miembros) return { error: erroresContrato(32) }
+      const col = modo === 'Sorteo' || modo === 'Subasta' ? t.tanda.cuota : colateralPara(t.tanda, pos)
+      const prima = modo === 'PrecioPorTurno' ? primaPara(t.tanda, turnos.opciones.prima_max_bps, pos) : 0n
+      return xdr.ScVal.scvVec([i128(col), i128(prima)])
     }
     // --- M1 ---
     if (fn === 'get_boveda') return addr(t.boveda ?? BOVEDA_ID)
@@ -186,6 +257,8 @@ const TIPOS = {
   liquidado: { miembro: ['symbol', 'address'], monto: ['symbol', 'i128'] },
   finalizada: { rendimiento: ['symbol', 'i128'], fondo_premios: ['symbol', 'i128'], retenido: ['symbol', 'i128'], sin_repartir: ['symbol', 'i128'] },
   cancelada: {},
+  oferta: { miembro: ['symbol', 'address'], ronda: ['symbol', 'u32'], descuento_bps: ['symbol', 'u32'], descuento: ['symbol', 'i128'] },
+  inter_prop: { de: ['symbol', 'address'], con: ['symbol', 'address'], compensacion: ['symbol', 'i128'] },
   // M1
   deuda_pag: { miembro: ['symbol', 'address'], pagador: ['symbol', 'address'], monto: ['symbol', 'i128'], deuda_restante: ['symbol', 'i128'] },
   abono: { deudor: ['symbol', 'address'], acreedor: ['symbol', 'address'], ronda: ['symbol', 'u32'], monto: ['symbol', 'i128'], retenida: ['symbol', 'bool'] },
@@ -235,6 +308,19 @@ const HISTORIAS = {
   4: [
     ['creada', { creador: CARLA, cuota: 100n * U, n_miembros: 3 }],
     ['cancelada', {}],
+  ],
+  9: [
+    ['creada', { creador: BETO, cuota: 100n * U, n_miembros: 3 }],
+    ['unido', { miembro: ME, posicion: SIN_TURNO, colateral: 100n * U }],
+    ['unido', { miembro: BETO, posicion: SIN_TURNO, colateral: 100n * U }],
+    ['unido', { miembro: CARLA, posicion: SIN_TURNO, colateral: 100n * U }],
+    ['iniciada', { inicio_ronda: 1n }],
+    ['pago', { miembro: BETO, ronda: 0, tarde: false }],
+    ['oferta', { miembro: BETO, ronda: 0, descuento_bps: 500, descuento: 15n * U }],
+  ],
+  10: [
+    ['creada', { creador: CARLA, cuota: 100n * U, n_miembros: 3 }],
+    ['inter_prop', { de: CARLA, con: ME, compensacion: 10n * U }],
   ],
   // M1: tanda mensual donde "yo" quedé en mora y Carla ya saldó su deuda (ver conTandaMorosa).
   6: [

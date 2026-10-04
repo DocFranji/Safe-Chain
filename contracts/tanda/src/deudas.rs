@@ -179,7 +179,8 @@ impl TandaContract {
                 let mut neto = bolsa - multas;
                 // Si la tanda sigue, todavía debe las cuotas de esta ronda en adelante: primero se repone
                 // su garantía para esas cuotas (va a la bóveda y vuelve al final con rendimiento).
-                // M3: en las tandas con opciones de turnos, aquí va `turnos::completar_garantia(...)`.
+                // (M3) Sirve igual en todos los modos de turnos: cuenta las cuotas que faltan desde la
+                // ronda actual, no el turno (`turnos::completar_garantia` usa el turno y apartaría de más).
                 let restantes = if t.estado == Estado::Activa {
                     t.n_miembros - t.ronda_actual
                 } else {

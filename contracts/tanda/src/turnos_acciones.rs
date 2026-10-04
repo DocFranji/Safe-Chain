@@ -1,16 +1,290 @@
-//! Reservado para la misión **M3**: acciones de turnos (`crear_tanda_avanzada`, `unirse_en_turno`, `ofertar`, intercambios).
-//!
-//! Empieza vacío a propósito: el módulo ya está declarado en `lib.rs`, así ninguna misión
-//! choca con otra al agregar archivos. Agrega aquí tu bloque:
-//!
-//! ```ignore
-//! use soroban_sdk::{contractimpl, Address, Env};
-//! use crate::{Error, TandaContract, TandaContractArgs, TandaContractClient};
-//!
-//! #[contractimpl]
-//! impl TandaContract {
-//!     pub fn mi_funcion(env: Env, ...) -> Result<..., Error> { ... }
-//! }
-//! ```
-//!
-//! Instrucciones: `.claude/agents/m3-turnos.md` y `agentes/PROTOCOLO.md`.
+//! Acciones de turnos (misión **M3**): crear con opciones, unirse eligiendo turno, ofertar en la
+//! subasta, intercambiar turnos y las consultas que usa la web. La lógica vive en `turnos.rs`.
+//! Diseño y decisiones: `docs/turnos.md`.
+use soroban_sdk::{contractimpl, token, Address, Env};
+
+use crate::almacenamiento::*;
+use crate::turnos::{self, colateral_al_unirse, colateral_para, prima_de_turno};
+use crate::{
+    ganchos, Error, Estado, EstadoTurnos, EvIntercambio, EvOferta, EvOpciones, EvPropuesta,
+    EvPropuestaRetirada, ModoTurnos, Oferta, OpcionesTanda, Propuesta, TandaContract,
+    TandaContractArgs, TandaContractClient, BPS, SIN_TURNO,
+};
+
+#[contractimpl]
+impl TandaContract {
+    /// Igual que `crear_tanda` (mismas reglas y validaciones), pero el creador elige cómo se
+    /// reparten los turnos: llegada, elección, precio por turno, sorteo o subasta, y si se
+    /// pueden intercambiar.
+    pub fn crear_tanda_avanzada(
+        env: Env,
+        creador: Address,
+        token: Address,
+        cuota: i128,
+        n_miembros: u32,
+        periodo_seg: u64,
+        penalidad_bps: u32,
+        cobertura_bps: u32,
+        opciones: OpcionesTanda,
+    ) -> Result<u32, Error> {
+        turnos::validar_opciones(&opciones)?;
+        // Mismo código que `crear_tanda` (pide la firma del creador y valida los parámetros).
+        let id = Self::crear_tanda(
+            env.clone(),
+            creador,
+            token,
+            cuota,
+            n_miembros,
+            periodo_seg,
+            penalidad_bps,
+            cobertura_bps,
+        )?;
+        let t = cargar_tanda(&env, id)?;
+        turnos::guardar_opciones(&env, &t, id, &opciones);
+        EvOpciones {
+            id,
+            modo: opciones.modo,
+            permitir_intercambio: opciones.permitir_intercambio,
+            prima_max_bps: opciones.prima_max_bps,
+            descuento_max_bps: opciones.descuento_max_bps,
+        }
+        .publish(&env);
+        Ok(id)
+    }
+
+    /// Unirse eligiendo un turno libre (modos `Eleccion` y `PrecioPorTurno`). Mismo camino que
+    /// `unirse`: verificación, ganchos del historial, colateral a la bóveda y arranque al llenarse.
+    pub fn unirse_en_turno(
+        env: Env,
+        id: u32,
+        miembro: Address,
+        posicion: u32,
+    ) -> Result<(), Error> {
+        Self::unirse_en(env, id, miembro, Some(posicion))
+    }
+
+    /// Subasta: ofrecer recibir `descuento_bps` menos de la bolsa para cobrar en la ronda en
+    /// curso. Debe superar la mejor oferta y se acepta solo hasta que vence la ronda.
+    pub fn ofertar(env: Env, id: u32, miembro: Address, descuento_bps: u32) -> Result<(), Error> {
+        miembro.require_auth();
+        let t = cargar_tanda(&env, id)?;
+        let o = turnos::opciones(&env, &t, id)
+            .filter(|o| o.modo == ModoTurnos::Subasta)
+            .ok_or(Error::ModoNoPermite)?;
+        if t.estado != Estado::Activa {
+            return Err(Error::EstadoInvalido);
+        }
+        // En la última ronda solo queda una persona sin turno: no hay nada que subastar.
+        if t.ronda_actual + 1 >= t.n_miembros
+            || env.ledger().timestamp() > t.inicio_ronda + t.periodo_seg
+        {
+            return Err(Error::SinSubasta);
+        }
+        let m = cargar_miembro(&env, id, &miembro)?;
+        if m.posicion != SIN_TURNO || m.moroso {
+            return Err(Error::NoPuedeOfertar);
+        }
+        let mejor = turnos::oferta_vigente(&env, &t, id, t.ronda_actual)
+            .map(|of| of.descuento_bps)
+            .unwrap_or(0);
+        if descuento_bps <= mejor || descuento_bps > o.descuento_max_bps {
+            return Err(Error::OfertaInvalida);
+        }
+        let oferta = Oferta {
+            ronda: t.ronda_actual,
+            miembro: miembro.clone(),
+            descuento_bps,
+        };
+        turnos::guardar_oferta(&env, &t, id, &oferta);
+        EvOferta {
+            id,
+            ronda: t.ronda_actual,
+            miembro,
+            descuento_bps,
+            descuento: t.cuota * t.n_miembros as i128 * descuento_bps as i128 / BPS,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// `de` propone cambiar su turno por el de `con`. Si `compensacion` > 0, `de` la deja ahora en
+    /// el contrato y `con` la recibe al aceptar; si es < 0, `con` le paga a `de` al aceptar.
+    pub fn proponer_intercambio(
+        env: Env,
+        id: u32,
+        de: Address,
+        con: Address,
+        compensacion: i128,
+    ) -> Result<(), Error> {
+        de.require_auth();
+        let t = cargar_tanda(&env, id)?;
+        turnos::opciones(&env, &t, id)
+            .filter(|o| o.permitir_intercambio)
+            .ok_or(Error::ModoNoPermite)?;
+        if t.estado != Estado::Activa {
+            return Err(Error::EstadoInvalido);
+        }
+        let a = cargar_miembro(&env, id, &de)?;
+        let b = cargar_miembro(&env, id, &con)?;
+        if de == con
+            || !turnos::intercambiable(&a, t.ronda_actual)
+            || !turnos::intercambiable(&b, t.ronda_actual)
+        {
+            return Err(Error::IntercambioInvalido);
+        }
+        let mut props = turnos::propuestas(&env, &t, id);
+        if props.iter().any(|p| p.de == de) {
+            return Err(Error::PropuestaExistente);
+        }
+        if compensacion > 0 {
+            token::Client::new(&env, &t.token).transfer(
+                &de,
+                env.current_contract_address(),
+                &compensacion,
+            );
+        }
+        props.push_back(Propuesta {
+            de: de.clone(),
+            con: con.clone(),
+            compensacion,
+        });
+        turnos::guardar_propuestas(&env, &t, id, &props);
+        EvPropuesta {
+            id,
+            de,
+            con,
+            compensacion,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// `con` acepta la propuesta de `de`: cambian de turno y se mueve la compensación.
+    /// La garantía no se mueve: quien adelanta su turno la completa al cobrar.
+    pub fn aceptar_intercambio(env: Env, id: u32, con: Address, de: Address) -> Result<(), Error> {
+        con.require_auth();
+        let t = cargar_tanda(&env, id)?;
+        if t.estado != Estado::Activa {
+            return Err(Error::EstadoInvalido);
+        }
+        let mut props = turnos::propuestas(&env, &t, id);
+        let i = props
+            .iter()
+            .position(|p| p.de == de && p.con == con)
+            .ok_or(Error::SinPropuesta)? as u32;
+        let p = props.get(i).unwrap();
+        let mut a = cargar_miembro(&env, id, &de)?;
+        let mut b = cargar_miembro(&env, id, &con)?;
+        if !turnos::intercambiable(&a, t.ronda_actual)
+            || !turnos::intercambiable(&b, t.ronda_actual)
+        {
+            return Err(Error::IntercambioInvalido);
+        }
+
+        let tok = token::Client::new(&env, &t.token);
+        let yo = env.current_contract_address();
+        if p.compensacion > 0 {
+            tok.transfer(&yo, &con, &p.compensacion);
+        } else if p.compensacion < 0 {
+            tok.transfer(&con, &de, &(-p.compensacion));
+        }
+
+        core::mem::swap(&mut a.posicion, &mut b.posicion);
+        guardar_miembro(&env, id, &de, &a);
+        guardar_miembro(&env, id, &con, &b);
+        let mut mapa = turnos::turnos_de(&env, &t, id);
+        mapa.set(a.posicion, de.clone());
+        mapa.set(b.posicion, con.clone());
+        turnos::guardar_turnos(&env, &t, id, &mapa);
+        props.remove(i);
+        turnos::guardar_propuestas(&env, &t, id, &props);
+
+        EvIntercambio {
+            id,
+            de,
+            con,
+            turno_de: a.posicion,
+            turno_con: b.posicion,
+            compensacion: p.compensacion,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Retira la propuesta de `de`. La puede retirar `de` (se arrepintió) o `con` (la rechaza).
+    /// Lo que `de` dejó guardado vuelve a `de`. Funciona en cualquier estado de la tanda.
+    pub fn cancelar_propuesta(env: Env, id: u32, de: Address, quien: Address) -> Result<(), Error> {
+        quien.require_auth();
+        let t = cargar_tanda(&env, id)?;
+        let mut props = turnos::propuestas(&env, &t, id);
+        let i = props
+            .iter()
+            .position(|p| p.de == de)
+            .ok_or(Error::SinPropuesta)? as u32;
+        let p = props.get(i).unwrap();
+        if quien != p.de && quien != p.con {
+            return Err(Error::NoAutorizado);
+        }
+        turnos::devolver_compensacion(&env, &t, &p);
+        props.remove(i);
+        turnos::guardar_propuestas(&env, &t, id, &props);
+        EvPropuestaRetirada {
+            id,
+            de: p.de,
+            con: p.con,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    // Consultas (no cambian nada, no cuestan firma): las usa la web.
+    // ---------------------------------------------------------------------
+
+    /// Opciones de turnos de la tanda (`Llegada` sin intercambio si se creó con `crear_tanda`).
+    pub fn get_opciones(env: Env, id: u32) -> Result<OpcionesTanda, Error> {
+        let t = cargar_tanda(&env, id)?;
+        Ok(turnos::opciones(&env, &t, id).unwrap_or(turnos::opciones_por_defecto()))
+    }
+
+    /// Todo lo de turnos en una sola lectura: opciones, mejor oferta, orden de respaldo,
+    /// intercambios pendientes y fondo de primas.
+    pub fn get_estado_turnos(env: Env, id: u32) -> Result<EstadoTurnos, Error> {
+        let t = cargar_tanda(&env, id)?;
+        let oferta = turnos::oferta_vigente(&env, &t, id, t.ronda_actual);
+        Ok(EstadoTurnos {
+            opciones: turnos::opciones(&env, &t, id).unwrap_or(turnos::opciones_por_defecto()),
+            mejor_oferta_bps: oferta.as_ref().map(|o| o.descuento_bps).unwrap_or(0),
+            mejor_postor: oferta.map(|o| o.miembro),
+            respaldo: turnos::respaldo(&env, &t, id),
+            propuestas: turnos::propuestas(&env, &t, id),
+            fondo_primas: turnos::fondo_primas(&env, &t, id),
+        })
+    }
+
+    /// (garantía que dejaría `miembro` al unirse en el turno `posicion`, prima de ese turno).
+    /// La garantía ya trae el descuento por historial (M2). Prima > 0: se descuenta de su bolsa;
+    /// < 0: se le suma. En sorteo y subasta el turno no se elige: devuelve lo que se deja al unirse.
+    pub fn cotizar_turno(
+        env: Env,
+        id: u32,
+        miembro: Address,
+        posicion: u32,
+    ) -> Result<(i128, i128), Error> {
+        let t = cargar_tanda(&env, id)?;
+        if posicion >= t.n_miembros {
+            return Err(Error::TurnoInvalido);
+        }
+        let o = turnos::opciones(&env, &t, id).unwrap_or(turnos::opciones_por_defecto());
+        let base = match o.modo {
+            ModoTurnos::Sorteo | ModoTurnos::Subasta => colateral_al_unirse(&t, SIN_TURNO),
+            _ => colateral_para(&t, posicion),
+        };
+        let colateral = ganchos::ajustar_colateral(&env, &t, &miembro, base);
+        let prima = if o.modo == ModoTurnos::PrecioPorTurno {
+            prima_de_turno(&t, o.prima_max_bps, posicion)
+        } else {
+            0
+        };
+        Ok((colateral, prima))
+    }
+}

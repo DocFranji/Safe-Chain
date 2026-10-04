@@ -53,6 +53,23 @@ Desde la web, quien está en mora ve el botón **"Pagar mi deuda"** con cuánto 
 2. El script crea la tanda e imprime el enlace `…/#/demo/<id>`. Ábrelo en el proyector (así queda fijo en esa tanda aunque el jurado cree otras).
 3. Pulsa ENTER y cuenta la historia siguiendo la tabla de arriba.
 
+## Demo de turnos (opcional): quién cobra primero lo decide el grupo
+
+Para mostrar los mecanismos de turnos, en otra terminal (unos 4 minutos por modo; imprime el enlace `…/#/tanda/<id>` de cada tanda):
+
+```bash
+WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.sh   # o sorteo, precio, intercambio, todos
+```
+
+| Modo | Qué se ve | Qué decir |
+| --- | --- | --- |
+| **Precio por turno** | Carla elige el turno 1 y cobra 276; Ana elige el 3 y cobra 324 | "Quien tiene prisa paga, quien espera gana. Lo que pagó Carla lo ganó Ana: el contrato no se queda con nada. Así funciona MoneyFellows, con 8,5 millones de usuarios en Egipto." |
+| **Subasta** | Beto ofrece 5 %, Carla 10 % y gana: "cada uno de los demás recibió 15 TUSD en su garantía" | "Cada ronda gana quien más necesita el dinero, y paga a los demás por adelantarse. Son los chit funds de la India, pero sin administrador." |
+| **Sorteo** | "El contrato sorteó el orden de cobro" | "Nadie tiene ventaja por llegar primero. El sorteo lo hace la red." |
+| **Intercambio** | "Carla y Beto cambiaron de turno": Carla le pagó 10 TUSD | "Si a alguien le surge una emergencia, negocia el turno con otro, sin intermediarios." |
+
+Si preguntan por la garantía en el sorteo o la subasta: "Como el turno no se sabe al unirse, todos dejan una cuota. A quien cobra primero se le aparta de su bolsa el resto de su garantía, y lo recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado."
+
 ## Que el jurado lo pruebe (solo Freighter)
 
 Quien llegue por el enlace de la web verá primero la landing de Rounda; con **Abrir la app** entra al lobby (`#/tandas`) y ahí está la guía **"Pruébalo en 4 pasos"**: instalar Freighter, ponerla en Testnet, conectar y conseguir TUSD. Si ya tienen Freighter, son dos clics.
