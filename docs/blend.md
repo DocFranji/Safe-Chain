@@ -156,12 +156,20 @@ real para el hackathon es muy bajo.
 - La tanda trabada sigue "corriendo el reloj" del TTL: por eso la renovación de M1 (al máximo de la
   red en cada operación) importa también aquí. Y nada se pierde aunque se archive: se restaura.
 
+**✅ DECIDIDO por @DocFranji (sáb 3, 19:00): A + indicador.** Sin colchón; si Blend no tiene liquidez la
+operación falla sin perder dinero, con mensaje claro y reintento. **Además, la web muestra la liquidez
+libre de Blend** en `#/estado` y en las tandas en USDC ("Blend tiene 28 453 USDC libres para retirar").
+El colchón (B) queda como plan de producción. La lógica del indicador y los mensajes están en
+`web/src/lib/blend.ts` (con pruebas sobre una lectura real del pool).
+
 **Mitigaciones evaluadas:**
-- **A) Sin colchón + error claro + reintento (recomiendo para el hackathon).** Mensaje en la web para
+- **A) Sin colchón + error claro + reintento (elegida, con el indicador).** Mensaje en la web para
   1207: "Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta en unos minutos."
 - **B) Colchón en el adaptador** (un % del colateral fuera de Blend). Exige convertir el adaptador en
-  una bóveda con participaciones propias (estilo ERC-4626): más código y más riesgo de redondeo. Para
-  producción, no para el domingo.
+  una bóveda con participaciones propias (estilo ERC-4626): más código y más riesgo de redondeo.
+  **Plan de producción:** colchón de 10–20 % que cubra las coberturas de las próximas rondas, con
+  participaciones propias del adaptador y el saldo líquido llevado en una cuenta interna (no por
+  `balance`, para que nadie infle el precio donando tokens).
 - **C) Cubrir con lo que haya.** Es parte del arreglo de la sección 5 para pérdidas; para liquidez
   no ayuda (el retiro mismo es lo que falla).
 
