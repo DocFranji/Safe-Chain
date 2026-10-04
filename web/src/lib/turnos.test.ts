@@ -79,6 +79,7 @@ describe('opciones', () => {
       descuento_max_bps: 0,
       primeros_con_historial: 0,
       puntaje_primeros: 0,
+      ofertas_selladas: false,
     })
     expect(aContrato(con({ modo: 'Subasta', descuentoPct: 30, intercambio: true }))).toEqual({
       modo: { tag: 'Subasta', values: undefined },
@@ -87,7 +88,11 @@ describe('opciones', () => {
       descuento_max_bps: 3000,
       primeros_con_historial: 0,
       puntaje_primeros: 0,
+      ofertas_selladas: false,
     })
+    // Ofertas selladas: solo en la subasta.
+    expect(aContrato(con({ modo: 'Subasta', descuentoPct: 30, selladas: true })).ofertas_selladas).toBe(true)
+    expect(aContrato(con({ modo: 'Sorteo', selladas: true })).ofertas_selladas).toBe(false)
   })
 
   it('límites: prima 1–20 %, descuento 1–50 %', () => {

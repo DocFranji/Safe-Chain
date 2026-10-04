@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, historial } from './mock.mjs'
+import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, historial } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -681,6 +681,74 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   check('Historial + turnos: el botón usa la garantía con descuento', await page.getByRole('button', { name: 'Unirme en el turno 1 y dejar 180 TUSD' }).isEnabled())
   await shot(page, 'm2m3-01-precio-con-historial')
   check('Historial + turnos: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M3: subasta con ofertas selladas
+{
+  // Crear: la casilla aparece en la subasta.
+  const est = nuevoEstadoTurnos()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('.modos')
+  await page.locator('.modo', { hasText: 'Subasta' }).click()
+  const casilla = page.getByLabel(/Ofertas selladas/)
+  check('Sellada/crear: la subasta ofrece ofertas selladas (apagadas por defecto)', (await casilla.count()) === 1 && !(await casilla.isChecked()))
+  await casilla.check()
+  check('Sellada/crear: explica que se revela desde el mismo navegador', /Se revela desde el mismo navegador/.test(await texto(page)))
+  await page.locator('.modo', { hasText: 'Precio por turno' }).click()
+  check('Sellada/crear: en otros modos no aparece', (await page.getByLabel(/Ofertas selladas/).count()) === 0)
+  check('Sellada/crear: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Primera mitad: se sella. Beto ya selló; nadie ve porcentajes.
+  const est = conSubastaSellada(nuevoEstadoTurnos(), 'sellar')
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  const t = await texto(page)
+  check('Sellada/sellar: cuántos sellaron, sin porcentajes', /Ofertas selladas\s*1 persona/.test(t) && !/Beto: 5 %/.test(t), t.slice(0, 900))
+  check('Sellada/sellar: cuánto queda para sellar', /Se sella durante/.test(t))
+  const boton = page.getByRole('button', { name: 'Sellar mi oferta' })
+  check('Sellada/sellar: sin porcentaje no se puede sellar', await boton.isDisabled())
+  await page.locator('#oferta-sellada').fill('8')
+  check('Sellada/sellar: con 8 % se habilita "Sellar mi oferta"', await boton.isEnabled())
+  check('Sellada/sellar: avisa que la clave queda en este navegador', /revélala desde aquí mismo/.test(await texto(page)))
+  await page.locator('#oferta-sellada').fill('31')
+  check('Sellada/sellar: más del máximo (30 %) no se puede', await boton.isDisabled())
+  await shot(page, 'm3-12-sellada-sellar')
+  check('Sellada/sellar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Segunda mitad: "yo" sellé 8 % desde este navegador y puedo revelarla; Beto ya reveló 5 %.
+  const est = conSubastaSellada(nuevoEstadoTurnos(), 'revelar')
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.addInitScript(
+    ({ k, v }) => localStorage.setItem(k, v),
+    { k: `rounda:oferta-sellada:${TANDA_ID}:9:0:${ME}`, v: JSON.stringify({ bps: 800, sal: '07'.repeat(32) }) },
+  )
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  const t = await texto(page)
+  check('Sellada/revelar: muestra la mejor revelada', /Mejor oferta revelada\s*Beto: 5 % menos/.test(t), t.slice(0, 900))
+  check('Sellada/revelar: botón "Revelar mi oferta (8 %)"', await page.getByRole('button', { name: 'Revelar mi oferta (8 %)' }).isEnabled())
+  await shot(page, 'm3-13-sellada-revelar')
+  check('Sellada/revelar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Segunda mitad, pero sellé desde otro navegador: no hay clave aquí.
+  const est = conSubastaSellada(nuevoEstadoTurnos(), 'revelar')
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/9')
+  await page.waitForSelector('.turnos-acciones', { timeout: 15000 })
+  check('Sellada/revelar sin clave: lo explica', /Sellaste tu oferta desde otro navegador/.test(await texto(page)))
+  check('Sellada/revelar sin clave: no ofrece revelar', (await page.getByRole('button', { name: /Revelar mi oferta/ }).count()) === 0)
+  const ancho = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }))
+  check('Sellada (390 px): sin desborde horizontal', ancho.sw <= ancho.cw + 1, JSON.stringify(ancho))
+  check('Sellada/revelar sin clave: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 

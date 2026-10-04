@@ -24,6 +24,17 @@ import {
   turnosLibres,
 } from '../lib/turnos'
 import { nivelDePuntaje, puntajeDe } from '../lib/historial'
+import {
+  aHex,
+  borrarOferta,
+  calcularSello,
+  claveOferta,
+  desdeHex,
+  faseSellada,
+  guardarOferta,
+  leerOferta,
+  nuevaSal,
+} from '../lib/ofertasSelladas'
 import { useHistorialCacheado } from '../hooks/useHistorial'
 import { EXPLORADOR, SIMBOLO, TANDA_ID } from '../config'
 
@@ -37,7 +48,8 @@ type Props = {
 }
 
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
-type Ejecutar = (construir: (c: Client) => Promise<contract.AssembledTransaction<unknown>>, textoListo: string) => Promise<void>
+/** Firma y envía; devuelve si salió bien. */
+type Ejecutar = (construir: (c: Client) => Promise<contract.AssembledTransaction<unknown>>, textoListo: string) => Promise<boolean>
 
 export function AccionesTurnos({ id, datos, billetera, saldo, ahora, alCambiar }: Props) {
   const [aviso, setAviso] = useState<Aviso>(null)
@@ -56,15 +68,17 @@ export function AccionesTurnos({ id, datos, billetera, saldo, ahora, alCambiar }
   if (modo === 'Llegada' && !turnos.opciones.permitir_intercambio) return null
 
   const ejecutar: Ejecutar = async (construir, textoListo) => {
-    if (!yo) return
+    if (!yo) return false
     setAviso({ tipo: 'esperando', texto: 'Confirma la firma y espera unos segundos mientras la red lo registra…' })
     try {
       const tx = await construir(clienteFirma(yo))
       await enviar(tx)
       setAviso({ tipo: 'listo', texto: textoListo })
       alCambiar()
+      return true
     } catch (e) {
       setAviso({ tipo: 'error', texto: traducirError(e) })
+      return false
     }
   }
 
@@ -281,6 +295,9 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
       </p>
     )
   }
+  if (turnos.opciones.ofertas_selladas) {
+    return <SubastaSellada id={id} datos={datos} yo={yo} mio={mio} puedeFirmar={puedeFirmar} ocupado={ocupado} ejecutar={ejecutar} ahora={ahora} />
+  }
 
   const puedeOfertar = mio !== null && !tieneTurno(mio.posicion) && !mio.moroso
   const bps = bpsDesdeTexto(texto)
@@ -349,6 +366,157 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
           </p>
         </>
       )}
+      {mio && tieneTurno(mio.posicion) && (
+        <p className="explica">Ya tienes turno (ronda {mio.posicion + 1}): no puedes ofertar.</p>
+      )}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Subasta con ofertas selladas: primera mitad de la ronda se sella, segunda se revela
+// ---------------------------------------------------------------------------
+
+function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: Comun & { ahora: number }) {
+  const { tanda, miembros, turnos, vence } = datos
+  const [texto, setTexto] = useState('')
+  const [sinGuardar, setSinGuardar] = useState(false)
+  const [, refrescar] = useState(0)
+  if (!turnos) return null
+  const ronda = tanda.ronda_actual
+  const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
+  const maximo = turnos.opciones.descuento_max_bps
+  const fin = Number(turnos.fin_sellado)
+  const fase = faseSellada(ahora, fin, vence)
+  const mejor = turnos.mejor_postor ? { quien: turnos.mejor_postor, bps: turnos.mejor_oferta_bps } : null
+  const respaldo = siguienteDelRespaldo(turnos.respaldo, miembros)
+  const puedeOfertar = mio !== null && !tieneTurno(mio.posicion) && !mio.moroso
+  const clave = yo ? claveOferta(TANDA_ID, id, ronda, yo) : null
+  const guardada = clave ? leerOferta(clave) : null
+  const yoSelle = yo !== null && turnos.sellos.includes(yo)
+  const sellaron = turnos.sellos.length
+  const bps = bpsDesdeTexto(texto)
+  const valida = bps !== null && bps >= 1 && bps <= maximo
+
+  async function sellar() {
+    if (!yo || !clave || bps === null) return
+    // La clave se guarda ANTES de enviar (si la página se cierra después, no se pierde). Si el envío
+    // falla, vuelve la anterior: siempre queda la que corresponde al sello que está en la red.
+    const anterior = leerOferta(clave)
+    const sal = nuevaSal()
+    const sello = await calcularSello(bps, sal)
+    if (!guardarOferta(clave, { bps, sal: aHex(sal) })) {
+      setSinGuardar(true)
+      return
+    }
+    const ok = await ejecutar(
+      (c) => c.ofertar_sellada({ id, miembro: yo, sello }),
+      `Listo: sellaste tu oferta de ${porcentaje(bps)}. Revélala desde aquí cuando empiece la segunda mitad de la ronda.`,
+    )
+    if (!ok) {
+      if (anterior) guardarOferta(clave, anterior)
+      else borrarOferta(clave)
+    }
+    refrescar((x) => x + 1)
+  }
+
+  return (
+    <>
+      <dl className="datos">
+        <div className="dato">
+          <dt>{fase === 'sellar' ? 'Ofertas selladas' : 'Mejor oferta revelada'}</dt>
+          <dd>
+            {fase === 'sellar'
+              ? sellaron === 0
+                ? 'Nadie todavía'
+                : `${sellaron} ${sellaron === 1 ? 'persona' : 'personas'}`
+              : mejor
+                ? `${nombreDe(mejor.quien)}: ${porcentaje(mejor.bps)} menos (${monto(descuentoDe(bolsa, mejor.bps))} ${SIMBOLO})`
+                : 'Nadie todavía'}
+          </dd>
+        </div>
+        <div className="dato">
+          <dt>{fase === 'sellar' ? 'Se sella durante' : fase === 'revelar' ? 'Se revela durante' : 'Ofertas'}</dt>
+          <dd className={fase === 'cerrada' ? 'alerta' : undefined}>
+            {fase === 'sellar' ? duracion(fin - ahora) : fase === 'revelar' ? duracion(vence - ahora) : 'Cerradas'}
+          </dd>
+        </div>
+      </dl>
+      <p className="explica">
+        Ofertas selladas: en la primera mitad de la ronda cada quien sella su oferta y nadie ve el porcentaje. En la
+        segunda mitad se revelan y gana la mayor (en empate, el orden sorteado al empezar).{' '}
+        {mejor && fase !== 'sellar'
+          ? `Si nadie revela una mayor, ${nombreDe(mejor.quien)} cobra esta ronda.`
+          : respaldo
+            ? `Si nadie revela una oferta, cobra ${nombreDe(respaldo)}.`
+            : 'Si nadie revela una oferta, cobra el siguiente del orden sorteado al empezar.'}
+      </p>
+
+      {fase === 'sellar' && puedeOfertar && puedeFirmar && yo && (
+        <>
+          {yoSelle && (
+            <p className="explica">
+              {guardada
+                ? `Ya sellaste ${porcentaje(guardada.bps)}. Puedes cambiarla mientras dure esta mitad.`
+                : 'Ya sellaste una oferta desde otro navegador: para revelarla tendrás que usar ese. Si sellas otra aquí, la reemplaza.'}
+            </p>
+          )}
+          <div className="campo fila-oferta">
+            <div className="campo">
+              <label htmlFor="oferta-sellada">Ofrezco recibir menos (%)</label>
+              <input
+                id="oferta-sellada"
+                inputMode="decimal"
+                placeholder={`De ${porcentaje(1)} a ${porcentaje(maximo)}`}
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                aria-invalid={texto !== '' && !valida ? true : undefined}
+                aria-describedby="oferta-sellada-ayuda"
+              />
+            </div>
+            <button className="boton principal" disabled={!valida || ocupado} onClick={() => void sellar()}>
+              {yoSelle ? 'Cambiar mi oferta' : 'Sellar mi oferta'}
+            </button>
+          </div>
+          <p id="oferta-sellada-ayuda" className={texto !== '' && !valida ? 'ayuda error' : 'ayuda'}>
+            {texto !== '' && !valida
+              ? `Escribe un porcentaje de máximo ${porcentaje(maximo)}.`
+              : 'Este navegador guarda la clave de tu oferta: revélala desde aquí mismo en la segunda mitad. Sin la clave, tu oferta no cuenta.'}
+          </p>
+          {sinGuardar && (
+            <p className="aviso nota">
+              Este navegador no deja guardar la clave de tu oferta (¿ventana privada?). Sin ella no podrías revelarla:
+              usa una ventana normal.
+            </p>
+          )}
+        </>
+      )}
+
+      {fase === 'revelar' && yoSelle && puedeFirmar && yo && (
+        guardada ? (
+          <button
+            className="boton principal"
+            disabled={ocupado}
+            onClick={() =>
+              void ejecutar(
+                (c) => c.revelar_oferta({ id, miembro: yo, descuento_bps: guardada.bps, sal: desdeHex(guardada.sal) }),
+                `Listo: revelaste tu oferta de ${porcentaje(guardada.bps)}.`,
+              )
+            }
+          >
+            Revelar mi oferta ({porcentaje(guardada.bps)})
+          </button>
+        ) : (
+          <p className="aviso nota">
+            Sellaste tu oferta desde otro navegador: su clave está allá. Revélala desde ese navegador antes de que
+            venza la ronda; si no, no cuenta.
+          </p>
+        )
+      )}
+      {fase === 'revelar' && puedeOfertar && !yoSelle && (
+        <p className="explica">No tienes una oferta sellada sin revelar en esta ronda.</p>
+      )}
+      {fase === 'cerrada' && <p className="explica">Las ofertas ya cerraron: al cerrar la ronda se sabrá quién cobra.</p>}
       {mio && tieneTurno(mio.posicion) && (
         <p className="explica">Ya tienes turno (ronda {mio.posicion + 1}): no puedes ofertar.</p>
       )}

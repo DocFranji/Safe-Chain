@@ -125,6 +125,26 @@ export interface Client {
         posicion: number;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<[bigint, bigint], Error>>>;
     /**
+     * Subasta sellada, segunda mitad de la ronda (hasta que vence): `miembro` revela la oferta que
+     * selló. Gana el mayor descuento; en empate, quien va antes en el orden de respaldo.
+     */
+    revelar_oferta(args: {
+        id: number;
+        miembro: string | Address;
+        descuento_bps: number;
+        sal: Uint8Array;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Subasta sellada, primera mitad de la ronda: `miembro` sella su oferta. `sello` =
+     * sha256(descuento_bps en 4 bytes big-endian ‖ sal de 32 bytes). Se puede cambiar mientras dure
+     * esta mitad. Un sello no se puede repetir en la ronda: nadie copia el de otro.
+     */
+    ofertar_sellada(args: {
+        id: number;
+        miembro: string | Address;
+        sello: Uint8Array;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
      * Unirse eligiendo un turno libre (modos `Eleccion` y `PrecioPorTurno`). Mismo camino que
      * `unirse`: verificación, ganchos del historial, colateral a la bóveda y arranque al llenarse.
      * Si es de los primeros turnos que piden historial, se revisa el puntaje de quien se une.
@@ -280,6 +300,8 @@ export declare class Client extends ContractClient {
         ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
         cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
+        revelar_oferta: (json: string) => AssembledTransaction<Result<null, Error>>;
+        ofertar_sellada: (json: string) => AssembledTransaction<Result<null, Error>>;
         unirse_en_turno: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_estado_turnos: (json: string) => AssembledTransaction<Result<EstadoTurnos, Error>>;
         cancelar_propuesta: (json: string) => AssembledTransaction<Result<null, Error>>;
@@ -315,6 +337,8 @@ export declare class Client extends ContractClient {
         ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
         cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
+        revelar_oferta: (json: string) => AssembledTransaction<Result<null, Error>>;
+        ofertar_sellada: (json: string) => AssembledTransaction<Result<null, Error>>;
         unirse_en_turno: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_estado_turnos: (json: string) => AssembledTransaction<Result<EstadoTurnos, Error>>;
         cancelar_propuesta: (json: string) => AssembledTransaction<Result<null, Error>>;
@@ -358,6 +382,12 @@ export declare class Client extends ContractClient {
      * Build a topics filter row for the "EvRonda" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evRondaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvSello" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evSelloEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**

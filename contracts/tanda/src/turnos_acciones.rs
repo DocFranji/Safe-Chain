@@ -1,15 +1,15 @@
 //! Acciones de turnos (misión **M3**): crear con opciones, unirse eligiendo turno, ofertar en la
 //! subasta, intercambiar turnos y las consultas que usa la web. La lógica vive en `turnos.rs`.
 //! Diseño y decisiones: `docs/turnos.md`.
-use soroban_sdk::{contractimpl, token, Address, Env};
+use soroban_sdk::{contractimpl, token, Address, Bytes, BytesN, Env};
 
 use crate::almacenamiento::*;
 use crate::requisitos;
 use crate::turnos::{self, colateral_al_unirse, colateral_para, prima_de_turno};
 use crate::{
     ganchos, Error, Estado, EstadoTurnos, EvIntercambio, EvOferta, EvOpciones, EvPropuesta,
-    EvPropuestaRetirada, ModoTurnos, Oferta, OpcionesTanda, Propuesta, TandaContract,
-    TandaContractArgs, TandaContractClient, BPS, SIN_TURNO,
+    EvPropuestaRetirada, EvSello, Miembro, ModoTurnos, Oferta, OpcionesTanda, Propuesta, Tanda,
+    TandaContract, TandaContractArgs, TandaContractClient, BPS, SIN_TURNO,
 };
 
 #[contractimpl]
@@ -54,6 +54,7 @@ impl TandaContract {
             descuento_max_bps: opciones.descuento_max_bps,
             primeros_con_historial: opciones.primeros_con_historial,
             puntaje_primeros: opciones.puntaje_primeros,
+            ofertas_selladas: opciones.ofertas_selladas,
         }
         .publish(&env);
         Ok(id)
@@ -79,23 +80,7 @@ impl TandaContract {
     /// curso. Debe superar la mejor oferta y se acepta solo hasta que vence la ronda.
     pub fn ofertar(env: Env, id: u32, miembro: Address, descuento_bps: u32) -> Result<(), Error> {
         miembro.require_auth();
-        let t = cargar_tanda(&env, id)?;
-        let o = turnos::opciones(&env, &t, id)
-            .filter(|o| o.modo == ModoTurnos::Subasta)
-            .ok_or(Error::ModoNoPermite)?;
-        if t.estado != Estado::Activa {
-            return Err(Error::EstadoInvalido);
-        }
-        // En la última ronda solo queda una persona sin turno: no hay nada que subastar.
-        if t.ronda_actual + 1 >= t.n_miembros
-            || env.ledger().timestamp() > t.inicio_ronda + t.periodo_seg
-        {
-            return Err(Error::SinSubasta);
-        }
-        let m = cargar_miembro(&env, id, &miembro)?;
-        if m.posicion != SIN_TURNO || m.moroso {
-            return Err(Error::NoPuedeOfertar);
-        }
+        let (t, o, _) = subasta_abierta_para(&env, id, &miembro, false)?;
         let mejor = turnos::oferta_vigente(&env, &t, id, t.ronda_actual)
             .map(|of| of.descuento_bps)
             .unwrap_or(0);
@@ -108,6 +93,96 @@ impl TandaContract {
             descuento_bps,
         };
         turnos::guardar_oferta(&env, &t, id, &oferta);
+        EvOferta {
+            id,
+            ronda: t.ronda_actual,
+            miembro,
+            descuento_bps,
+            descuento: t.cuota * t.n_miembros as i128 * descuento_bps as i128 / BPS,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Subasta sellada, primera mitad de la ronda: `miembro` sella su oferta. `sello` =
+    /// sha256(descuento_bps en 4 bytes big-endian ‖ sal de 32 bytes). Se puede cambiar mientras dure
+    /// esta mitad. Un sello no se puede repetir en la ronda: nadie copia el de otro.
+    pub fn ofertar_sellada(
+        env: Env,
+        id: u32,
+        miembro: Address,
+        sello: BytesN<32>,
+    ) -> Result<(), Error> {
+        miembro.require_auth();
+        let (t, _, _) = subasta_abierta_para(&env, id, &miembro, true)?;
+        if env.ledger().timestamp() >= turnos::mitad_de_ronda(&env, &t, id) {
+            return Err(Error::FaseEquivocada);
+        }
+        let mut sellos = turnos::sellos_vigentes(&env, &t, id);
+        if sellos
+            .iter()
+            .any(|(quien, s)| s == sello && quien != miembro)
+        {
+            return Err(Error::SelloRepetido);
+        }
+        sellos.set(miembro.clone(), sello);
+        turnos::guardar_sellos(&env, &t, id, sellos);
+        EvSello {
+            id,
+            ronda: t.ronda_actual,
+            miembro,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Subasta sellada, segunda mitad de la ronda (hasta que vence): `miembro` revela la oferta que
+    /// selló. Gana el mayor descuento; en empate, quien va antes en el orden de respaldo.
+    pub fn revelar_oferta(
+        env: Env,
+        id: u32,
+        miembro: Address,
+        descuento_bps: u32,
+        sal: BytesN<32>,
+    ) -> Result<(), Error> {
+        miembro.require_auth();
+        let (t, o, _) = subasta_abierta_para(&env, id, &miembro, true)?;
+        if env.ledger().timestamp() < turnos::mitad_de_ronda(&env, &t, id) {
+            return Err(Error::FaseEquivocada);
+        }
+        let mut sellos = turnos::sellos_vigentes(&env, &t, id);
+        let sello = sellos.get(miembro.clone()).ok_or(Error::SelloInvalido)?;
+        let mut datos = Bytes::from_array(&env, &descuento_bps.to_be_bytes());
+        datos.append(&sal.into());
+        if env.crypto().sha256(&datos).to_bytes() != sello {
+            return Err(Error::SelloInvalido);
+        }
+        if descuento_bps == 0 || descuento_bps > o.descuento_max_bps {
+            return Err(Error::OfertaInvalida);
+        }
+        // Revelada: el sello ya no sirve para otra vez.
+        sellos.remove(miembro.clone());
+        turnos::guardar_sellos(&env, &t, id, sellos);
+        let gana = match turnos::oferta_vigente(&env, &t, id, t.ronda_actual) {
+            None => true,
+            Some(mejor) => {
+                descuento_bps > mejor.descuento_bps
+                    || (descuento_bps == mejor.descuento_bps
+                        && antes_en_respaldo(
+                            &turnos::respaldo(&env, &t, id),
+                            &miembro,
+                            &mejor.miembro,
+                        ))
+            }
+        };
+        if gana {
+            let oferta = Oferta {
+                ronda: t.ronda_actual,
+                miembro: miembro.clone(),
+                descuento_bps,
+            };
+            turnos::guardar_oferta(&env, &t, id, &oferta);
+        }
         EvOferta {
             id,
             ronda: t.ronda_actual,
@@ -271,13 +346,20 @@ impl TandaContract {
     pub fn get_estado_turnos(env: Env, id: u32) -> Result<EstadoTurnos, Error> {
         let t = cargar_tanda(&env, id)?;
         let oferta = turnos::oferta_vigente(&env, &t, id, t.ronda_actual);
+        let o = turnos::opciones(&env, &t, id).unwrap_or(turnos::opciones_por_defecto());
         Ok(EstadoTurnos {
-            opciones: turnos::opciones(&env, &t, id).unwrap_or(turnos::opciones_por_defecto()),
+            opciones: o.clone(),
             mejor_oferta_bps: oferta.as_ref().map(|o| o.descuento_bps).unwrap_or(0),
             mejor_postor: oferta.map(|o| o.miembro),
             respaldo: turnos::respaldo(&env, &t, id),
             propuestas: turnos::propuestas(&env, &t, id),
             fondo_primas: turnos::fondo_primas(&env, &t, id),
+            sellos: turnos::sellos_vigentes(&env, &t, id).keys(),
+            fin_sellado: if o.ofertas_selladas && t.estado == Estado::Activa {
+                turnos::mitad_de_ronda(&env, &t, id)
+            } else {
+                0
+            },
         })
     }
 
@@ -306,5 +388,43 @@ impl TandaContract {
             0
         };
         Ok((colateral, prima))
+    }
+}
+
+/// Lo que comparten `ofertar`, `ofertar_sellada` y `revelar_oferta`: la tanda es una subasta del tipo
+/// pedido (abierta o sellada), está en curso, la ronda no es la última ni venció, y `miembro` puede
+/// ofertar (todavía sin turno y al día).
+fn subasta_abierta_para(
+    env: &Env,
+    id: u32,
+    miembro: &Address,
+    sellada: bool,
+) -> Result<(Tanda, OpcionesTanda, Miembro), Error> {
+    let t = cargar_tanda(env, id)?;
+    let o = turnos::opciones(env, &t, id)
+        .filter(|o| o.modo == ModoTurnos::Subasta && o.ofertas_selladas == sellada)
+        .ok_or(Error::ModoNoPermite)?;
+    if t.estado != Estado::Activa {
+        return Err(Error::EstadoInvalido);
+    }
+    // En la última ronda solo queda una persona sin turno: no hay nada que subastar.
+    if t.ronda_actual + 1 >= t.n_miembros
+        || env.ledger().timestamp() > t.inicio_ronda + t.periodo_seg
+    {
+        return Err(Error::SinSubasta);
+    }
+    let m = cargar_miembro(env, id, miembro)?;
+    if m.posicion != SIN_TURNO || m.moroso {
+        return Err(Error::NoPuedeOfertar);
+    }
+    Ok((t, o, m))
+}
+
+/// En el orden de respaldo, ¿`a` va antes que `b`? (Desempata ofertas selladas iguales.)
+fn antes_en_respaldo(respaldo: &soroban_sdk::Vec<Address>, a: &Address, b: &Address) -> bool {
+    match (respaldo.first_index_of(a), respaldo.first_index_of(b)) {
+        (Some(i), Some(j)) => i < j,
+        (Some(_), None) => true,
+        _ => false,
     }
 }

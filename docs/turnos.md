@@ -203,7 +203,7 @@ Cada quien elige un turno libre al unirse (`unirse_en_turno`), gratis, y ve la g
   - El **descuento se reparte en partes iguales entre los demás miembros que no están en mora, como dividendo que se suma a su garantía.** Va a la bóveda en un solo depósito y vuelve en `finalizar` con rendimiento, sin cambiar `finalizar`. Además protege al grupo: si alguien deja de pagar, su dividendo cubre primero. El residuo del redondeo va al último que lo recibe; si nadie puede recibirlo, va al retenido.
 - En la última ronda solo queda una persona: cobra la bolsa completa, sin subasta (`SinSubasta`).
 - Ejemplo (3 personas, cuota 100, cobertura 100 %): en la ronda 1 Beto ofrece 5 % (15). Al cerrar, Beto recibe 300 − 15 = 285, de los que se apartan 100 de garantía → **185 en efectivo**. Ana y Carla reciben 7,5 cada una en su garantía.
-- **Ofertas selladas** (comprometer y revelar) quedan como extra. Riesgo documentado de las abiertas: se puede mejorar una oferta en el último segundo (como en cualquier subasta abierta).
+- **Ofertas abiertas (por defecto):** se puede mejorar una oferta en el último segundo, como en cualquier subasta abierta. Para evitarlo están las ofertas selladas (§4.8).
 
 ### 4.6 Intercambio de turnos (`permitir_intercambio`)
 
@@ -232,6 +232,28 @@ Quien cobra primero recibe la bolsa antes de terminar de pagar: en la práctica,
   - Al crear, la casilla "Los primeros turnos, solo para quien tenga buen historial" (turnos 1 a k y nivel) aparece solo en "Precio por turno" y "Elegir e intercambiar", y solo si hay historial conectado. La tabla marca esos turnos con su nivel.
   - Quien crea y se une sin alcanzar el nivel queda en el primer turno abierto, y el texto lo dice ("cobrarás en la ronda 3").
   - En la rejilla de turnos, los protegidos dicen "Pide Bronce" y se desactivan si tu puntaje no alcanza ("tienes 110").
+
+### 4.8 Ofertas selladas en la subasta (comprometer y revelar)
+
+En la subasta abierta, quien oferta al final ve las ofertas de los demás y puede ganarles por poco en el último segundo. Con ofertas selladas, nadie ve los montos hasta que se cierran las ofertas. Es opcional (`ofertas_selladas: bool` en `OpcionesTanda`, solo en la subasta) y la subasta abierta sigue siendo la de siempre.
+
+- **Primera mitad de cada ronda (sellar):** `ofertar_sellada(id, miembro, sello)`.
+  - `sello = sha256(descuento_bps en 4 bytes big-endian ‖ sal de 32 bytes al azar)`. El contrato guarda solo el sello, así que nadie ve el monto.
+  - Pueden sellar los mismos que pueden ofertar: sin turno, al día y antes de la última ronda. Cada quien puede cambiar su sello mientras dure esta mitad.
+  - **Anticopia:** un sello no se puede repetir en la ronda (`SelloRepetido`). Así nadie copia el sello de otro para revelar lo mismo después.
+- **Segunda mitad, hasta que vence la ronda (revelar):** `revelar_oferta(id, miembro, descuento_bps, sal)`.
+  - El contrato recalcula el sha256 y lo compara con el sello (`SelloInvalido` si no coincide o si no selló).
+  - La oferta tiene que estar dentro del máximo (`OfertaInvalida`) y quien la revela, al día (`NoPuedeOfertar`).
+  - Gana el mayor descuento. **En empate, desempata el orden de respaldo** (sorteado al llenarse), no quién reveló primero: así nadie tiene que apurarse.
+  - Revelar fuera de su mitad da `FaseEquivocada`.
+- **Al cerrar la ronda:** la misma resolución de la subasta abierta (§4.5). Las ofertas no reveladas no cuentan, y no hay multa: no se deja nada al sellar.
+- `ofertar` (abierta) no aplica en una subasta sellada (`ModoNoPermite`).
+- **La sal la guarda la web en el navegador de quien oferta.** Sin ella no se puede revelar: la pantalla lo dice antes de sellar. Las rondas tienen al menos 60 s; en la demo rápida de 1 minuto son 30 s para sellar y 30 s para revelar.
+- **Interfaz nueva:**
+  - funciones `ofertar_sellada` y `revelar_oferta`;
+  - `EstadoTurnos.sellos`: quiénes sellaron en la ronda en curso, sin montos;
+  - evento `sello` (id, ronda, miembro). Al revelar se emite el evento `oferta` de siempre;
+  - errores 41 `FaseEquivocada`, 42 `SelloInvalido` y 43 `SelloRepetido`.
 
 ## 5. Seguridad, dinero y presupuesto
 
@@ -310,13 +332,13 @@ Peores casos con 12 miembros que tendrán prueba y costo medido en el PR: el úl
 | Funciones públicas y consultas | `contracts/tanda/src/turnos_acciones.rs` |
 | Tipos, errores 30–39 y eventos | bloques `// --- M3 ---` de `tipos.rs` y `eventos.rs` |
 | Flujo principal | `lib.rs`: `unirse` → `unirse_en(..., turno)`; regla 3 de `cerrar_ronda`. `consultas.rs`: `colateral_siguiente` |
-| Pruebas | `contracts/tanda/src/test_turnos.rs` (30) |
+| Pruebas | `contracts/tanda/src/test_turnos.rs` (35) |
 | Web | `web/src/lib/turnos.ts` (+ pruebas), `components/OpcionesTurnos.tsx`, `components/AccionesTurnos.tsx`, `historia.ts`, `contrato.ts`, `Rueda.tsx`, `ListaMiembros.tsx` |
 | Navegador | `web/e2e/mock.mjs` (`nuevoEstadoTurnos()`), escenarios "Turnos" en `run.mjs` |
 | Demo por terminal | `scripts/demo_turnos.sh` |
 
 ```bash
-cargo test -p tanda test_turnos -- --nocapture   # 30 pruebas de M3
+cargo test -p tanda test_turnos -- --nocapture   # 35 pruebas de M3
 bash scripts/verificar.sh                        # toda la Definición de Terminado
 MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después de desplegar_testnet.sh)
 ```
@@ -325,24 +347,26 @@ MODO=subasta bash scripts/demo_turnos.sh         # un modo en testnet (después 
 
 | Operación | Instrucciones | Lecturas | Escrituras |
 | --- | --- | --- | --- |
-| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 6,8 M | 46 | 22 |
-| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 5,3 M | 57 | 8 |
-| Subasta: último `unirse` (sortea el orden de respaldo) | 4,4 M | 46 | 11 |
-| Subasta: `ofertar` | 1,0 M | 8 | 2 |
-| Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11 | 20,7 M | 57 | 21 |
-| Precio por turno: último `unirse_en_turno` | 4,5 M | 46 | 11 |
-| Precio por turno: `cerrar_ronda` con prima | 4,2 M | 55 | 5 |
-| `proponer_intercambio` / `aceptar_intercambio` | 1,3 M / 1,6 M | 12 | 4 / 7 |
-| Subasta + deudas (M1): `cerrar_ronda` con casi nadie al día | 28,9 M | 57 | 30 |
-| **Subasta + deudas (M1) + historial (M2): `cerrar_ronda` con casi nadie al día** | **38,7 M** | **72** | **42** |
-| Subasta + historial (M2): `cerrar_ronda` con todos al día | 13,4 M | 61 | 23 |
+| Sorteo: último `unirse` (baraja y asigna 12 turnos) | 7,0 M | 48 | 22 |
+| Sorteo: `cerrar_ronda` que aparta 1 000 de garantía | 5,5 M | 59 | 8 |
+| Subasta: último `unirse` (sortea el orden de respaldo) | 4,6 M | 48 | 11 |
+| Subasta: `ofertar` | 1,1 M | 8 | 2 |
+| Subasta: `cerrar_ronda` con 6 impagos y dividendos para 11 | 20,8 M | 59 | 21 |
+| Precio por turno: último `unirse_en_turno` | 4,9 M | 48 | 11 |
+| Precio por turno: `cerrar_ronda` con prima | 4,4 M | 57 | 5 |
+| `proponer_intercambio` / `aceptar_intercambio` | 1,4 M / 1,8 M | 12 / 13 | 4 / 7 |
+| Subasta + deudas (M1): `cerrar_ronda` con casi nadie al día | 29,1 M | 59 | 30 |
+| **Subasta + deudas (M1) + historial (M2): `cerrar_ronda` con casi nadie al día** | **39,0 M** | **74** | **42** |
+| Subasta + historial (M2): `cerrar_ronda` con todos al día | 13,6 M | 63 | 23 |
 | Subasta + historial (M2): `finalizar` con 12 que cumplieron | 19,8 M | 64 | **43** |
-| Precio por turno con historial mínimo en 11 turnos: último `unirse_en_turno` (pregunta el puntaje) | 5,5 M | 49 | 11 |
-| Ídem: `proponer_intercambio` / `aceptar_intercambio` entre turnos protegidos | 2,3 M / 2,8 M | 16 / 17 | 4 / 7 |
+| Precio por turno con historial mínimo en 11 turnos: último `unirse_en_turno` (pregunta el puntaje) | 5,7 M | 51 | 11 |
+| Ídem: `proponer_intercambio` / `aceptar_intercambio` entre turnos protegidos | 2,4 M / 2,8 M | 16 / 17 | 4 / 7 |
+| Subasta sellada de 12: `ofertar_sellada` (el sello 12 se compara con 11) / `revelar_oferta` con empate | 1,2 M / 1,3 M | 9 / 11 | 2 / 2 |
+| Subasta sellada de 12: `cerrar_ronda` | 10,8 M | 59 | 22 |
 
 Todo cabe. Lo más justo son las escrituras (43 de 50): las pone el historial al anotar a las 12 personas en el `finalizar`, igual que en cualquier tanda de 12 con historial.
 
-**Tamaño:** `tanda.wasm` pesa 74 579 bytes con M1 + M2 + M3 y el historial mínimo para los primeros turnos (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes).
+**Tamaño:** `tanda.wasm` pesa 80 008 bytes con M1 + M2 + M3, el historial mínimo para los primeros turnos y las ofertas selladas (límite de la red: 131 072). El historial es un contrato aparte (14 533 bytes). Con las ofertas selladas, al llenarse la tanda y en cada cierre se leen 2 entradas más (se revisa si existen las dos claves de las ofertas selladas para renovarlas, aunque la tanda no las use): el máximo de lecturas pasa de 72 a 74. Ninguna de las tres mejoras agrega escrituras.
 
 ### Cómo se combina con M1 (deudas) y M2 (historial)
 
@@ -380,3 +404,10 @@ Con esto quedan probadas la codificación de `OpcionesTanda` (el enum `modo`), l
   - Beto, con 80 puntos, pidió el turno 1 y la simulación falló con `Error(Contract, #40)`.
   - Al unirse sin elegir, quedó en el turno 2 ([tx](https://stellar.expert/explorer/testnet/tx/cd20e59bea2db9948c9202822d72e89bc4b6202944807c236bcc74de227426f5)).
   - Ana sumó 20 puntos (100 en total) y tomó el turno 1, con 200 de garantía ([tx](https://stellar.expert/explorer/testnet/tx/27439dd9c1452b7a9339b0fed54acdb5fdb3cf19b7e72a98725862f91172340f)).
+
+**Ofertas selladas, en testnet** (dom 4 oct, contratos desechables con M1 + M2 + M3). Los sellos se calcularon aparte con Python:
+- En una subasta sellada de 3 personas y rondas de 60 s, Beto selló 10 % ([tx](https://stellar.expert/explorer/testnet/tx/7eec3b6a891336a6356b9b54484c49a76f769b6ffb7618025e28ca48c19f3b84)) y Carla 5 %.
+- Revelar antes de la mitad dio `#41`, y revelar con otra sal, `#42`.
+- En la segunda mitad revelaron los dos ([tx de Beto](https://stellar.expert/explorer/testnet/tx/66fab2b0f5c2177e9b9cab2c40dc821895ab7c691b6b0e2bfe9a7b13fdb1bff4)).
+- Al cerrar ganó Beto: recibió 30 de descuento y cada uno de los otros dos, 15 de dividendo ([tx](https://stellar.expert/explorer/testnet/tx/39947e5f3ce9a9ac74aa03b3b7fd7e34c8a5543754ffdcdd7be9c030c32044b3)).
+- **Con el código de la web** (WebCrypto y el cliente generado, firmando con una llave de prueba): sello ([tx](https://stellar.expert/explorer/testnet/tx/c72d6f3cb3c3f392085a665fc473f20f50f72156722e83ad372969188bbc620f)) y revelación de 12 % aceptada ([tx](https://stellar.expert/explorer/testnet/tx/2cc7cdf6c0977f6c63f4d298026ab74f8242de882381c4201ee0ff7317984c9e)).

@@ -191,6 +191,17 @@ pub struct EvOpciones {
     pub descuento_max_bps: u32,
     pub primeros_con_historial: u32,
     pub puntaje_primeros: u32,
+    pub ofertas_selladas: bool,
+}
+
+/// Subasta sellada: `miembro` selló una oferta en la ronda `ronda` (el monto se verá al revelarla).
+#[contractevent(topics = ["sello"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvSello {
+    #[topic]
+    pub id: u32,
+    pub ronda: u32,
+    pub miembro: Address,
 }
 
 /// El contrato sorteó el orden de cobro: `orden[i]` cobra en la ronda `i`.

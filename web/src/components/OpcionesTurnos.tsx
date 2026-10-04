@@ -75,6 +75,21 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
             onChange={(e) => alCambiar({ ...valor, descuentoPct: Number(e.target.value) })}
           />
           <p className="ayuda">Nadie puede ofrecer recibir menos que esto. Así nadie se queda con muy poco.</p>
+          <label className="casilla">
+            <input
+              type="checkbox"
+              checked={valor.selladas}
+              onChange={(e) => alCambiar({ ...valor, selladas: e.target.checked })}
+            />
+            <span>
+              Ofertas selladas
+              <span className="ayuda">
+                {' '}
+                (nadie ve las ofertas de los demás: en la primera mitad de cada ronda cada quien sella la suya y en la
+                segunda la revela. Gana la mayor. Se revela desde el mismo navegador con el que se selló)
+              </span>
+            </span>
+          </label>
         </div>
       )}
 

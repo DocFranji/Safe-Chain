@@ -114,6 +114,9 @@ pub enum Error {
     PropuestaExistente = 38,
     SinPropuesta = 39,
     TurnoExigeHistorial = 40,
+    FaseEquivocada = 41,
+    SelloInvalido = 42,
+    SelloRepetido = 43,
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +246,8 @@ pub struct OpcionesTanda {
     pub primeros_con_historial: u32,
     /// Puntaje de historial que piden los primeros turnos (0 si `primeros_con_historial` es 0).
     pub puntaje_primeros: u32,
+    /// Subasta: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.
+    pub ofertas_selladas: bool,
 }
 
 /// Subasta: la mejor oferta de una ronda.
@@ -280,4 +285,9 @@ pub struct EstadoTurnos {
     pub propuestas: Vec<Propuesta>,
     /// PrecioPorTurno: primas ya cobradas que esperan a los últimos turnos.
     pub fondo_primas: i128,
+    /// Subasta sellada: quiénes sellaron una oferta en la ronda en curso y aún no la revelan.
+    pub sellos: Vec<Address>,
+    /// Subasta sellada en curso: hasta este momento se sella; después, hasta que vence, se revela
+    /// (0 si no aplica).
+    pub fin_sellado: u64,
 }

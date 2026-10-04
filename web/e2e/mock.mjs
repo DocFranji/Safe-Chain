@@ -92,10 +92,10 @@ export function nuevoEstado() {
 export const SIN_TURNO = 4_294_967_295
 const opcionesTurnos = (tag, o = {}) => ({
   modo: { tag, values: undefined }, permitir_intercambio: false, prima_max_bps: 0, descuento_max_bps: 0,
-  primeros_con_historial: 0, puntaje_primeros: 0, ...o,
+  primeros_con_historial: 0, puntaje_primeros: 0, ofertas_selladas: false, ...o,
 })
 const estadoTurnos = (opciones, o = {}) => ({
-  opciones, mejor_postor: null, mejor_oferta_bps: 0, respaldo: [], propuestas: [], fondo_primas: 0n, ...o,
+  opciones, mejor_postor: null, mejor_oferta_bps: 0, respaldo: [], propuestas: [], fondo_primas: 0n, sellos: [], fin_sellado: 0n, ...o,
 })
 
 /**
@@ -135,6 +135,21 @@ export function nuevoEstadoTurnos() {
     turnos: estadoTurnos(opcionesTurnos('Eleccion', { permitir_intercambio: true }), {
       propuestas: [{ de: CARLA, con: ME, compensacion: 10n * U }],
     }),
+  }
+  return e
+}
+
+/**
+ * M3: la subasta de la tanda 9 con ofertas selladas. `sellar`: falta medio minuto para revelar y Beto
+ * ya selló. `revelar`: ya se revela; Beto reveló 5 % y "yo" y Carla sellamos sin revelar todavía.
+ */
+export function conSubastaSellada(e, fase) {
+  const t = e.tandas[9]
+  t.turnos.opciones = { ...t.turnos.opciones, ofertas_selladas: true }
+  if (fase === 'sellar') {
+    Object.assign(t.turnos, { fin_sellado: BigInt(ahora() + 30), sellos: [BETO], mejor_postor: null, mejor_oferta_bps: 0 })
+  } else {
+    Object.assign(t.turnos, { fin_sellado: BigInt(ahora() - 10), sellos: [ME, CARLA], mejor_postor: BETO, mejor_oferta_bps: 500 })
   }
   return e
 }

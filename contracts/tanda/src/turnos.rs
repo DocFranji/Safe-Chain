@@ -12,7 +12,7 @@
 //! - El azar nunca decide a quién se le paga en la misma transacción: Stellar fija de antemano qué
 //!   datos toca cada transacción y la simulación usa otra semilla. Por eso el sorteo se hace al
 //!   llenarse la tanda y la subasta sin ofertas usa un orden de respaldo sorteado entonces.
-use soroban_sdk::{contracttype, token, Address, Env, IntoVal, Map, TryFromVal, Val, Vec};
+use soroban_sdk::{contracttype, token, Address, BytesN, Env, IntoVal, Map, TryFromVal, Val, Vec};
 
 use crate::almacenamiento::*;
 use crate::requisitos;
@@ -42,6 +42,18 @@ pub enum ClaveM3 {
     Propuestas(u32),
     /// Precio por turno: primas cobradas que esperan a los últimos turnos.
     FondoPrimas(u32),
+    /// Subasta sellada: sellos de la ronda en curso.
+    Sellos(u32),
+    /// Subasta sellada: (ronda, momento en que de verdad empezó) si la ronda anterior se cerró tarde.
+    InicioReal(u32),
+}
+
+/// Subasta sellada: los sellos de una ronda (miembro → sha256 de su oferta y su sal).
+#[contracttype]
+#[derive(Clone)]
+pub struct Sellos {
+    pub ronda: u32,
+    pub sellos: Map<Address, BytesN<32>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +77,8 @@ fn renovar_claves(env: &Env, t: &Tanda, id: u32) {
         ClaveM3::Respaldo(id),
         ClaveM3::Propuestas(id),
         ClaveM3::FondoPrimas(id),
+        ClaveM3::Sellos(id),
+        ClaveM3::InicioReal(id),
     ] {
         if p.has(&clave) {
             renovar(env, t, &clave);
@@ -98,6 +112,7 @@ pub(crate) fn opciones_por_defecto() -> OpcionesTanda {
         descuento_max_bps: 0,
         primeros_con_historial: 0,
         puntaje_primeros: 0,
+        ofertas_selladas: false,
     }
 }
 
@@ -121,6 +136,34 @@ pub(crate) fn oferta_vigente(env: &Env, t: &Tanda, id: u32, ronda: u32) -> Optio
 
 pub(crate) fn guardar_oferta(env: &Env, t: &Tanda, id: u32, o: &Oferta) {
     guardar(env, t, &ClaveM3::Oferta(id), o);
+}
+
+/// Subasta sellada: los sellos de la ronda en curso (los de rondas pasadas no cuentan).
+pub(crate) fn sellos_vigentes(env: &Env, t: &Tanda, id: u32) -> Map<Address, BytesN<32>> {
+    leer::<Sellos>(env, t, &ClaveM3::Sellos(id))
+        .filter(|s| s.ronda == t.ronda_actual)
+        .map(|s| s.sellos)
+        .unwrap_or(Map::new(env))
+}
+
+pub(crate) fn guardar_sellos(env: &Env, t: &Tanda, id: u32, sellos: Map<Address, BytesN<32>>) {
+    let s = Sellos {
+        ronda: t.ronda_actual,
+        sellos,
+    };
+    guardar(env, t, &ClaveM3::Sellos(id), &s);
+}
+
+/// Subasta sellada: hasta este momento se sella; desde aquí hasta que vence la ronda, se revela.
+/// Es la mitad del tiempo que la ronda tuvo de verdad: con el calendario anclado (M1), si la ronda
+/// anterior se cerró tarde, esta empezó cuando se cerró aquella, no en `inicio_ronda`.
+pub(crate) fn mitad_de_ronda(env: &Env, t: &Tanda, id: u32) -> u64 {
+    let vence = t.inicio_ronda + t.periodo_seg;
+    let desde = leer::<(u32, u64)>(env, t, &ClaveM3::InicioReal(id))
+        .filter(|(ronda, _)| *ronda == t.ronda_actual)
+        .map(|(_, momento)| momento.clamp(t.inicio_ronda, vence))
+        .unwrap_or(t.inicio_ronda);
+    desde + (vence - desde) / 2
 }
 
 pub(crate) fn respaldo(env: &Env, t: &Tanda, id: u32) -> Vec<Address> {
@@ -154,7 +197,10 @@ pub(crate) fn validar_opciones(o: &OpcionesTanda, n_miembros: u32) -> Result<(),
             && o.puntaje_primeros > 0
             && o.primeros_con_historial < n_miembros
     };
+    // Las ofertas selladas son de la subasta.
+    let sellado_ok = !o.ofertas_selladas || o.modo == ModoTurnos::Subasta;
     let ok = primeros_ok
+        && sellado_ok
         && match o.modo {
             ModoTurnos::Llegada | ModoTurnos::Eleccion | ModoTurnos::Sorteo => {
                 o.prima_max_bps == 0 && o.descuento_max_bps == 0
@@ -329,6 +375,15 @@ pub(crate) fn resolver_ronda(
     };
     renovar_claves(env, t, id);
     limpiar_propuestas(env, t, id, ronda + 1)?;
+    if o.ofertas_selladas {
+        // La ronda que sigue empieza de verdad ahora (ver `mitad_de_ronda`).
+        guardar(
+            env,
+            t,
+            &ClaveM3::InicioReal(id),
+            &(ronda + 1, env.ledger().timestamp()),
+        );
+    }
     match o.modo {
         ModoTurnos::Subasta => resolver_subasta(env, t, id, miembros, ronda, bolsa),
         modo => {

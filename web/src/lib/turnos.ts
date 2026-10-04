@@ -28,6 +28,7 @@ export const garantiaAlCobrar = (modo: Modo) => modo === 'Sorteo' || modo === 'S
  * Lo que la persona elige en el formulario de crear (porcentajes enteros, como los demás campos).
  * `primeros`: cuántos de los primeros turnos piden historial (0 = ninguno; solo donde se elige turno).
  * `puntajePrimeros`: puntaje de historial (M2) que piden esos turnos.
+ * `selladas`: subasta con ofertas selladas (se sellan en la primera mitad de la ronda y se revelan después).
  */
 export type OpcionesForm = {
   modo: Modo
@@ -36,6 +37,7 @@ export type OpcionesForm = {
   descuentoPct: number
   primeros: number
   puntajePrimeros: number
+  selladas: boolean
 }
 
 export const OPCIONES_CLASICAS: OpcionesForm = {
@@ -45,6 +47,7 @@ export const OPCIONES_CLASICAS: OpcionesForm = {
   descuentoPct: 30,
   primeros: 0,
   puntajePrimeros: 100,
+  selladas: false,
 }
 
 export const MODOS: { modo: Modo; titulo: string; lema: string; detalle: string }[] = [
@@ -103,6 +106,7 @@ export function aContrato(o: OpcionesForm): OpcionesTanda {
     descuento_max_bps: o.modo === 'Subasta' ? Math.round(o.descuentoPct * 100) : 0,
     primeros_con_historial: conHistorial(o) ? o.primeros : 0,
     puntaje_primeros: conHistorial(o) ? o.puntajePrimeros : 0,
+    ofertas_selladas: o.modo === 'Subasta' && o.selladas,
   }
 }
 
