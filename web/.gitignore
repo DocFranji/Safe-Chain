@@ -23,5 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# El cliente del contrato ya compilado SI se sube, para que la web funcione al clonar.
-!packages/tanda/dist/
+# Los clientes de los contratos ya compilados SÍ se suben (todos los de web/packages), para que la web
+# compile al clonar (CI y Vercel no tienen la CLI de Stellar para generarlos).
+!packages/*/dist/
