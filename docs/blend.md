@@ -268,12 +268,14 @@ leídos de la red:
 | `unirse` (1 depósito en Blend) · `49a3d4f7ab71aaf468aa7fd539fbe7f9970d4a1943bf899473743babeb58eb58` | 5,3 M | 22 / 12 | 3 368 | 0,086 XLM (primera vez: crea datos) |
 | `cerrar_ronda` con **12 retiros** · `00d0bc4906ca3b12320131e7bade92f550c8d5bdb59c9f6e3e06408733e560be` | **39,0 M** | 42 / 19 | 6 988 | 0,014 XLM |
 | `cerrar_ronda` con 11 retiros · `15ba51799e6f3c4199ac865cb7a826a9833fda7b7e21d6626d2f73a358267c85` | 33,6 M | 42 / 19 | 6 988 | 0,013 XLM |
+| `cerrar_ronda` con 2 retiros · `adc06e0b8b000f11069893758285c295fbe16a675bec6ca1e6c1bfda77c10e0a` | 8,7 M | 41 / 18 | 6 844 | 0,008 XLM |
+| `finalizar` (retira todo de Blend y reparte entre 12) · `63875e6f9cc57fb4bb9723163421e5fe09b6677aa96b7f2b87c15adb8d095376` | 10,0 M | 29 / 18 | 6 820 | 0,009 XLM |
 
 Límites de testnet (dato de ORQ): 400 M instrucciones, 200 entradas. El peor caso usa **~10 %** de
 las instrucciones y 21 % de las entradas: queda espacio de sobra para los ganchos del historial (M2).
-Cada retiro de Blend suma ~5 M instrucciones (39,0 M con 12 retiros contra 33,6 M con 11).
+Cada retiro de Blend suma ~3 M instrucciones (de 39,0 M con 12 retiros a 8,7 M con 2). Las 12 rondas
+cerraron y `finalizar` terminó bien (estado `Finalizada`, `shares_boveda = 0`).
 
-<!-- FINALIZAR12 -->
 
 **Rendimiento real medido** (dos lecturas del `b_rate` con 1 075 s de diferencia):
 - XLM: **≈ 179 % anual** (el pool está prestado al 92 %: tasas de testnet, no de mainnet). 40 XLM de

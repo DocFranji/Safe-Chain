@@ -26,7 +26,7 @@ ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_ble
 Variables de `demo_blend.sh`: `ADMIN`, `MIEMBROS="ana beto carla"`, `CUOTA`, `PERIODO`.
 
 **Probado en testnet** (1 y 3 oct 2026): tanda completa con XLM y con USDC, y el peor caso de 12
-miembros (12 retiros de Blend en un solo `cerrar_ronda`: 39 M instrucciones de 400 M). Hashes en
+miembros (12 retiros de Blend en un solo `cerrar_ronda`: 39 M instrucciones de 400 M; `finalizar`: 10 M). Hashes en
 `docs/blend.md` §3.
 
 **Cómo funciona el adaptador:**
