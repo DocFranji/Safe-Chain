@@ -4,7 +4,7 @@ Rama `mision/m1-tiempos-deudas` · Tablero: issue #4 · Instrucciones: `.claude/
 
 Objetivo: que una tanda de **rondas mensuales y hasta 12 meses** funcione de verdad en testnet, y que un **moroso pueda pagar su deuda** y volver a estar al día.
 
-Estado de este documento: **diseño** (sáb 3 oct, 19:00 CR). Las decisiones marcadas con ❓ esperan respuesta de las personas; mientras tanto avanzo con la recomendación, porque todas son reversibles hasta el despliegue.
+Estado: **MVP implementado** (dom 4 oct). Las decisiones marcadas con ❓ se llevaron a las personas en el resumen de ORQ (issue #4). Se implementó la recomendación de cada una, y todas son reversibles hasta el despliegue v2. Lo que quedó fuera del MVP está en §5.
 
 ---
 
@@ -14,7 +14,7 @@ Datos de testnet usados (ORQ y medición propia, 3 oct): protocolo **29**; **5,0
 
 ### A1. Los datos de la tanda se archivan (crítico) ✅ confirmado
 
-Prueba: `test_tiempos::tanda_mensual_de_12_meses_sin_datos_archivados` (12 personas, rondas de 30 días). Revisa la vida de cada dato **antes** de cada salto de tiempo. Con el código actual falla así:
+Prueba: `test_tiempos::tanda_mensual_de_12_meses_sin_datos_archivados` (12 personas, rondas de 30 días). Revisa la vida de cada dato **antes** de cada salto de tiempo. Antes del arreglo fallaba así:
 
 ```
 mientras se llena: Miembro(1, #0) se archivaría (le quedan 17279 ledgers y vamos a avanzar 17280)
@@ -34,7 +34,7 @@ Causas, de mayor a menor gravedad:
 
 ### A2. La bóveda acelerada se vuelve insolvente con meses (crítico) ✅ confirmado
 
-Prueba: `test_tiempos::boveda_acelerada_con_meses_no_traba_la_tanda` (3 personas, rondas de 30 días, bóveda ×52 560). `finalizar` falla:
+Prueba: `test_tiempos::boveda_acelerada_con_meses_no_traba_la_tanda` (3 personas, rondas de 30 días, bóveda ×52 560). Antes del arreglo, `finalizar` fallaba:
 
 ```
 "balance is not sufficient to spend" … transfer … 2596000000000   (la bóveda debía 259 600 TUSD y tenía 10 400)
@@ -72,7 +72,7 @@ Hallazgo extra que afecta la demo de hoy: el precio crece **desde que se despleg
 
 ### A2. Bóveda ❓ (afecta la demo: decide @DocFranji)
 
-**En cualquier caso (ya lo implemento): protección de solvencia.** El precio de la bóveda nunca supera `saldo / participaciones`. Con eso se puede demostrar que (1) la bóveda **siempre** puede pagarle a todos (nunca queda insolvente, `retirar` nunca falla por falta de fondos) y (2) el precio **nunca baja**, así que nadie pierde lo que depositó. Si se agota el fondeo, el rendimiento simplemente se detiene.
+**En cualquier caso (implementado): protección de solvencia.** El precio de la bóveda nunca supera `saldo / participaciones`. Con eso se puede demostrar que (1) la bóveda **siempre** puede pagarle a todos (nunca queda insolvente, `retirar` nunca falla por falta de fondos) y (2) el precio **nunca baja**, así que nadie pierde lo que depositó. Si se agota el fondeo, el rendimiento simplemente se detiene.
 
 Opciones:
 
@@ -154,12 +154,64 @@ Momento de la demo: *"Ana pagó su deuda de 100 TUSD: Carla recibió los 100 TUS
 - `ganchos.rs`: solo agrego `al_pagar_deuda` vacío.
 - `web/src/components/PanelRonda.tsx`: una línea para `PagarDeuda`. `PaginaTanda.tsx`: una línea para `Calendario`.
 
+### Ajustes durante la implementación
+
+- **`sacar_de_boveda`** (hallazgo de M4, decisión de ORQ). Cuando la tanda cubre un impago, nunca gasta participaciones de otra tanda del mismo contrato. Si la bóveda vale menos de lo anotado, entra lo que de verdad salió: esa diferencia es pérdida de la bóveda, no deuda del moroso.
+- **Tolerancia de redondeo en la bóveda.** Con la bóveda sin acelerar, el precio sube una unidad mínima cada ~63 s. Si nadie pagaba la primera ronda, sacar las garantías completas pedía 1 unidad más de las que había y **la tanda se trababa**. Ahora la bóveda pone esa fracción, hasta 100 unidades mínimas, que son centésimas de centavo.
+- **Garantía al recuperar la bolsa a mitad de tanda** (pedido de M3 y ORQ). Si el moroso salda mientras la tanda sigue, de su bolsa retenida primero se repone la garantía para las cuotas que aún debe, con la misma fórmula que al unirse y un mínimo de una cuota. Esa garantía vuelve al final con rendimiento. Así no puede cobrar y volver a desaparecer. M3 engancha ahí `turnos::completar_garantia` para sus modos.
+- **Renovación de la bóveda.** La tanda renueva la instancia y el código de su bóveda (`deployer().extend_ttl`, sin permiso) y llama con `try` a una función opcional `renovar(dueño)` que renueva las participaciones del contrato. Una bóveda sin esa función, como el adaptador de Blend, no rompe nada.
+- **Consultas extra:**
+  - `get_deudas(id)`: todas las deudas de la tanda en una sola llamada; la web la usa para "Saldó su deuda".
+  - `acelerador()` en la bóveda: la web dice si el rendimiento es acelerado o real.
+- **Errores de la bóveda:** pasan a 17 y 18. Antes eran 1 y 2, y la web los confundía con los de la tanda; por ejemplo, decía "Esa tanda no existe".
+- **Sin `///` en los errores 14–16:** el SDK de JS usaría ese texto como mensaje en vez del nombre.
+
 ## 4. Cómo probarlo
 
 ```bash
-cargo test -p tanda test_tiempos   # tanda mensual de 12 × 12 meses, TTL, bóveda
-cargo test -p tanda test_deudas    # pagar_deuda en todos sus casos, con conservación
-cd web && npm test                 # entradas, formato y fechas
+bash scripts/verificar.sh                    # toda la Definición de Terminado (de ORQ)
+cargo test -p tanda test_tiempos             # TTL, calendario, ronda máxima, bóvedas
+cargo test -p tanda test_deudas              # pagar_deuda en todos sus casos, con conservación
+stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso -- --nocapture   # costo con WASM real
+cd web && npm test                           # entradas, formato y fechas, deudas, historia
+DEUDA=1 bash scripts/demo.sh                 # en testnet, después de desplegar_testnet.sh
 ```
 
-(Se completa con el MVP.)
+### Pruebas que importan
+
+| Prueba | Qué demuestra |
+| --- | --- |
+| `tanda_mensual_de_12_meses_sin_datos_archivados` | 12 personas, rondas de 30 días, 12 meses avanzando ledgers de verdad con los límites de testnet. Antes de cada salto revisa que ningún dato de la tanda ni de la bóveda se archive. Antes del arreglo fallaba |
+| `boveda_acelerada_con_meses_no_traba_la_tanda` | Con ×52 560 y meses, `finalizar` ya no falla. Antes fallaba |
+| `boveda_*` | El precio nunca baja, la bóveda nunca promete más de lo que tiene (también casi sin fondeo y con depósitos y retiros alternados), y sin acelerar rinde 5 % en un año |
+| `una_tanda_no_se_traba_por_redondeo_de_la_boveda` | Antes fallaba con `Error(Contract, #2)` |
+| `una_tanda_nunca_gasta_participaciones_de_otra` | El hallazgo de M4. Antes fallaba |
+| `calendario_*`, `cierre_atrasado_no_castiga_a_quien_paga_a_tiempo` | Con rondas cortas, igual que antes; con mensuales, las fechas no se corren; y quedan al menos 3 días para pagar |
+| `test_deudas::*` | Pago total, parcial, de más, sin deuda, por un tercero, sin firma, en cada estado, moroso que vuelve a pagar y cobrar, bolsa retenida, acreedor moroso y garantía repuesta. Todas con conservación |
+| `peor_caso_12_miembros_con_morosos` | Cada operación medida contra los límites de mainnet |
+
+### Peor caso medido (12 miembros, contratos en WASM)
+
+| Operación | Instrucciones | Lecturas | Escrituras |
+| --- | --- | --- | --- |
+| `cerrar_ronda` | 22,2 M | 48 | 28 |
+| `pagar_deuda` | 6,2 M | 37 | 16 |
+| `finalizar` | 6,7 M | 34 | 15 |
+| `unirse` (el último, que activa) | 3,7 M | 39 | 10 |
+| `pagar_cuota` | 1,1 M | 10 | 4 |
+
+Límites por transacción: en mainnet, 100 M instrucciones, 100 lecturas y 50 escrituras; en testnet, 400 M y 200 entradas. Tamaño de los WASM: `tanda.wasm` 41,6 KB y `boveda_simulada.wasm` 10,4 KB (el límite es 128 KB).
+
+## 5. Pendiente y riesgos
+
+- **Cerrador automático** (Cron de Vercel) y **`reponer_colateral`**: no entraron al MVP.
+- **Segundos por ledger:** la vida de los datos se calcula a 5 s por ledger (lo medido). Si la red se acelera, los datos viven menos en días. Sigue habiendo margen, porque cada cierre renueva todo y la ronda más larga (90 días) más el margen (30 días) cabe holgada en el máximo (~180 días). Si algo se archiva igual, se restaura solo (protocolo 23+).
+- **Participaciones en la bóveda de una tanda tranquila:** se renuevan en cada cierre con `renovar`. Una bóveda que no tenga esa función (el adaptador de Blend) depende de que haya movimiento, o de la restauración automática.
+- **Multas de un moroso que salda antes de su turno:** como no le queda garantía, sus multas pendientes no se cobran al final; solo se descuentan si recupera una bolsa retenida. El historial de M2 registra igual que estuvo en mora.
+- **Eventos:** el RPC público guarda eventos solo unos días. La historia de una tanda de meses en la web queda incompleta; los datos del contrato (`get_*`) sí están completos.
+
+## 6. Despliegue (v2)
+
+- `scripts/desplegar_testnet.sh` despliega dos bóvedas: la principal, con `ACELERADOR=1`, y la rápida, con `ACELERADOR_RAPIDA=52560`. Luego configura la rápida en la tanda. Con `SIN_BOVEDA_RAPIDA=1`, todo usa la principal (opción A de la decisión de la bóveda).
+- Antes de la presentación: `bash scripts/renovar_boveda_rapida.sh` cambia la rápida por una nueva, sin afectar las tandas que ya existen.
+- La web no necesita variables nuevas: lee la bóveda de cada tanda del contrato (`get_boveda`).
