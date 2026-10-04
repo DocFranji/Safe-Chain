@@ -1041,3 +1041,169 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
     // Límites de mainnet (más estrictos que testnet): 100 M instrucciones, 100 lecturas, 50 escrituras.
     assert!(peor.0 < 100_000_000 && peor.1 <= 100 && peor.2 <= 50);
 }
+
+// ===========================================================================
+// Casos borde, incluidos los que cruzan con las deudas de M1
+// ===========================================================================
+
+/// 4 personas, garantía mínima. Ronda 1: Ana gana con 6 %. Ronda 2: Beto, Carla y Dani caen en mora;
+/// nadie puede cobrar al día, así que el turno es de Beto (en mora) y su bolsa se retiene. Carla salda
+/// su deuda (M1) y vuelve a poder ofertar: en la ronda 3 gana, y como todos los demás están en mora,
+/// su descuento no tiene a quién ir como dividendo y pasa al retenido que se reparte al final.
+#[test]
+fn subasta_moroso_que_salda_vuelve_a_ofertar_y_dividendo_sin_receptores() {
+    let c = setup();
+    let id = c.crear_con(4, 0, &subasta(3_000));
+    let gente = c.personas(4);
+    let (ana, beto, carla, dani) = (&gente[0], &gente[1], &gente[2], &gente[3]);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    // Ronda 1: Ana oferta 6 % y paga; los demás no (sus garantías cubren).
+    c.tanda.ofertar(&id, ana, &600);
+    c.tanda.pagar_cuota(&id, ana);
+    c.cerrar(id);
+    assert_eq!(c.turno(id, ana), 0);
+    for p in [beto, carla, dani] {
+        assert_eq!(c.miembro(id, p).colateral, 8 * U); // solo su dividendo (24 / 3)
+    }
+    // Ronda 2: nadie paga. Beto, Carla y Dani caen en mora; el turno es de Beto y se retiene.
+    c.cerrar(id);
+    for p in [beto, carla, dani] {
+        assert!(c.miembro(id, p).moroso);
+    }
+    assert_eq!(c.turno(id, beto), 1);
+    let retenido = c.tanda.get_tanda(&id).retenido;
+    assert!(retenido > 0);
+    // Carla salda su deuda y vuelve a estar al día.
+    let deuda = c.miembro(id, carla).deuda;
+    c.tanda.pagar_deuda(&id, carla, carla, &deuda);
+    assert!(!c.miembro(id, carla).moroso);
+    // Ronda 3: Carla oferta 10 % y paga; Ana deja de pagar y cae en mora. Carla gana y su descuento
+    // (10 % de 100) no tiene receptores al día: va al retenido.
+    c.tanda.ofertar(&id, carla, &1_000);
+    c.tanda.pagar_cuota(&id, carla);
+    let antes = c.tanda.get_tanda(&id).retenido;
+    c.cerrar(id);
+    assert!(c.miembro(id, ana).moroso);
+    assert_eq!(c.turno(id, carla), 2);
+    assert_eq!(c.tanda.get_tanda(&id).retenido, antes + 10 * U);
+    // Ronda 4: solo queda Dani (en mora). Carla, que ya saldó, paga: así hay a quién repartirle lo
+    // retenido al final (si todos terminaran en mora, `finalizar` lo deja sin repartir, como siempre).
+    c.tanda.pagar_cuota(&id, carla);
+    c.cerrar(id);
+    assert_eq!(c.turno(id, dani), 3);
+    let retenido = c.tanda.get_tanda(&id).retenido;
+    let carla_antes = c.saldo(carla);
+    c.al_final(id, &gente);
+    // Carla es la única al día: recibe todo lo retenido (más su garantía, menos su multa).
+    assert!(c.saldo(carla) >= carla_antes + retenido);
+}
+
+/// 3 personas, garantía mínima. Beto gana la ronda 1; Ana y Carla caen en mora en la ronda 2 y el
+/// turno es de Ana (en mora): su bolsa se retiene. Ana salda (M1) y recupera su bolsa, de la que
+/// primero se repone su garantía para la cuota que aún debe. Todo cuadra al final.
+#[test]
+fn subasta_todos_en_mora_bolsa_retenida_y_recuperada_al_saldar() {
+    let c = setup();
+    let id = c.crear_con(3, 0, &subasta(3_000));
+    let gente = c.personas(3);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    c.tanda.ofertar(&id, &c.beto, &500);
+    c.tanda.pagar_cuota(&id, &c.beto);
+    c.cerrar(id);
+    assert_eq!(c.turno(id, &c.beto), 0);
+    // Ronda 2: solo Beto paga. Ana y Carla quedan en mora y nadie puede cobrar al día.
+    c.tanda.pagar_cuota(&id, &c.beto);
+    c.cerrar(id);
+    assert!(c.miembro(id, &c.ana).moroso && c.miembro(id, &c.carla).moroso);
+    assert_eq!(
+        c.turno(id, &c.ana),
+        1,
+        "el primero sin turno, aunque esté en mora"
+    );
+    assert!(!c.miembro(id, &c.ana).cobro);
+    let retenido = c.tanda.get_tanda(&id).retenido;
+    assert!(retenido > 0);
+    // Ana salda y recupera su bolsa retenida (M1).
+    let deuda = c.miembro(id, &c.ana).deuda;
+    c.tanda.pagar_deuda(&id, &c.ana, &c.ana, &deuda);
+    let ma = c.miembro(id, &c.ana);
+    assert!(!ma.moroso && ma.cobro);
+    assert!(c.tanda.get_tanda(&id).retenido < retenido);
+    // Ronda 3: Carla (en mora) es la última sin turno: su bolsa se retiene.
+    c.tanda.pagar_cuota(&id, &c.ana);
+    c.tanda.pagar_cuota(&id, &c.beto);
+    c.cerrar(id);
+    assert_eq!(c.turno(id, &c.carla), 2);
+    c.al_final(id, &gente);
+    c.assert_conservacion();
+}
+
+/// 12 personas, prima del 20 %, garantía mínima: desde la ronda 2 solo paga el turno 1, así que las
+/// bolsas son más chicas que las primas. La prima se cobra solo hasta lo que hay, las bonificaciones
+/// solo hasta lo que hay en el fondo, y todo termina en cero sin dinero atrapado.
+#[test]
+fn precio_por_turno_primas_mayores_que_la_bolsa() {
+    let c = setup();
+    // 12 personas × 12 rondas: el presupuesto del entorno de pruebas se acumula en toda la prueba.
+    c.env.cost_estimate().budget().reset_unlimited();
+    let id = c.crear_con(12, 0, &precio(2_000));
+    let gente = c.personas(12);
+    for p in &gente {
+        c.tanda.unirse(&id, p); // turnos 0..11 en orden de llegada (el libre más bajo)
+    }
+    for p in &gente {
+        assert_eq!(
+            c.turno(id, p),
+            gente.iter().position(|x| x == p).unwrap() as u32
+        );
+    }
+    for _ in 0..12 {
+        c.tanda.pagar_cuota(&id, &gente[0]);
+        c.cerrar(id);
+        let e = c.tanda.get_estado_turnos(&id);
+        assert!(e.fondo_primas >= 0);
+    }
+    assert_eq!(c.tanda.get_estado_turnos(&id).fondo_primas, 0);
+    for p in &gente[1..] {
+        assert!(c.miembro(id, p).moroso);
+    }
+    c.al_final(id, &gente);
+    // El único que cumplió termina ganando: se lleva lo retenido de todos los demás.
+    assert!(c.saldo(&gente[0]) > inicial(12));
+}
+
+/// En el sorteo no se puede proponer un intercambio antes de que se sortee (tanda abierta), y una
+/// propuesta se puede retirar aunque la tanda ya haya terminado.
+#[test]
+fn intercambio_en_sorteo_solo_despues_del_sorteo() {
+    let c = setup();
+    let id = c.crear_con(4, 10_000, &con_intercambio(opciones(ModoTurnos::Sorteo)));
+    let gente = c.personas(4);
+    for p in &gente[..3] {
+        c.tanda.unirse(&id, p);
+    }
+    assert_eq!(
+        c.tanda
+            .try_proponer_intercambio(&id, &gente[1], &gente[2], &0),
+        Err(Ok(Error::EstadoInvalido))
+    );
+    c.tanda.unirse(&id, &gente[3]);
+    // Ya hay turnos. Los dueños de los turnos 3 y 4 cambian, con 5 TUSD de por medio.
+    let (t2, t3) = (c.duenio(id, &gente, 2), c.duenio(id, &gente, 3));
+    c.tanda.proponer_intercambio(&id, &t2, &t3, &(5 * U));
+    c.tanda.aceptar_intercambio(&id, &t3, &t2);
+    assert_eq!((c.turno(id, &t2), c.turno(id, &t3)), (3, 2));
+    for _ in 0..4 {
+        c.pagan_todos(id, &gente);
+        c.cerrar(id);
+    }
+    c.al_final(id, &gente);
+    assert_eq!(
+        c.tanda.try_cancelar_propuesta(&id, &t2, &t2),
+        Err(Ok(Error::SinPropuesta))
+    );
+}
