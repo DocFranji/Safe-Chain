@@ -1,42 +1,49 @@
 # Tanda On-Chain con Blend (rendimiento real)
 
+Hoy el colateral de las tandas rinde en una **bóveda simulada** (rendimiento acelerado para la demo).
+Con el **adaptador de Blend** (`contracts/adaptador_blend`), el colateral se deposita en el pool real
+**TestnetV2** de Blend, el protocolo de préstamos de Stellar, y gana intereses de verdad.
 
-Hay dos tandas que conviven en testnet:
+La auditoría completa, los riesgos y la recomendación de producto están en
+[`docs/blend.md`](docs/blend.md).
 
-| Versión | Token | Dónde está el colateral | Para qué sirve |
+| Versión | Activo | Dónde está el colateral | Para qué sirve |
 | --- | --- | --- | --- |
-| Original | TUSD | Bóveda simulada (rendimiento acelerado) | Demo principal, segura y predecible |
-| Con Blend | XLM | Pool real **TestnetV2** de Blend | Mostrar rendimiento real del ecosistema Stellar |
+| Original | TUSD | Bóveda simulada (acelerada) | Demo principal: rendimiento grande y predecible |
+| Con Blend | **USDC de prueba de Blend** | Pool TestnetV2 de Blend | Tanda en dólares con rendimiento **real** |
+| Con Blend | XLM | Pool TestnetV2 de Blend | Lo más simple de probar (Friendbot), rendimiento real |
 
-**Por qué XLM:** el pool de Blend no acepta nuestro TUSD, y su USDC de prueba no tiene un faucet público. El XLM de testnet es gratis (Friendbot) y Blend lo acepta.
-
-**Viabilidad probada a mano en testnet (1 oct 2026):**
-
-- `get_reserve` del pool respondió bien.
-- Depositar 100 XLM → recibimos 455 718 653 bTokens.
-- Retirar 100 XLM → sobraron 11 567 bTokens: el interés ganado en esos minutos.
-
-**El contrato de la tanda no cambió ni una línea:** solo se inicializa una tanda nueva con el adaptador como `boveda`.
+**El contrato de la tanda no cambia:** se inicializa una tanda con el adaptador como `boveda`.
 
 ```bash
-bash scripts/desplegar_blend.sh   # adaptador + tanda nueva -> scripts/.contratos_blend
-bash scripts/demo_blend.sh        # misma demo, con el colateral en Blend
+# XLM (las cuentas se fondean con Friendbot)
+bash scripts/desplegar_blend.sh && bash scripts/demo_blend.sh
+
+# USDC de prueba de Blend (cada miembro pide antes su USDC al faucet de Blend: docs/blend.md §4)
+ACTIVO=usdc bash scripts/desplegar_blend.sh && ACTIVO=usdc bash scripts/demo_blend.sh
 ```
+
+Variables de `demo_blend.sh`: `ADMIN`, `MIEMBROS="ana beto carla"`, `CUOTA`, `PERIODO`.
+
+**Probado en testnet** (1 y 3 oct 2026): tanda completa con XLM y con USDC, y el peor caso de 12
+miembros (12 retiros de Blend en un solo `cerrar_ronda`: 39 M instrucciones de 400 M). Hashes en
+`docs/blend.md` §3.
 
 **Cómo funciona el adaptador:**
 
-- **Es el "usuario" de Blend:** todo el colateral queda a su nombre. Por dentro lleva la cuenta de cuántos bTokens le corresponden a cada tanda.
-- **Para depositar** usa `submit_with_allowance` (request_type 0). **Para retirar** usa `submit` (request_type 1), con el dinero yendo directo a la tanda.
-- **El valor de los bTokens** sale del `b_rate` de `get_reserve`, que tiene 12 decimales. Lo lee campo por campo, para no romperse si Blend agrega campos.
-- **Redondea igual que Blend** (bTokens hacia abajo al depositar, hacia arriba al retirar). Así una tanda nunca puede gastar bTokens de otra.
+- **Es el "usuario" de Blend:** todo el colateral queda a su nombre. Por dentro lleva la cuenta exacta
+  de cuántos bTokens le corresponden a cada dueño (cada contrato de tanda).
+- **Para depositar** usa `submit_with_allowance` (request_type 0). **Para retirar** usa `submit`
+  (request_type 1), con el dinero yendo directo a la tanda.
+- **Mide** los bTokens que Blend acuña o quema (posición antes y después) en vez de suponerlos, y se
+  revierte si algo no cuadra. Así una tanda nunca puede gastar bTokens de otro dueño.
+- **El valor de los bTokens** sale del `b_rate` de `get_reserve` (12 decimales), que Blend calcula al
+  día en cada lectura.
 
-**Riesgo conocido:** si el pool está casi 100% prestado, un retiro grande puede fallar por falta de liquidez. Al momento de la prueba estaba al ~92%. Para producción conviene dejar parte del colateral fuera de Blend.
+**Rendimiento real (medido el 3 oct):** XLM ≈ 179 % anual (pool prestado al 92 %), USDC ≈ 2,2 % anual.
+En los minutos de una demo es pequeño (≈ 0,0009 XLM en 8 minutos sobre 40 XLM): es real, y hay que
+contarlo así.
 
-**La web (por ahora) sigue con la tanda de TUSD.** Está pensada alrededor de TUSD: revisa la trustline en Horizon, usa el faucet de `web/api/faucet.ts` y muestra `SIMBOLO = 'TUSD'` en `web/src/config.ts`. Apuntarla a la tanda de Blend en XLM requeriría varias cosas:
-
-1. `VITE_TANDA_ID=<TANDA_BLEND>` y `VITE_TOKEN_ID=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`.
-2. Que `SIMBOLO` sea configurable ("XLM").
-3. Saltarse la trustline y el faucet cuando el token es XLM nativo, porque el XLM no los necesita.
-4. `VITE_BOVEDA_SIMULADA=false`, para que la web deje de avisar que el rendimiento es simulado.
-
-Para la demo del hackathon, la versión con Blend se muestra con `scripts/demo_blend.sh` y sus transacciones en stellar.expert.
+**Riesgos conocidos** (detalle en `docs/blend.md`): si el pool se queda sin liquidez, cerrar una ronda
+con impagos o finalizar fallan **sin perder dinero** hasta que vuelva la liquidez; con el pool
+congelado nadie puede unirse a tandas nuevas, pero las que están en curso terminan bien.
