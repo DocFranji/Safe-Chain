@@ -246,3 +246,5 @@ Si `puntaje_minimo > 0` y `puntaje(miembro) < puntaje_minimo` → `Error::Puntaj
 - Web: `VITE_HISTORIAL_ID` es **opcional**: si falta, la web le pregunta a la tanda (`get_historial`). Con un contrato de tanda anterior a M2 (el de producción hoy), todo lo del historial se esconde sin errores (hay prueba de navegador para eso).
 - Página `#/historial/<dirección>` (y `#/historial` = el mío), enlace "Mi historial" en el menú, insignia de nivel en "Quiénes participan", nota al unirse (requisito y descuento; el botón usa la garantía con descuento), opciones al crear (firma extra `configurar_requisitos` antes de unirse).
 - Pendiente (extra): insignias en las tarjetas del lobby y línea de tiempo del historial (necesita indexador).
+
+- **Vida de los requisitos** (hallazgo 3 de `docs/seguridad.md`, arreglado): `ClaveM2::Requisitos(id)` se renueva con la vida de la tanda en `al_fin_operacion` (cada cierre de ronda) y en `puede_unirse`. Sin escrituras extra en el peor caso (43 de 50); +1–2 lecturas (máx. 74 de 100).

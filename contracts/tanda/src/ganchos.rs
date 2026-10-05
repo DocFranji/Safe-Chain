@@ -15,6 +15,7 @@
 //!   `al_fin_operacion` al final de su función**; si no, esos hechos no llegan al historial.
 use soroban_sdk::{vec, Address, Env, Vec};
 
+use crate::almacenamiento::renovar_para_tanda;
 use crate::requisitos::{direccion_historial, requisitos_de, HistorialClient};
 use crate::{ClaveM2, Error, Hecho, HechoMiembro, Miembro, Tanda, BPS};
 
@@ -66,6 +67,12 @@ fn anotar(env: &Env, id: u32, miembro: &Address, hecho: Hecho, monto: i128) {
 /// Fin de una operación que anotó hechos (`cerrar_ronda`, `finalizar`): los envía en un solo lote
 /// y vacía el búfer de la tanda.
 pub(crate) fn al_fin_operacion(env: &Env, t: &Tanda, id: u32) {
+    // Los requisitos viven lo que dure la tanda: se renuevan en cada cierre (en tandas de más de
+    // ~150 días se archivarían a mitad de camino; hallazgo 3 de `docs/seguridad.md`).
+    let req = ClaveM2::Requisitos(id);
+    if env.storage().persistent().has(&req) {
+        renovar_para_tanda(env, t, &req);
+    }
     let clave = ClaveM2::HechosPendientes(id);
     let tmp = env.storage().temporary();
     let Some(hechos) = tmp.get::<_, Vec<HechoMiembro>>(&clave) else {
@@ -82,7 +89,12 @@ pub(crate) fn al_fin_operacion(env: &Env, t: &Tanda, id: u32) {
 // ---------------------------------------------------------------------------
 
 /// Antes de unirse: si la tanda pide puntaje mínimo, ¿lo alcanza?
-pub(crate) fn puede_unirse(env: &Env, _t: &Tanda, id: u32, miembro: &Address) -> Result<(), Error> {
+pub(crate) fn puede_unirse(env: &Env, t: &Tanda, id: u32, miembro: &Address) -> Result<(), Error> {
+    // Una tanda puede pasar mucho tiempo abierta: sus requisitos también se renuevan al unirse alguien.
+    let clave = ClaveM2::Requisitos(id);
+    if env.storage().persistent().has(&clave) {
+        renovar_para_tanda(env, t, &clave);
+    }
     let req = requisitos_de(env, id);
     if req.puntaje_minimo == 0 {
         return Ok(());
