@@ -695,3 +695,60 @@ fn finalizar_12_cumplidos_con_historial() {
     }
     assert_conservacion_de(&c, &g);
 }
+
+/// Hallazgo 3 de `docs/seguridad.md`: los requisitos de una tanda larga (3 rondas de 90 días = 270,
+/// más que la vida máxima de un dato en testnet, ~180 días) no deben archivarse mientras la tanda sigue.
+/// Se renuevan con la tanda en cada cierre de ronda.
+#[test]
+fn los_requisitos_viven_lo_que_dure_la_tanda() {
+    use crate::test_tiempos::{como_testnet, pasar, SEG_POR_LEDGER};
+    use soroban_sdk::testutils::storage::Persistent as _;
+    const NOVENTA_DIAS: u64 = 90 * 86_400;
+    let c = setup();
+    como_testnet(&c);
+    con_historial(&c);
+    let gente = personas(&c, 3);
+    let id = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &3,
+        &NOVENTA_DIAS,
+        &1_000,
+        &10_000,
+    );
+    c.tanda.configurar_requisitos(&id, &0, &true);
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    let vida = || {
+        c.env.as_contract(&c.tanda_addr, || {
+            c.env
+                .storage()
+                .persistent()
+                .get_ttl(&ClaveM2::Requisitos(id))
+        })
+    };
+    let ronda_en_ledgers = (NOVENTA_DIAS / SEG_POR_LEDGER) as u32;
+    for ronda in 0..3 {
+        assert!(
+            vida() > ronda_en_ledgers,
+            "ronda {ronda}: a los requisitos les quedan {} ledgers y la ronda dura {ronda_en_ledgers}",
+            vida()
+        );
+        for p in &gente {
+            c.tanda.pagar_cuota(&id, p);
+        }
+        pasar(&c, NOVENTA_DIAS);
+        c.tanda.cerrar_ronda(&id);
+    }
+    assert_eq!(
+        c.tanda.get_requisitos(&id),
+        Requisitos {
+            puntaje_minimo: 0,
+            descuento: true
+        }
+    );
+    c.tanda.finalizar(&id);
+    assert_conservacion_de(&c, &gente);
+}
