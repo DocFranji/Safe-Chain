@@ -531,6 +531,9 @@ fn firmas_reales() {
 const MAX_INSTRUCCIONES: i64 = 100_000_000;
 const MAX_ESCRITURAS: u32 = 50;
 const MAX_LECTURAS: u32 = 100;
+/// Bytes de eventos por transacción: la simulación no lo revisa y la red rechaza lo que se pase.
+/// El historial es el que más emite en el peor cierre (un `hist_hecho` por hecho).
+const MAX_EVENTOS_BYTES: u32 = 16_384;
 
 type Medidas = StdVec<(&'static str, i64, u32, u32)>;
 
@@ -554,6 +557,11 @@ fn recorrer_peor_caso(c: &Ctx, h: &Hist) -> Medidas {
             r.write_entries
         );
         assert!(lecturas <= MAX_LECTURAS, "{que}: {lecturas} lecturas");
+        assert!(
+            r.contract_events_size_bytes <= MAX_EVENTOS_BYTES,
+            "{que}: {} bytes de eventos",
+            r.contract_events_size_bytes
+        );
         let mut m = medidas.borrow_mut();
         match m.iter_mut().find(|x| x.0 == que) {
             Some(x) => {
@@ -688,6 +696,7 @@ fn finalizar_12_cumplidos_con_historial() {
     assert!(r.instructions < MAX_INSTRUCCIONES);
     assert!(r.write_entries <= MAX_ESCRITURAS);
     assert!(lecturas <= MAX_LECTURAS);
+    assert!(r.contract_events_size_bytes <= MAX_EVENTOS_BYTES);
     for p in &g {
         // 12 cuotas (120) + 50 = 170, con el tope de 150 por tanda.
         assert_eq!(h.puntaje(p), 150);
