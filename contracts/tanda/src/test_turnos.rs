@@ -450,6 +450,7 @@ fn sorteo_12_miembros_presupuesto() {
         "demasiado caro: {}",
         r.instructions
     );
+    assert!(r.contract_events_size_bytes <= 16_384);
     for _ in 0..12 {
         c.pagan_todos(id, &gente);
         c.cerrar(id);
@@ -1469,6 +1470,12 @@ fn peor_caso_turnos_12_miembros_en_wasm() {
             r.instructions,
             lecturas,
             r.write_entries
+        );
+        // La simulación no revisa el límite de eventos por transacción: la red rechaza lo que se pase.
+        assert!(
+            r.contract_events_size_bytes <= 16_384,
+            "{que}: {} bytes de eventos",
+            r.contract_events_size_bytes
         );
         peor.0 = peor.0.max(r.instructions);
         peor.1 = peor.1.max(lecturas);

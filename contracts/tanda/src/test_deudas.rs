@@ -392,6 +392,9 @@ const MAX_INSTRUCCIONES: i64 = 100_000_000;
 const MAX_MEMORIA: i64 = 40 * 1024 * 1024;
 const MAX_ESCRITURAS: u32 = 50;
 const MAX_LECTURAS: u32 = 100;
+/// Bytes de eventos por transacción. La simulación no lo revisa: si se pasa, la red rechaza la
+/// transacción (le pasó a M4 con USDC y 11 morosos) y la tanda queda trabada.
+const MAX_EVENTOS_BYTES: u32 = 16_384;
 
 /// Lo más caro que se midió de cada operación: (nombre, instrucciones, lecturas, escrituras).
 type Medidas = StdVec<(&'static str, i64, u32, u32)>;
@@ -425,6 +428,11 @@ fn recorrer_peor_caso(c: &Ctx) -> Medidas {
             r.write_entries
         );
         assert!(lecturas <= MAX_LECTURAS, "{que}: {lecturas} lecturas");
+        assert!(
+            r.contract_events_size_bytes <= MAX_EVENTOS_BYTES,
+            "{que}: {} bytes de eventos",
+            r.contract_events_size_bytes
+        );
         let mut m = medidas.borrow_mut();
         match m.iter_mut().find(|x| x.0 == que) {
             Some(x) => {
