@@ -7,6 +7,7 @@
   --ln-tinta: #eef6f1;
   --ln-tinta-2: #a3b8ad;
   --ln-acento: #3ee08f;
+  --ln-ease: cubic-bezier(0.23, 1, 0.32, 1); /* ease-out fuerte para la interfaz */
   --ln-acento-suave: rgba(62, 224, 143, 0.14);
   --ln-sobre-acento: #04140c;
   --ln-brillo: rgba(62, 224, 143, 0.35);
@@ -98,9 +99,14 @@
   position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 52px; padding: 12px 22px; border: 0; border-radius: 12px;
   font: inherit; font-weight: 800; cursor: pointer; text-decoration: none;
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  transition: transform 0.2s var(--ln-ease), box-shadow 0.2s ease, border-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.ln-boton:hover:not(:disabled) { transform: translateY(-2px); }
+@media (hover: hover) and (pointer: fine) {
+  .ln-boton:hover:not(:disabled) { transform: translateY(-2px); }
+}
+/* Al apretar, el botón cede: la página "escuchó". */
+.ln-boton:active:not(:disabled), .ln-boton:hover:active:not(:disabled) { transform: scale(0.97); transition-duration: 0.14s; }
 .ln-boton:disabled { opacity: 0.5; cursor: not-allowed; }
 .ln-boton.principal { background: var(--ln-acento); color: var(--ln-sobre-acento); }
 .ln-boton.principal:hover:not(:disabled) { box-shadow: 0 14px 34px -10px var(--ln-brillo); }
@@ -208,7 +214,9 @@
   background: var(--ln-superficie); border: 1px solid var(--ln-linea); border-radius: 20px;
   transition: border-color 0.3s, background 0.3s;
 }
-.ln-paso:hover { border-color: var(--ln-acento); background: var(--ln-acento-suave); }
+@media (hover: hover) and (pointer: fine) {
+  .ln-paso:hover { border-color: var(--ln-acento); background: var(--ln-acento-suave); }
+}
 .ln-paso h3 { font-family: var(--ln-titulos); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
 .ln-paso p { font-size: 15px; color: var(--ln-tinta-2); text-wrap: pretty; }
 .ln-paso-num { font-family: var(--ln-titulos); font-size: 44px; font-weight: 900; line-height: 1; color: transparent; -webkit-text-stroke: 1px var(--ln-tinta-2); }
@@ -268,13 +276,13 @@
 /* ---------- Animaciones ---------- */
 @keyframes ln-flotar-1 { to { transform: translate(-6vw, 6vh) scale(1.15); } }
 @keyframes ln-flotar-2 { to { transform: translate(8vw, -4vh) scale(1.2); } }
-@keyframes ln-subir { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
+@keyframes ln-subir { from { opacity: 0; transform: translateY(32px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes ln-destello-texto { to { background-position: 200% center; } }
 @keyframes ln-destello { 0%, 70% { left: -60%; } 100% { left: 130%; } }
 @keyframes ln-girar { to { transform: rotate(360deg); } }
 @keyframes ln-parpadeo { 50% { opacity: 0.35; } }
 @keyframes ln-pulso { 0% { box-shadow: 0 0 0 0 var(--ln-brillo); } 100% { box-shadow: 0 0 0 18px transparent; } }
-@keyframes ln-aparecer { 0%, 8% { transform: scale(0); opacity: 0; } 18%, 80% { transform: scale(1); opacity: 1; } 92%, 100% { transform: scale(0); opacity: 0; } }
+@keyframes ln-aparecer { 0%, 8% { transform: scale(0.6); opacity: 0; } 18%, 80% { transform: scale(1); opacity: 1; } 92%, 100% { transform: scale(0.6); opacity: 0; } }
 @keyframes ln-crecer { 0%, 5% { transform: scaleY(0); } 25%, 80% { transform: scaleY(1); } 95%, 100% { transform: scaleY(0); } }
 @keyframes ln-caer { 0% { transform: translateY(-48px); opacity: 0; } 10% { opacity: 1; } 40% { transform: translateY(0); opacity: 1; } 50%, 100% { transform: translateY(8px); opacity: 0; } }
 @keyframes ln-ascender { 0% { transform: translateY(12px); opacity: 0; } 20% { opacity: 1; } 70% { transform: translateY(-24px); opacity: 1; } 100% { transform: translateY(-34px); opacity: 0; } }
