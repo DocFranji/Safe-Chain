@@ -435,3 +435,48 @@
     transition: none;
   }
 }
+
+/* =====================================================================================================
+   CREAR, HISTORIAL Y DATOS
+   ===================================================================================================== */
+:root[data-tema='carreta'] :is(.historial-cabeza, .opciones-historial) {
+  border: var(--grosor) solid var(--c-tinta);
+  border-radius: var(--radio);
+}
+:root[data-tema='carreta'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+/* Sobre el amarillo de lo elegido, el texto secundario va en tinta (el gris no se lee). */
+:root[data-tema='carreta'] :is(.modo.elegido .modo-lema, .moneda.elegida .moneda-lema) {
+  color: var(--c-tinta);
+}
+/* Los datos de los paneles (bolsa, plazo, quién cobra), con la letra de rótulo. */
+:root[data-tema='carreta'] .dato dd {
+  font-family: var(--titulos);
+  font-weight: 400;
+  font-size: 19px;
+}
+:root[data-tema='carreta'] .dato dd.alerta {
+  color: var(--alerta);
+}
+
+:root[data-tema='fintech'] :is(.historial-cabeza, .opciones-historial) {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+:root[data-tema='fintech'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+:root[data-tema='fintech'] .dato dd {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* La llanta de la rueda de la carreta: el aro blanco con contorno de tinta detrás de los segmentos. */
+.rc-llanta {
+  fill: #ffffff;
+  stroke: var(--c-tinta);
+  stroke-width: 3;
+}

@@ -63,7 +63,7 @@ const R_ANILLO = 132 // donde van las personas, sobre el anillo del tiempo
 const R_NOMBRE_ANILLO = 186
 const CIRC_ANILLO = 2 * Math.PI * R_ANILLO
 
-function RuedaAnillo({ m, centro, etiqueta }: { m: ModeloRueda; centro: React.ReactNode; etiqueta: string }) {
+export function RuedaAnillo({ m, centro, etiqueta }: { m: ModeloRueda; centro: React.ReactNode; etiqueta: string }) {
   return (
     <svg className="rueda-anillo" viewBox="-250 -214 500 428" role="img" aria-label={etiqueta}>
       <circle className="rueda-pista" r={R_ANILLO} />
@@ -81,7 +81,7 @@ function RuedaAnillo({ m, centro, etiqueta }: { m: ModeloRueda; centro: React.Re
         const ang = ((-90 + (a.i * 360) / m.n) * Math.PI) / 180
         const x = R_ANILLO * Math.cos(ang)
         const y = R_ANILLO * Math.sin(ang)
-        const clases = ['nodo', !a.miembro && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
+        const clases = ['nodo', a.libre && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
           .filter(Boolean)
           .join(' ')
         return (

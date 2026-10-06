@@ -31,9 +31,10 @@ export function RuedaCarreta({ m, centro, etiqueta }: { m: ModeloRueda; centro: 
   const forma = segmento(m.n)
   return (
     <svg className={m.activa ? 'rueda-carreta activa' : 'rueda-carreta'} viewBox="-262 -222 524 444" role="img" aria-label={etiqueta}>
+      <circle className="rc-llanta" r={R_AFUERA + 9} />
       <g className="rc-giro" style={{ transform: `rotate(${m.giro}deg)` }}>
         {m.asientos.map((a) => {
-          const clases = ['nodo', !a.miembro && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
+          const clases = ['nodo', a.libre && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
             .filter(Boolean)
             .join(' ')
           return (
@@ -75,7 +76,7 @@ export function RuedaCarreta({ m, centro, etiqueta }: { m: ModeloRueda; centro: 
       ))}
       {m.asientos.map((a) => (
         <g key={a.i} className="rc-orbita" style={orbita(a.i * paso + m.giro, R_NOMBRE)}>
-          <text className={`nodo-nombre${a.yo ? ' yo' : ''}${a.miembro ? '' : ' libre'}`} y={5}>
+          <text className={`nodo-nombre${a.yo ? ' yo' : ''}${a.libre ? ' libre' : ''}`} y={5}>
             {a.nombre}
           </text>
         </g>

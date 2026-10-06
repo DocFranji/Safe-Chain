@@ -7,6 +7,8 @@ import { tieneTurno } from './turnos'
 export type Asiento = {
   i: number
   miembro: MiembroConDireccion | null
+  /** Asiento sin nadie todavía. */
+  libre: boolean
   nombre: string
   /** El número de turno, o "?" si todavía no lo tiene (sorteo antes de llenarse, subasta). */
   numero: string
@@ -63,6 +65,7 @@ export function armarRueda(datos: DatosTanda, ahora: number, yo: string | null):
   const asientos = ocupantes.map((m, i): Asiento => ({
     i,
     miembro: m,
+    libre: m === null,
     nombre: m === null ? 'Libre' : m.direccion === yo ? `${nombreDe(m.direccion)} (tú)` : nombreDe(m.direccion),
     numero: m !== null && !tieneTurno(m.posicion) ? '?' : String(i + 1),
     pago: m !== null && pagaron.includes(m.direccion),

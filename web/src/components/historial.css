@@ -29,13 +29,13 @@ a.insignia:focus-visible {
   --nivel-color: var(--tinta-2);
 }
 .nivel-bronce {
-  --nivel-color: #e0a36b;
+  --nivel-color: #a35f22; /* bronce, legible sobre blanco */
 }
 .nivel-plata {
-  --nivel-color: #c9d6dd;
+  --nivel-color: #5d6e7a; /* plata */
 }
 .nivel-oro {
-  --nivel-color: var(--turno);
+  --nivel-color: #8f6a00; /* oro */
 }
 
 .historial {
