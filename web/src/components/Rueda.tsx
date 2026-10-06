@@ -3,6 +3,7 @@
 // - Anillo verde: ya pagó la cuota de esta ronda.
 // - Marca ✓: ya cobró su bolsa.
 // - El arco interior es el tiempo que le queda a la ronda.
+import type { CSSProperties } from 'react'
 import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import { monto, duracion } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
@@ -71,10 +72,11 @@ export function Rueda({ datos, ahora, yo }: Props) {
         {asientos.map((m, i) => {
           const { x, y, yNombre } = puntos[i]
           const pago = m !== null && pagaron.includes(m.direccion)
+          const turno = beneficiario !== null && i === tanda.ronda_actual
           const clases = [
             'nodo',
             m === null && 'libre',
-            beneficiario !== null && i === tanda.ronda_actual && 'turno',
+            turno && 'turno',
             pago && 'pago',
             m?.moroso && 'moroso',
             m !== null && m.direccion === yo && 'yo',
@@ -82,7 +84,8 @@ export function Rueda({ datos, ahora, yo }: Props) {
             .filter(Boolean)
             .join(' ')
           return (
-            <g key={i} className={clases}>
+            <g key={i} className={clases} style={{ '--i': i } as CSSProperties}>
+              {turno && <circle className="nodo-halo" cx={x} cy={y} r={27} />}
               {pago && <circle className="nodo-anillo" cx={x} cy={y} r={31} />}
               <circle className="nodo-punto" cx={x} cy={y} r={24} />
               <text className="nodo-turno" x={x} y={y + 6}>
