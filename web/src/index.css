@@ -1,35 +1,10 @@
-/* Colores y tipografía de toda la app. Cambien aquí para ajustar el estilo. */
+/*
+ * Colores, letras y movimiento de toda la app. Hay dos mundos en prueba (src/lib/tema.ts, docs/diseno.md):
+ *   [data-tema='carreta']  la rueda pintada de la carreta de Sarchí: blanco, tinta negra, rojo, amarillo, cobalto y verde.
+ *   [data-tema='fintech']  una app de finanzas moderna: gris muy claro, blanco, un verde de marca.
+ * Los nombres de las variables son los mismos en los dos: el resto del CSS solo usa variables.
+ */
 :root {
-  /* Paleta de Rounda (la misma de la landing, src/landing/landing.css). Cambien aquí para ajustar toda la app. */
-  --papel: #06100c; /* fondo */
-  --superficie: #0c1a14; /* paneles y tarjetas */
-  --tinta: #eef6f1; /* texto principal */
-  --tinta-2: #a3b8ad; /* texto secundario */
-  --linea: rgba(255, 255, 255, 0.12); /* divisiones suaves */
-  --borde: rgba(255, 255, 255, 0.42); /* bordes que deben verse (campos, botones) */
-  --acento: #3ee08f; /* acción principal */
-  --sobre-acento: #04140c; /* texto sobre el acento */
-  --turno: #f2c14e; /* a quien le toca cobrar */
-  --turno-suave: rgba(242, 193, 78, 0.14);
-  --sobre-turno: #1d1403; /* texto sobre el color de turno */
-  --pago: #3ee08f; /* pagó / correcto */
-  --pago-suave: rgba(62, 224, 143, 0.14);
-  --pago-texto: #8ff0bf;
-  --alerta: #f0826e; /* vencido / error */
-  --alerta-suave: rgba(224, 112, 92, 0.18);
-  --alerta-texto: #ffb4a6;
-  --titulos: 'Archivo', system-ui, sans-serif;
-
-  /* Profundidad: tres niveles de superficie y el brillo verde de la landing. */
-  --superficie-2: #11241b; /* superficie sobre superficie (hover, filas) */
-  --borde-luz: rgba(255, 255, 255, 0.07); /* filo de luz arriba de las tarjetas */
-  --brillo: rgba(62, 224, 143, 0.35);
-  --sombra: 0 1px 0 0 var(--borde-luz) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
-  --sombra-alta: 0 1px 0 0 var(--borde-luz) inset, 0 24px 60px -28px rgba(0, 0, 0, 0.95),
-    0 0 0 1px rgba(62, 224, 143, 0.18);
-  --radio: 18px;
-  --radio-chico: 12px;
-
   /* Movimiento (curvas fuertes: las de CSS por defecto se sienten flojas).
      Entrar o salir: --ease-out. Moverse en pantalla: --ease-in-out. Nunca ease-in en la interfaz. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -40,13 +15,100 @@
   --t-rapido: 200ms; /* hover, colores, avisos */
   --t-medio: 280ms; /* entrar una página o una tarjeta */
 
-  color-scheme: dark; /* campos, barras de scroll y desplegables en oscuro */
-  font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --texto: 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif;
+  color-scheme: light;
+  font-family: var(--texto);
   font-size: 17px;
   line-height: 1.5;
   color: var(--tinta);
   background: var(--papel);
   -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}
+
+/* ---------- Carreta de Sarchí (también es el tema por defecto) ---------- */
+:root,
+:root[data-tema='carreta'] {
+  /* Los colores de la carreta, para la rueda y los adornos. */
+  --c-rojo: #c8261b;
+  --c-naranja: #ef6c1a;
+  --c-amarillo: #f6b800;
+  --c-azul: #1e46a8;
+  --c-verde: #1e8449;
+  --c-tinta: #1a1410;
+
+  --papel: #ffffff; /* fondo */
+  --superficie: #ffffff; /* paneles y tarjetas (los separa la línea de tinta) */
+  --superficie-2: #fff3cc; /* resaltado suave (amarillo carreta muy claro) */
+  --tinta: var(--c-tinta);
+  --tinta-2: #5c5048;
+  --linea: rgba(26, 20, 16, 0.14);
+  --borde: var(--c-tinta); /* las piezas se dibujan con contorno de tinta, como en la carreta */
+  --grosor: 2px;
+  --marca: var(--c-rojo); /* barra, portada, momentos grandes */
+  --sobre-marca: #ffffff;
+  --acento: var(--c-azul); /* acción principal */
+  --sobre-acento: #ffffff;
+  --turno: var(--c-amarillo);
+  --turno-suave: #fff1c2;
+  --sobre-turno: var(--c-tinta);
+  --pago: var(--c-verde);
+  --pago-suave: #e2f4e8;
+  --pago-texto: #14693a;
+  --alerta: #b8211a;
+  --alerta-suave: #fde4e1;
+  --alerta-texto: #8f1a14;
+  --brillo: rgba(30, 70, 168, 0.22);
+  --sombra: none;
+  --sombra-alta: 0 10px 24px -14px rgba(26, 20, 16, 0.45);
+  --foco: var(--c-azul);
+  --radio: 16px;
+  --radio-chico: 10px;
+  --titulos: 'Bungee', var(--texto);
+  --titulos-peso: 400;
+  --titulos-espacio: 0;
+}
+
+/* ---------- Fintech ---------- */
+:root[data-tema='fintech'] {
+  --texto: 'Geist Variable', system-ui, sans-serif;
+  --c-rojo: #d9480f;
+  --c-naranja: #f08c00;
+  --c-amarillo: #f59e0b;
+  --c-azul: #3b5bdb;
+  --c-verde: #0b7a5c;
+  --c-tinta: #0d1117;
+
+  --papel: #f5f6f8;
+  --superficie: #ffffff;
+  --superficie-2: #f0f2f5;
+  --tinta: #0d1117;
+  --tinta-2: #5b6472;
+  --linea: #e3e6eb;
+  --borde: #c9ced6;
+  --grosor: 1px;
+  --marca: #0b7a5c;
+  --sobre-marca: #ffffff;
+  --acento: #0b7a5c;
+  --sobre-acento: #ffffff;
+  --turno: #f59e0b;
+  --turno-suave: #fef3c7;
+  --sobre-turno: #3b2300;
+  --pago: #0e9f6e;
+  --pago-suave: #e3f6ee;
+  --pago-texto: #0b6b4b;
+  --alerta: #d9480f;
+  --alerta-suave: #fdece3;
+  --alerta-texto: #a33508;
+  --brillo: rgba(11, 122, 92, 0.22);
+  --sombra: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --sombra-alta: 0 16px 36px -16px rgba(16, 24, 40, 0.22), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --foco: #0b7a5c;
+  --radio: 16px;
+  --radio-chico: 12px;
+  --titulos: 'Geist Variable', system-ui, sans-serif;
+  --titulos-peso: 650;
+  --titulos-espacio: -0.02em;
 }
 
 *,
@@ -59,7 +121,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background: var(--papel);
-  /* Lo que se sale de lado (el vidrio de la barra) no crea barra de desplazamiento horizontal. */
+  /* Lo que se sale de lado (franjas de lado a lado) no crea barra de desplazamiento horizontal. */
   overflow-x: clip;
 }
 
@@ -73,11 +135,13 @@ h1,
 h2,
 h3 {
   font-family: var(--titulos);
+  font-weight: var(--titulos-peso);
+  letter-spacing: var(--titulos-espacio);
 }
 
 ::selection {
-  background: var(--acento);
-  color: var(--sobre-acento);
+  background: var(--turno);
+  color: var(--sobre-turno);
 }
 
 a {
@@ -92,13 +156,62 @@ a:hover {
 
 code {
   font-size: 0.9em;
-  background: var(--superficie);
+  background: var(--superficie-2);
   border: 1px solid var(--linea);
   border-radius: 5px;
   padding: 1px 6px;
 }
 
 :focus-visible {
-  outline: 3px solid var(--turno);
+  outline: 3px solid var(--foco);
   outline-offset: 2px;
+}
+
+/* Números de dinero y tablas: todos del mismo ancho. */
+td,
+dd,
+.saldo {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Franja del diseño en prueba (src/components/SelectorTema.tsx) ---------- */
+.selector-tema {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  background: var(--c-tinta);
+  color: #ffffff;
+  font-family: var(--texto);
+  font-size: 13px;
+}
+.selector-tema-texto {
+  opacity: 0.75;
+}
+.selector-tema-opciones {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.selector-tema button {
+  min-height: 28px;
+  padding: 2px 12px;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color var(--t-rapido) ease,
+    color var(--t-rapido) ease;
+}
+.selector-tema button[aria-pressed='true'] {
+  background: #ffffff;
+  color: var(--c-tinta);
 }

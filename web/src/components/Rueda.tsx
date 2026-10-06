@@ -1,120 +1,109 @@
-// La "rueda" de la tanda: cada persona es un punto del círculo, en orden de turno.
-// - Relleno amarillo: a quien le toca cobrar esta ronda.
-// - Anillo verde: ya pagó la cuota de esta ronda.
-// - Marca ✓: ya cobró su bolsa.
-// - El arco interior es el tiempo que le queda a la ronda.
+// La "rueda" de la tanda: cada persona es un lugar del círculo, en orden de turno.
+// Hay dos dibujos, uno por diseño en prueba (src/lib/tema.ts):
+// - Carreta: una rueda pintada que gira una ronda a la vez (RuedaCarreta.tsx).
+// - Fintech: un anillo con el tiempo de la ronda y un círculo por persona (aquí abajo).
+// El modelo (quién está dónde, quién pagó, cuánto gira) es común: src/lib/rueda.ts.
 import type { CSSProperties } from 'react'
 import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import { monto, duracion } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
-import { tieneTurno } from '../lib/turnos'
+import { armarRueda, type ModeloRueda } from '../lib/rueda'
+import { useTema } from '../lib/tema'
 import { useSimbolo } from '../hooks/useMoneda'
+import { RuedaCarreta } from './RuedaCarreta'
 
 type Props = { datos: DatosTanda; ahora: number; yo: string | null }
 
-const CX = 200
-const CY = 178
-const R = 118 // radio donde van las personas
-const R_TIEMPO = 80 // radio del arco de tiempo
-const CIRC_TIEMPO = 2 * Math.PI * R_TIEMPO
-
 export function Rueda({ datos, ahora, yo }: Props) {
-  const { tanda, miembros, pagaron, vence } = datos
-  const n = tanda.n_miembros
-  const estado = tanda.estado.tag
-  const activa = estado === 'Activa'
-
-  // (M3) Quien todavía no tiene turno (sorteo antes de llenarse, subasta) ocupa un asiento libre, marcado con "?".
-  const sinTurno = miembros.filter((m) => !tieneTurno(m.posicion))
-  let k = 0
-  const asientos: (MiembroConDireccion | null)[] = Array.from(
-    { length: n },
-    (_, i) => miembros.find((m) => m.posicion === i) ?? sinTurno[k++] ?? null,
-  )
-  // En la subasta, quien cobra la ronda no se sabe hasta cerrarla: el asiento puede ser de alguien sin turno.
-  const enTurno = activa ? asientos[tanda.ronda_actual] : null
-  const beneficiario = enTurno !== null && enTurno.posicion === tanda.ronda_actual ? enTurno : null
-
-  const puntos = asientos.map((_, i) => {
-    const ang = ((-90 + (i * 360) / n) * Math.PI) / 180
-    const x = CX + R * Math.cos(ang)
-    const y = CY + R * Math.sin(ang)
-    const arriba = Math.sin(ang) < -0.2
-    return { x, y, yNombre: arriba ? y - 38 : y + 50 }
-  })
-  const yMin = Math.min(...puntos.map((p) => Math.min(p.y - 34, p.yNombre - 18)))
-  const yMax = Math.max(...puntos.map((p) => Math.max(p.y + 34, p.yNombre + 8)))
-
-  const periodo = Number(tanda.periodo_seg)
-  const restante = vence - ahora
-  const vencida = activa && restante <= 0
-  const fraccionRestante = activa ? Math.min(1, Math.max(0, restante / periodo)) : 0
+  const tema = useTema()
+  const m = armarRueda(datos, ahora, yo)
+  const estado = datos.tanda.estado.tag
+  const etiqueta = resumen(datos, m.restante)
+  const centro = <Centro datos={datos} beneficiario={m.beneficiario} restante={m.restante} />
 
   return (
     <figure className="rueda">
-      <svg viewBox={`0 ${yMin} 400 ${yMax - yMin}`} role="img" aria-label={resumen(datos, restante)}>
-        <circle className="rueda-pista" cx={CX} cy={CY} r={R} />
-
-        {activa && (
-          <circle
-            className={vencida ? 'rueda-tiempo vencida' : 'rueda-tiempo'}
-            cx={CX}
-            cy={CY}
-            r={R_TIEMPO}
-            strokeDasharray={CIRC_TIEMPO}
-            strokeDashoffset={vencida ? 0 : CIRC_TIEMPO * (1 - fraccionRestante)}
-            transform={`rotate(-90 ${CX} ${CY})`}
-          />
-        )}
-
-        <Centro datos={datos} beneficiario={beneficiario} restante={restante} />
-
-        {asientos.map((m, i) => {
-          const { x, y, yNombre } = puntos[i]
-          const pago = m !== null && pagaron.includes(m.direccion)
-          const turno = beneficiario !== null && i === tanda.ronda_actual
-          const clases = [
-            'nodo',
-            m === null && 'libre',
-            turno && 'turno',
-            pago && 'pago',
-            m?.moroso && 'moroso',
-            m !== null && m.direccion === yo && 'yo',
-          ]
-            .filter(Boolean)
-            .join(' ')
-          return (
-            <g key={i} className={clases} style={{ '--i': i } as CSSProperties}>
-              {turno && <circle className="nodo-halo" cx={x} cy={y} r={27} />}
-              {pago && <circle className="nodo-anillo" cx={x} cy={y} r={31} />}
-              <circle className="nodo-punto" cx={x} cy={y} r={24} />
-              <text className="nodo-turno" x={x} y={y + 6}>
-                {m !== null && !tieneTurno(m.posicion) ? '?' : i + 1}
-              </text>
-              {m?.cobro && (
-                <g className="nodo-cobro">
-                  <circle cx={x + 19} cy={y - 19} r={10} />
-                  <text x={x + 19} y={y - 15}>
-                    ✓
-                  </text>
-                </g>
-              )}
-              <text className="nodo-nombre" x={x} y={yNombre}>
-                {m === null ? 'Libre' : m.direccion === yo ? `${nombreDe(m.direccion)} (tú)` : nombreDe(m.direccion)}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+      {tema === 'carreta' ? (
+        <RuedaCarreta m={m} centro={centro} etiqueta={etiqueta} />
+      ) : (
+        <RuedaAnillo m={m} centro={centro} etiqueta={etiqueta} />
+      )}
 
       {estado !== 'Abierta' && (
-      <figcaption className="leyenda">
-        <span><i className="muestra turno" /> Le toca cobrar</span>
-        <span><i className="muestra pago" /> Pagó esta ronda</span>
-        <span><i className="muestra cobro">✓</i> Ya cobró</span>
-      </figcaption>
+        <figcaption className="leyenda">
+          {tema === 'carreta' ? (
+            <>
+              <span><i className="muestra flecha" /> Cobra esta ronda</span>
+              <span><i className="muestra pintado" /> Pagó esta ronda</span>
+              <span><i className="muestra cobro"><Visto /></i> Ya cobró</span>
+            </>
+          ) : (
+            <>
+              <span><i className="muestra turno" /> Le toca cobrar</span>
+              <span><i className="muestra pago" /> Pagó esta ronda</span>
+              <span><i className="muestra cobro"><Visto /></i> Ya cobró</span>
+            </>
+          )}
+        </figcaption>
       )}
     </figure>
+  )
+}
+
+/** La marca de "ya cobró", dibujada (no un carácter). */
+function Visto() {
+  return (
+    <svg viewBox="-6 -6 12 12" aria-hidden="true">
+      <path d="M -3.5 0.3 L -1 2.8 L 3.6 -2.4" />
+    </svg>
+  )
+}
+
+const R_ANILLO = 132 // donde van las personas, sobre el anillo del tiempo
+const R_NOMBRE_ANILLO = 186
+const CIRC_ANILLO = 2 * Math.PI * R_ANILLO
+
+function RuedaAnillo({ m, centro, etiqueta }: { m: ModeloRueda; centro: React.ReactNode; etiqueta: string }) {
+  return (
+    <svg className="rueda-anillo" viewBox="-250 -214 500 428" role="img" aria-label={etiqueta}>
+      <circle className="rueda-pista" r={R_ANILLO} />
+      {m.activa && (
+        <circle
+          className={m.vencida ? 'rueda-tiempo vencida' : 'rueda-tiempo'}
+          r={R_ANILLO}
+          strokeDasharray={CIRC_ANILLO}
+          strokeDashoffset={m.vencida ? 0 : CIRC_ANILLO * (1 - m.fraccionRestante)}
+          transform="rotate(-90)"
+        />
+      )}
+      {centro}
+      {m.asientos.map((a) => {
+        const ang = ((-90 + (a.i * 360) / m.n) * Math.PI) / 180
+        const x = R_ANILLO * Math.cos(ang)
+        const y = R_ANILLO * Math.sin(ang)
+        const clases = ['nodo', !a.miembro && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
+          .filter(Boolean)
+          .join(' ')
+        return (
+          <g key={a.i} className={clases} style={{ '--i': a.i } as CSSProperties}>
+            {a.turno && <circle className="nodo-halo" cx={x} cy={y} r={27} />}
+            <circle className="nodo-punto" cx={x} cy={y} r={24} />
+            <text className="nodo-turno" x={x} y={y + 6}>
+              {a.numero}
+            </text>
+            {a.cobro && (
+              <g className="nodo-cobro" transform={`translate(${x + 18} ${y - 18})`}>
+                <circle r={10} />
+                <path d="M -4.5 0.5 L -1.2 3.8 L 4.8 -3.2" />
+              </g>
+            )}
+            <text className="nodo-nombre" x={R_NOMBRE_ANILLO * Math.cos(ang)} y={R_NOMBRE_ANILLO * Math.sin(ang) + 5}>
+              {a.nombre}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
   )
 }
 
@@ -171,11 +160,12 @@ function Centro({
       lineas = [{ texto: 'Cancelada', clase: 'centro-medio' }]
   }
 
-  const y0 = CY - 18
+  // Las líneas quedan centradas en el cubo: la primera (la grande) un poco más arriba.
+  const y0 = lineas.length === 1 ? 9 : lineas.length === 2 ? -2 : -14
   return (
     <g className="centro">
       {lineas.map((l, i) => (
-        <text key={i} className={l.clase} x={CX} y={y0 + i * 26 + (i > 0 ? 6 : 0)}>
+        <text key={i} className={l.clase} x={0} y={y0 + i * 25 + (i > 0 ? 6 : 0)}>
           {l.texto}
         </text>
       ))}

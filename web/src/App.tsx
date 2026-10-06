@@ -1,5 +1,6 @@
 import './App.css'
 import './movimiento.css'
+import './temas.css'
 import { useBilletera, type Billetera } from './hooks/useBilletera'
 import { useRuta } from './hooks/useRuta'
 import { useCuenta } from './hooks/useCuenta'
