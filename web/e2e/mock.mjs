@@ -515,13 +515,22 @@ const HISTORIAS = {
   ],
 }
 
+// Ledgers como en testnet: la red guarda ~7 días de eventos (120 960 ledgers) y `getEvents` revisa como
+// máximo 10 000 ledgers por consulta, con un cursor para seguir. Los eventos de las tandas del mock son
+// recientes, así que una web que pregunte desde el ledger más viejo de una sola vez no los encuentra.
+export const ULTIMO_LEDGER = 200_000
+export const VIEJO_LEDGER = ULTIMO_LEDGER - 120_960 + 1
+const TRAMO_EVENTOS = 10_000
+const cursorDe = (ledger) => `${((BigInt(ledger) << 32n) | 0xffffffffn).toString().padStart(19, '0')}-4294967295`
+const ledgerDelCursor = (cursor) => Number(BigInt(String(cursor).split('-')[0]) >> 32n)
+
 function eventosDe(idTanda, est) {
   const base = Math.floor(Date.now() / 1000) - 600
   // Un escenario puede cambiar la historia de una tanda con `est.historias[id]`.
   return (est?.historias?.[idTanda] ?? HISTORIAS[idTanda] ?? []).map(([nombre, datos], i) => ({
     id: `${String(1000 + i).padStart(10, '0')}-0000000001`,
     type: 'contract',
-    ledger: 900 + i,
+    ledger: ULTIMO_LEDGER - 100 + i,
     ledgerClosedAt: new Date((base + i * 12) * 1000).toISOString(),
     transactionIndex: 0,
     operationIndex: 0,
@@ -544,16 +553,24 @@ export function respuestaRpc(est, cuerpo) {
   const ok = (result) => ({ jsonrpc: '2.0', id, result })
   switch (method) {
     case 'getHealth':
-      return ok({ status: 'healthy', latestLedger: 1000, oldestLedger: 1, ledgerRetentionWindow: 999 })
+      return ok({ status: 'healthy', latestLedger: ULTIMO_LEDGER, oldestLedger: VIEJO_LEDGER, ledgerRetentionWindow: 120_960 })
     case 'simulateTransaction':
       return ok(simular(est, params.transaction))
-    case 'getEvents':
+    case 'getEvents': {
       est.eventosPedidos++
+      const cursor = params?.pagination?.cursor
+      const desde = cursor ? ledgerDelCursor(cursor) + 1 : params.startLedger
+      if (!cursor && !(desde > VIEJO_LEDGER && desde <= ULTIMO_LEDGER)) {
+        return { jsonrpc: '2.0', id, error: { code: -32600, message: `startLedger must be within the ledger range: ${VIEJO_LEDGER + 1} - ${ULTIMO_LEDGER}` } }
+      }
+      const fin = Math.min(cursor ? Infinity : (params.endLedger ?? Infinity), ULTIMO_LEDGER + 1, desde + TRAMO_EVENTOS)
       return ok({
-        events: eventosDe(idDelFiltro(params), est), latestLedger: 1000, oldestLedger: 1, latestLedgerCloseTime: '1', oldestLedgerCloseTime: '1', cursor: 'x',
+        events: eventosDe(idDelFiltro(params), est).filter((e) => e.ledger >= desde && e.ledger < fin),
+        latestLedger: ULTIMO_LEDGER, oldestLedger: VIEJO_LEDGER, latestLedgerCloseTime: '1', oldestLedgerCloseTime: '1', cursor: cursorDe(fin - 1),
       })
+    }
     case 'getLatestLedger':
-      return ok({ id: 'a', protocolVersion: 25, sequence: 1000 })
+      return ok({ id: 'a', protocolVersion: 25, sequence: ULTIMO_LEDGER })
     case 'getLedgerEntries': {
       const lk = xdr.LedgerKey.fromXDR(params.keys[0], 'base64')
       // (M3) El código del contrato (lo baja `contract.Client.from` en #/estado): un WASM con su spec.
@@ -561,7 +578,7 @@ export function respuestaRpc(est, cuerpo) {
         const codigo = xdr.LedgerEntryData.contractCode(
           new xdr.ContractCodeEntry({ ext: xdr.ContractCodeEntryExt.v0(), hash: HASH_WASM, code: wasmConSpec(est) }),
         )
-        return ok({ entries: [{ key: params.keys[0], xdr: codigo.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: 100000 }], latestLedger: 1000 })
+        return ok({ entries: [{ key: params.keys[0], xdr: codigo.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: ULTIMO_LEDGER + 100_000 }], latestLedger: 1000 })
       }
       // Instancia de un contrato: la de la tanda guarda sus bóvedas (DataKey::Boveda y, desde M1,
       // ClaveM1::BovedaRapida); la de cada bóveda, su configuración (M1, para #/estado).
@@ -593,7 +610,7 @@ export function respuestaRpc(est, cuerpo) {
         durability: xdr.ContractDataDurability.persistent,
         val: xdr.ScVal.scvContractInstance(instancia),
       }))
-      return ok({ entries: [{ key: params.keys[0], xdr: dato.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: 100000 }], latestLedger: 1000 })
+      return ok({ entries: [{ key: params.keys[0], xdr: dato.toXDR('base64'), lastModifiedLedgerSeq: 900, liveUntilLedgerSeq: ULTIMO_LEDGER + 100_000 }], latestLedger: 1000 })
     }
     default:
       return { jsonrpc: '2.0', id, error: { code: -32601, message: `mock: método no soportado ${method}` } }

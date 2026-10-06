@@ -13,6 +13,7 @@ import {
 } from '@stellar/stellar-sdk'
 import { clienteLectura } from './contrato'
 import { ordenar, type EventoTanda } from './historia'
+import { eventosEntre, eventosHaciaAtras, LIMITE, unir, type PedirEventos } from './eventosRed'
 import { NETWORK_PASSPHRASE, RPC_URL, TANDA_ID, TOKEN_ID } from '../config'
 
 /** Cuenta "vacía" que sirve para simular llamadas de solo lectura sin ninguna billetera. */
@@ -129,12 +130,48 @@ export function aceleradorBoveda(boveda: string): Promise<number> {
 // Eventos del contrato (historia de la tanda y resultados finales)
 // ---------------------------------------------------------------------------
 
-// La red solo guarda los eventos un tiempo. Recordamos desde qué ledger empieza esa ventana
-// para no preguntarlo en cada lectura; si deja de ser válido, se vuelve a consultar.
-let inicioDeEventos: number | null = null
-async function ledgerInicial(renovar = false): Promise<number> {
-  if (renovar || inicioDeEventos === null) inicioDeEventos = (await servidor().getHealth()).oldestLedger
-  return inicioDeEventos
+// La red solo guarda los eventos un tiempo (en testnet, ~7 días) y esa ventana avanza un ledger cada ~5 s.
+// `getEvents` rechaza un `startLedger` fuera de ella (incluso el que `getHealth` dice que es el más viejo),
+// así que dejamos un margen: perder los primeros minutos de una ventana de 7 días no cambia nada.
+const MARGEN_VENTANA = 60
+
+type Crudo = rpc.Api.EventResponse
+/** Lo ya leído de cada tanda: sus eventos y hasta qué ledger se revisó. Así cada refresco pide solo lo nuevo. */
+const leidos = new Map<number, { eventos: Crudo[]; hasta: number }>()
+/** Una sola lectura a la vez por tanda (la primera puede tardar varios segundos). */
+const enCurso = new Map<number, Promise<Crudo[]>>()
+
+function esCreacion(e: Crudo): boolean {
+  try {
+    return scValToNative(e.topic[0]) === 'creada'
+  } catch {
+    return false
+  }
+}
+
+async function crudosDeTanda(id: number): Promise<Crudo[]> {
+  const s = servidor()
+  const filtro = {
+    type: 'contract' as const,
+    contractIds: [TANDA_ID],
+    topics: [['*', nativeToScVal(id, { type: 'u32' }).toXDR('base64')]],
+  }
+  const pedir: PedirEventos<Crudo> = async (p) => {
+    const r = await s.getEvents({ ...p, filters: [filtro], limit: LIMITE })
+    return { events: r.events, cursor: r.cursor }
+  }
+  // `getHealth` da en una sola consulta el ledger más reciente y el más viejo que guarda la red.
+  const salud = await s.getHealth()
+  const ultimo = salud.latestLedger
+  const previo = leidos.get(id)
+  let eventos: Crudo[]
+  if (previo) {
+    eventos = unir(previo.eventos, await eventosEntre(pedir, previo.hasta + 1, ultimo))
+  } else {
+    eventos = await eventosHaciaAtras(pedir, salud.oldestLedger + MARGEN_VENTANA, ultimo, esCreacion)
+  }
+  leidos.set(id, { eventos, hasta: Math.max(ultimo, previo?.hasta ?? 0) })
+  return eventos
 }
 
 /**
@@ -143,24 +180,16 @@ async function ledgerInicial(renovar = false): Promise<number> {
  * La red conserva los eventos solo unos días: una tanda muy vieja puede devolver una lista vacía.
  */
 export async function leerEventos(id: number): Promise<EventoTanda[]> {
+  let lectura = enCurso.get(id)
+  if (!lectura) {
+    lectura = crudosDeTanda(id).finally(() => enCurso.delete(id))
+    enCurso.set(id, lectura)
+  }
+  const crudos = await lectura
+
   const cliente = clienteLectura()
-  const s = servidor()
-  const filtro = {
-    type: 'contract' as const,
-    contractIds: [TANDA_ID],
-    topics: [['*', nativeToScVal(id, { type: 'u32' }).toXDR('base64')]],
-  }
-  const pedir = (startLedger: number) => s.getEvents({ startLedger, filters: [filtro], limit: 200 })
-
-  let respuesta: Awaited<ReturnType<typeof pedir>>
-  try {
-    respuesta = await pedir(await ledgerInicial())
-  } catch {
-    respuesta = await pedir(await ledgerInicial(true))
-  }
-
   const salida: EventoTanda[] = []
-  for (const ev of respuesta.events) {
+  for (const ev of crudos) {
     if (!ev.inSuccessfulContractCall) continue
     // Un evento que no se pueda interpretar no debe tumbar toda la historia: se omite y se sigue.
     let evento
