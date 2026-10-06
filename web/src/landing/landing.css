@@ -505,7 +505,7 @@
   color: rgba(255, 255, 255, 0.92);
 }
 [data-tema='carreta'] .ln-rueda-nota {
-  color: rgba(255, 255, 255, 0.8);
+  color: #ffffff;
 }
 [data-tema='carreta'] .ln .rueda-carreta .nodo-nombre {
   fill: #ffffff;

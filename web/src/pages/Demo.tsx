@@ -54,13 +54,14 @@ function DemoTanda({ id, fijada }: { id: number; fijada: boolean }) {
   return (
     <section className="demo" aria-label="Demo en vivo">
       <header className="demo-cabeza">
-        <div>
+        <h1>Tanda {id}</h1>
+        {/* "En vivo" va junto al estado, no como etiqueta encima del título. */}
+        <div className="demo-estado">
           <p className="demo-etiqueta">
             <span className="punto-vivo" aria-hidden="true" /> Demo en vivo
           </p>
-          <h1>Tanda {id}</h1>
+          {estado && <span className={`etiqueta grande ${claseEstado(estado)}`}>{etiquetaEstado(estado)}</span>}
         </div>
-        {estado && <span className={`etiqueta grande ${claseEstado(estado)}`}>{etiquetaEstado(estado)}</span>}
       </header>
 
       {error && !datos && <Mensaje titulo="No pudimos leer esta tanda">{error}</Mensaje>}

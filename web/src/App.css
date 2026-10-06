@@ -1237,15 +1237,24 @@ td .dir {
   line-height: 1.05;
   letter-spacing: var(--titulos-espacio);
 }
-.demo-etiqueta {
+.demo-estado {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.demo-etiqueta {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 3px 12px;
+  border: var(--grosor) solid var(--alerta);
+  border-radius: 99px;
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--alerta);
+  color: var(--alerta-texto);
+  background: var(--alerta-suave);
 }
 .punto-vivo {
   width: 12px;
