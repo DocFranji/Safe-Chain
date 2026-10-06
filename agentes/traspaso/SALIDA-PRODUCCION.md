@@ -22,6 +22,11 @@ Tiempo: unos 20 minutos, más el recorrido de prueba.
   | `BOVEDA_RAPIDA` | `CCKIREUJCV5LXCPZDIWVO5LHFXYGHHFJ2X7DO7SETMIUS27UHFUK45QI` |
   | `ADAPTADOR_USDC` | `CCHY4HALFLRKP5JZ5UIXTFPTRCUI6NPXDBJCCSSH53KXHANSJ3FISUDE` |
 
+  **Ojo:** `main` va a tener un arreglo de M2 (PR #17, los requisitos de historial ya no se archivan en tandas de
+  más de ~150 días) que la tanda v3 desplegada **no** tiene, porque se integró después del despliegue. La interfaz
+  es la misma, así que la web funciona igual. Entra en el próximo despliegue de la tanda (recomendado: la segunda
+  entrada a producción, viernes 9).
+
   La web solo necesita `TANDA` (y `TOKEN`, que no cambió): las bóvedas, el historial y el adaptador los lee del
   contrato de la tanda. Desde el PR de `web-preview`, el valor por defecto de `TANDA_ID` en `web/src/config.ts` ya
   es el v3, así que **lo normal es que Production no necesite ninguna variable de contrato**.
