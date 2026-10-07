@@ -38,8 +38,10 @@ mod turnos;
 
 // Archivos reservados por misión (ver agentes/PROTOCOLO.md). Empiezan vacíos para que
 // agregar código no choque en este archivo.
+mod bovedas_token; // M4
 mod deudas; // M1
 mod requisitos; // M2
+mod tiempos; // M1
 mod turnos_acciones; // M3
 
 #[cfg(test)]
@@ -51,6 +53,8 @@ mod test_deudas; // M1
 #[cfg(test)]
 mod test_historial; // M2
 #[cfg(test)]
+mod test_invariantes; // ORQ
+#[cfg(test)]
 mod test_tiempos; // M1
 #[cfg(test)]
 mod test_turnos; // M3
@@ -59,7 +63,6 @@ pub use eventos::*;
 pub use tipos::*;
 
 use almacenamiento::*;
-use turnos::{beneficiario_de_ronda, colateral_para, posicion_al_unirse};
 
 // ---------------------------------------------------------------------------
 // Constantes: límites de los parámetros (sección "Parámetros y estado" de la spec)
@@ -71,6 +74,9 @@ const MIN_MIEMBROS: u32 = 3;
 /// presupuesto de cómputo que Stellar permite por transacción.
 const MAX_MIEMBROS: u32 = 12;
 const MIN_PERIODO_SEG: u64 = 60;
+/// (M1) Ronda más larga: 90 días (3 meses). Así una ronda cabe holgada en la vida máxima de un dato
+/// en la red (~180 días) y los datos de la tanda se renuevan al menos una vez por ronda.
+const MAX_PERIODO_SEG: u64 = 90 * 86_400;
 const MAX_PENALIDAD_BPS: u32 = 5_000;
 const MAX_COBERTURA_BPS: u32 = 10_000;
 
@@ -151,7 +157,7 @@ impl TandaContract {
         }
         if cuota <= 0
             || !(MIN_MIEMBROS..=MAX_MIEMBROS).contains(&n_miembros)
-            || periodo_seg < MIN_PERIODO_SEG
+            || !(MIN_PERIODO_SEG..=MAX_PERIODO_SEG).contains(&periodo_seg)
             || penalidad_bps > MAX_PENALIDAD_BPS
             || cobertura_bps > MAX_COBERTURA_BPS
         {
@@ -178,6 +184,7 @@ impl TandaContract {
             fondo_premios: 0,
             retenido: 0,
         };
+        fijar_boveda(&env, id, &tanda)?; // M1: cada tanda guarda su bóveda al crearse
         guardar_tanda(&env, id, &tanda);
         guardar_miembros(&env, id, &Vec::new(&env));
 
@@ -192,8 +199,20 @@ impl TandaContract {
     }
 
     /// Unirse a una tanda abierta: paga el colateral, que va directo a la bóveda.
-    /// El orden de llegada define el turno. Cuando entra el último, la tanda arranca.
+    /// El orden de llegada define el turno (salvo que la tanda use otro modo de turnos,
+    /// ver `turnos.rs`). Cuando entra el último, la tanda arranca.
     pub fn unirse(env: Env, id: u32, miembro: Address) -> Result<(), Error> {
+        Self::unirse_en(env, id, miembro, None)
+    }
+
+    /// (M3) Cuerpo compartido por `unirse` y `unirse_en_turno` (`turnos_acciones.rs`): `turno` es
+    /// el turno que eligió quien se une, si la tanda lo permite. No se exporta (no es `pub`).
+    pub(crate) fn unirse_en(
+        env: Env,
+        id: u32,
+        miembro: Address,
+        turno: Option<u32>,
+    ) -> Result<(), Error> {
         miembro.require_auth();
         let mut t = cargar_tanda(&env, id)?;
         match t.estado {
@@ -220,9 +239,14 @@ impl TandaContract {
         ganchos::puede_unirse(&env, &t, id, &miembro)?;
 
         let mut miembros = cargar_miembros(&env, id);
-        let posicion = posicion_al_unirse(&env, &t, &miembros);
-        let colateral =
-            ganchos::ajustar_colateral(&env, &t, &miembro, colateral_para(&t, posicion));
+        let posicion = turnos::posicion_al_unirse(&env, &t, id, &miembros, turno)?;
+        let colateral = ganchos::ajustar_colateral(
+            &env,
+            &t,
+            id,
+            &miembro,
+            turnos::colateral_al_unirse(&t, posicion),
+        );
 
         // 1) El miembro le pasa el colateral al contrato.
         let yo = env.current_contract_address();
@@ -230,7 +254,7 @@ impl TandaContract {
         tok.transfer(&miembro, &yo, &colateral);
 
         // 2) El contrato le da permiso a la bóveda por ese monto y deposita.
-        let boveda = direccion_boveda(&env)?;
+        let boveda = boveda_de(&env, id, &t)?;
         tok.approve(&yo, &boveda, &colateral, &(env.ledger().sequence() + 100));
         let shares = BovedaClient::new(&env, &boveda).depositar(&yo, &colateral);
         t.shares_boveda += shares;
@@ -248,6 +272,7 @@ impl TandaContract {
         guardar_miembro(&env, id, &miembro, &m);
         miembros.push_back(miembro.clone());
         guardar_miembros(&env, id, &miembros);
+        turnos::al_unirse(&env, &t, id, &miembro, posicion);
         ganchos::al_unirse(&env, &t, id, &miembro, posicion, colateral);
         EvUnido {
             id,
@@ -262,6 +287,7 @@ impl TandaContract {
             t.estado = Estado::Activa;
             t.ronda_actual = 0;
             t.inicio_ronda = env.ledger().timestamp();
+            turnos::al_llenarse(&env, &t, id, &miembros)?;
             EvIniciada {
                 id,
                 inicio_ronda: t.inicio_ronda,
@@ -302,7 +328,10 @@ impl TandaContract {
             guardar_miembro(&env, id, &miembro, &m);
         }
         env.storage().persistent().set(&clave_pago, &true);
-        extender(&env, &clave_pago);
+        // M1: el pago vive hasta que se cierre la ronda. `pagar_cuota` solo toca lo de quien paga (la
+        // tanda y su registro se renuevan con el piso al leerse); todo lo demás lo renueva
+        // `cerrar_ronda` (vía `guardar_tanda`), que pasa al menos una vez por ronda.
+        renovar(&env, &clave_pago, vida_ronda(&env, &t));
         ganchos::al_pagar(&env, &t, id, &miembro, t.ronda_actual, tarde);
 
         EvPago {
@@ -329,10 +358,16 @@ impl TandaContract {
         }
 
         let yo = env.current_contract_address();
-        let boveda = BovedaClient::new(&env, &direccion_boveda(&env)?);
+        let boveda = BovedaClient::new(&env, &boveda_de(&env, id, &t)?);
         let miembros = cargar_miembros(&env, id);
         let ronda = t.ronda_actual;
         let mut bolsa: i128 = 0;
+        // M1: lo que cada moroso no alcanzó a cubrir esta ronda (se le debe a quien cobra).
+        let mut faltantes: Vec<(Address, i128)> = Vec::new(&env);
+        // M4: lo que cubren las garantías se saca de la bóveda en UN solo retiro, después del bucle.
+        // Con Blend, un retiro por moroso emitía un evento por retiro y con 11 morosos la transacción
+        // pasaba el límite de 16 KiB de eventos de la red: la ronda no se podía cerrar (docs/blend.md §9).
+        let mut cubierto_total: i128 = 0;
 
         for dir in miembros.iter() {
             if env
@@ -353,6 +388,7 @@ impl TandaContract {
             } else {
                 // Regla 2: no alcanza. Entra lo que queda y el miembro queda moroso.
                 m.deuda += t.cuota - m.colateral;
+                faltantes.push_back((dir.clone(), t.cuota - m.colateral)); // M1
                 if !m.moroso {
                     m.moroso = true;
                     ganchos::al_quedar_moroso(&env, &t, id, &dir, m.deuda);
@@ -367,9 +403,7 @@ impl TandaContract {
             };
             if cubierto > 0 {
                 m.colateral -= cubierto;
-                let quemadas = boveda.retirar_monto(&yo, &cubierto);
-                t.shares_boveda -= quemadas;
-                bolsa += cubierto;
+                cubierto_total += cubierto;
                 ganchos::al_cubrir(&env, &t, id, &dir, ronda, cubierto);
                 EvCubierto {
                     id,
@@ -381,22 +415,45 @@ impl TandaContract {
             }
             guardar_miembro(&env, id, &dir, &m);
         }
+        if cubierto_total > 0 {
+            // Nunca gasta participaciones de otra tanda: si la bóveda vale menos de lo anotado,
+            // entra lo que de verdad salió (M4/M1, ver `sacar_de_boveda`).
+            bolsa += sacar_de_boveda(&env, &boveda, &mut t, cubierto_total);
+        }
 
         // Regla 3: paga al beneficiario de turno (o retiene si es moroso).
-        let beneficiario = beneficiario_de_ronda(&env, &t, &miembros, ronda);
+        // (M3) `resolver_ronda` decide quién cobra y aplica la prima o el descuento del modo de
+        // turnos; `completar_garantia` aparta de la bolsa la garantía que le falte a su turno.
+        let (beneficiario, bolsa) =
+            turnos::resolver_ronda(&env, &mut t, id, &miembros, ronda, bolsa)?;
         let mut mb = cargar_miembro(&env, id, &beneficiario)?;
         let monto_pagado = if mb.moroso {
             t.retenido += bolsa;
             0
         } else {
-            if bolsa > 0 {
-                token::Client::new(&env, &t.token).transfer(&yo, &beneficiario, &bolsa);
+            let apartado =
+                turnos::completar_garantia(&env, &mut t, id, &beneficiario, &mut mb, bolsa)?;
+            let neto = bolsa - apartado;
+            if neto > 0 {
+                token::Client::new(&env, &t.token).transfer(&yo, &beneficiario, &neto);
             }
             mb.cobro = true;
             guardar_miembro(&env, id, &beneficiario, &mb);
-            ganchos::al_cobrar(&env, &t, id, &beneficiario, ronda, bolsa);
-            bolsa
+            ganchos::al_cobrar(&env, &t, id, &beneficiario, ronda, neto);
+            neto
         };
+        // M1: anota a quién le debe cada moroso (y la bolsa retenida) para `pagar_deuda`.
+        deudas::anotar_ronda(
+            &env,
+            &t,
+            id,
+            ronda,
+            &beneficiario,
+            &faltantes,
+            // (M3) Solo la bolsa retenida por mora: con turnos, `monto_pagado` es el efectivo y no
+            // incluye la garantía que se apartó de la bolsa, que tampoco está retenida.
+            if mb.moroso { bolsa } else { 0 },
+        );
         EvRonda {
             id,
             ronda,
@@ -405,14 +462,16 @@ impl TandaContract {
         }
         .publish(&env);
 
-        // La siguiente ronda empieza AHORA (no desde el vencimiento anterior), para que
-        // nadie quede "tarde" por culpa de un cierre atrasado.
+        // M1: calendario anclado. La siguiente ronda vence un periodo después de la anterior, aunque
+        // el cierre llegue tarde; si llegó tardísimo, igual deja al menos min(periodo, 3 días) para
+        // pagar, así nadie queda "tarde" por culpa de un cierre atrasado (ver `tiempos.rs`).
         t.ronda_actual += 1;
-        t.inicio_ronda = ahora;
+        t.inicio_ronda = tiempos::inicio_siguiente(&t, ahora);
         if t.ronda_actual == t.n_miembros {
             t.estado = Estado::PorLiquidar;
         }
         guardar_tanda(&env, id, &t);
+        ganchos::al_fin_operacion(&env, &t, id); // M2: envía los hechos de esta ronda al historial
         Ok(())
     }
 
@@ -430,7 +489,7 @@ impl TandaContract {
 
         // 1) Retirar todo de la bóveda.
         let total = if t.shares_boveda > 0 {
-            BovedaClient::new(&env, &direccion_boveda(&env)?).retirar(&yo, &t.shares_boveda)
+            BovedaClient::new(&env, &boveda_de(&env, id, &t)?).retirar(&yo, &t.shares_boveda)
         } else {
             0
         };
@@ -469,20 +528,26 @@ impl TandaContract {
             }
         }
         if suma_col2 > 0 {
+            // Se reparte en proporción lo que de verdad volvió para estas garantías. (ORQ) El
+            // rendimiento puede salir unas unidades mínimas NEGATIVO por el redondeo de las
+            // participaciones: sumar "colateral + parte" daba a veces un pago negativo al último, que
+            // no se transfería, y `finalizar` pagaba de más y se trababa. Con rendimiento >= 0 da lo
+            // mismo que antes; nunca hay pagos negativos.
+            let disponible = (suma_col2 + rendimiento).max(0);
             let mut repartido: i128 = 0;
             let mut ultimo: Option<u32> = None;
             for i in 0..n {
                 let m = datos.get(i).unwrap();
                 if !m.moroso && m.colateral > 0 {
-                    let parte = rendimiento * m.colateral / suma_col2;
-                    pagos.set(i, m.colateral + parte);
-                    repartido += parte;
+                    let pago = disponible * m.colateral / suma_col2;
+                    pagos.set(i, pago);
+                    repartido += pago;
                     ultimo = Some(i);
                 }
             }
             // El resto del redondeo va al último receptor: el saldo termina en 0 exacto.
             if let Some(u) = ultimo {
-                pagos.set(u, pagos.get(u).unwrap() + (rendimiento - repartido));
+                pagos.set(u, pagos.get(u).unwrap() + (disponible - repartido));
             }
         } else {
             // Nadie tiene colateral: el rendimiento se suma al fondo de premios.
@@ -551,6 +616,7 @@ impl TandaContract {
             sin_repartir,
         }
         .publish(&env);
+        ganchos::al_fin_operacion(&env, &t, id); // M2: envía los hechos finales al historial
         Ok(())
     }
 
@@ -565,7 +631,7 @@ impl TandaContract {
         let yo = env.current_contract_address();
         let miembros = cargar_miembros(&env, id);
         let total = if t.shares_boveda > 0 {
-            BovedaClient::new(&env, &direccion_boveda(&env)?).retirar(&yo, &t.shares_boveda)
+            BovedaClient::new(&env, &boveda_de(&env, id, &t)?).retirar(&yo, &t.shares_boveda)
         } else {
             0
         };

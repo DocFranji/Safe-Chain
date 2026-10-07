@@ -53,5 +53,10 @@ export async function nuevaPagina(browser, { direccion = ME, conectado = true, e
     if (est.cuentas[address]) est.cuentas[address].saldo += 1000n * 10_000_000n
     await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, monto: 1000 }) })
   })
+  // M4: faucet de USDC de Blend (web/api/faucet-blend.ts). Responde lo que diga `est.faucetBlend`.
+  await page.route('**/api/faucet-blend', async (r) => {
+    const { status, cuerpo } = est.faucetBlend
+    await r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(cuerpo) })
+  })
   return { page, ctx, errores }
 }

@@ -18,23 +18,90 @@ Un script hace de **Ana, Beto y Carla** desde la terminal, así nadie pierde tie
 
 Los tiempos marcan cuándo termina cada paso y son aproximados: dependen de la red (cada transacción tarda unos 5 a 6 segundos). Ensáyalo para calibrarlos.
 
+### Variante con deuda (`DEUDA=1`)
+
+Muestra que en Rounda **un moroso puede ponerse al día**. La tanda usa la garantía mínima (cada quien deja una cuota), así la de Ana se acaba antes:
+
+| Qué pasa | Qué se ve en pantalla | Qué decir |
+| --- | --- | --- |
+| **Ronda 2** | *"Ana no pagó: su garantía cubrió 100 TUSD"* | "Su garantía alcanzó para esta ronda…" |
+| **Ronda 3** | *"Ana quedó en mora"* y *"Carla cobró 200 TUSD"* | "…pero ya no le queda garantía: Carla cobró 100 de menos." |
+| **Ana vuelve** | Resaltados: *"Ana pagó 100 TUSD y saldó su deuda"* y *"Carla recibió los 100 TUSD que le faltaban"* | **El momento clave.** "La deuda no se pierde: cuando Ana paga, el dinero le llega a quien cobró de menos, y Ana vuelve a estar al día. También lo podría pagar un familiar." |
+
+```bash
+DEUDA=1 WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
+```
+
+Desde la web, quien está en mora ve el botón **"Pagar mi deuda"** con cuánto debe, a quién le llega y qué recupera.
+
+### Cierre: el historial crediticio (misión M2)
+
+Al terminar, `demo.sh` imprime el puntaje de cada persona y el enlace a su página pública (`#/historial/<dirección>`). En la demo normal: Carla 80 (pagó todo a tiempo), Beto 48 (un pago tarde), Ana 5 (su garantía cubrió dos cuotas).
+
+| Qué se ve | Qué decir |
+| --- | --- |
+| La página de Carla: puntaje, nivel y "3 cuotas pagadas a tiempo, 1 tanda terminada sin atrasos" | "Cada cuota que pagas a tiempo queda escrita en Stellar para siempre. Tu historial es tuyo, cualquiera puede verificarlo y nadie lo puede borrar." |
+| En otra tanda, junto a cada persona, su insignia (Bronce, Plata, Oro) | "Con buen historial entras a tandas exigentes y dejas menos garantía: hasta la mitad con nivel Oro." |
+| Al unirse a una tanda con descuento: *"Por tu historial Bronce, tu garantía baja de 500 a 450 TUSD"* | "Esto resuelve la paradoja del crédito: quien cumple necesita menos dinero inmovilizado." |
+
 ## Antes de la demo (una hora antes)
 
 1. **¿Testnet sigue con el contrato?** Stellar reinicia testnet cada tanto. Abre `<tu-web>/#/estado`: debe decir *"Todo listo para la demo"*. Si el contrato no responde, hay que volver a desplegar (ver "Si algo falla").
 2. **Faucet** (para que el jurado consiga TUSD): en Vercel deben estar `FAUCET_ISSUER_SECRET`, `VITE_TANDA_ID`, `VITE_TOKEN_ID` y `VITE_NOMBRES`. `#/estado` lo comprueba. Pruébalo con una cuenta nueva de Freighter: activar con Friendbot, aceptar TUSD y pedir TUSD.
-3. **Bóveda con fondos:** paga los intereses con su propio saldo. `#/estado` avisa si le falta.
-4. **Ensayo completo** (30 minutos antes), tal como será la demo real:
+3. **Bóvedas con fondos:** pagan los intereses con su propio saldo. `#/estado` revisa las dos: cuánto les queda libre para intereses (sin contar las garantías) y avisa si les falta. Si se acaba, el rendimiento se detiene; nadie pierde lo que depositó.
+4. **Bóveda rápida nueva (1 a 2 horas antes):** la acelerada rinde menos cuanto más vieja es (con un día de edad, unas 8 veces menos). `#/estado` dice cuánto rinde hoy una demo de 5 minutos por cada 100 TUSD y avisa si es poco. Cámbiala por una nueva con `bash scripts/renovar_boveda_rapida.sh` (en la máquina que tiene la cuenta `emisor`). Las tandas que ya existen no se afectan.
+5. **Ensayo completo** (30 minutos antes), tal como será la demo real:
    ```bash
    WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
    ```
    Abre el enlace que imprime (`.../#/demo/<id>`), pulsa ENTER y mira que todo salga. Graba la pantalla: sirve de respaldo.
-5. En el proyector, abre la web en pantalla completa (F11) y pon el zoom del navegador en 100% o 110%.
+6. En el proyector, abre la web en pantalla completa (F11) y pon el zoom del navegador en 100% o 110%.
 
 ## Durante la demo
 
 1. En la terminal: `WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh`
 2. El script crea la tanda e imprime el enlace `…/#/demo/<id>`. Ábrelo en el proyector (así queda fijo en esa tanda aunque el jurado cree otras).
 3. Pulsa ENTER y cuenta la historia siguiendo la tabla de arriba.
+
+## Demo de turnos (opcional): quién cobra primero lo decide el grupo
+
+Para mostrar los mecanismos de turnos, en otra terminal (unos 4 minutos por modo; imprime el enlace `…/#/tanda/<id>` de cada tanda):
+
+```bash
+WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.sh   # o sorteo, precio, intercambio, sellada, todos
+```
+
+| Modo | Qué se ve | Qué decir |
+| --- | --- | --- |
+| **Precio por turno** | Carla elige el turno 1 y cobra 276; Ana elige el 3 y cobra 324 | "Quien tiene prisa paga, quien espera gana. Lo que pagó Carla lo ganó Ana: el contrato no se queda con nada. Así funciona MoneyFellows, con 8,5 millones de usuarios en Egipto." |
+| **Subasta** | Beto ofrece 5 %, Carla 10 % y gana: "cada uno de los demás recibió 15 TUSD en su garantía" | "Cada ronda gana quien más necesita el dinero, y paga a los demás por adelantarse. Son los chit funds de la India, pero sin administrador." |
+| **Sorteo** | "El contrato sorteó el orden de cobro" | "Nadie tiene ventaja por llegar primero. El sorteo lo hace la red." |
+| **Intercambio** | "Carla y Beto cambiaron de turno": Carla le pagó 10 TUSD | "Si a alguien le surge una emergencia, negocia el turno con otro, sin intermediarios." |
+| **Subasta sellada** (`MODO=sellada`) | "Beto selló una oferta", "Carla selló una oferta" (sin montos); en la segunda mitad revelan y gana Carla con 10 % | "Nadie ve las ofertas de los demás: nadie puede ganarle a otro por un pelo en el último segundo. Se sella, se revela y gana la mayor." |
+
+Si preguntan por la garantía en el sorteo o la subasta: "Como el turno no se sabe al unirse, todos dejan una cuota. A quien cobra primero se le aparta de su bolsa el resto de su garantía, y lo recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado."
+
+## Demo de Blend (opcional): rendimiento real en USDC
+
+Las tandas en **USDC de prueba de Blend** guardan su garantía en el pool real de **Blend** (el protocolo de
+préstamos de Stellar) y ganan intereses de verdad. Viven en el mismo contrato y el mismo lobby que las de TUSD:
+al crear una tanda se elige la moneda. (Misión M4, `docs/blend.md`.)
+
+En otra terminal (unos 8 minutos; Ana, Beto y Carla ya recibieron USDC en el despliegue):
+
+```bash
+PRINCIPAL=1 bash scripts/demo_blend.sh     # tanda en USDC en el contrato principal; imprime el id
+```
+
+| Momento | Qué se ve | Qué decir |
+| --- | --- | --- |
+| Se unen | En la página de la tanda: "Esta garantía está depositada en Blend… el rendimiento es real" y "Ver la garantía en Blend" | "La garantía no se queda quieta: está en Blend, prestada a otros usuarios de Stellar, ganando intereses." |
+| Cada ronda | El guion imprime "rendimiento real: +0,0000039 USDC", "+0,0000077"… | "Es poquito porque son minutos, pero es de verdad. En una tanda de meses son intereses de un préstamo real." |
+| Ana no paga | Su garantía **sale de Blend** y cubre su cuota | "Ni siquiera hay que avisarle a Blend: el contrato retira lo justo y Beto cobra completo." |
+| Liquidez | "Blend tiene 28 453 USDC libres para retirar" (también en `#/estado`) | "Si un día Blend estuviera prestado al 100 %, cerrar la ronda esperaría unos minutos. Nadie pierde dinero." |
+
+Para que el jurado cree una tanda en USDC: en la barra de su cuenta, **"Recibir USDC de prueba"** (una firma; Blend
+le envía 1 000 USDC), y en `#/crear` elige **USDC**.
 
 ## Que el jurado lo pruebe (solo Freighter)
 
@@ -58,17 +125,25 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 | Síntoma | Qué hacer |
 | --- | --- |
 | `#/estado` dice que el contrato no responde | Testnet se reinició. `bash scripts/desplegar_testnet.sh` (unos minutos) escribe `web/.env.local` y **imprime las variables para Vercel**: pégalas allí y vuelve a desplegar |
+| `#/estado` dice que la web y el contrato no coinciden | La web es de una versión y el contrato de otra (pasa si se cambia el contrato sin actualizar Vercel, o al revés). Si el contrato es el nuevo, revisa que `VITE_TANDA_ID` en Vercel sea el que imprimió `desplegar_testnet.sh` y vuelve a desplegar la web; si no, despliega el contrato de esta versión con ese script |
 | Los nombres salen como `GADM…TVPD` en vez de Ana | Falta `VITE_NOMBRES` en Vercel (lo imprime el script de despliegue) |
 | El script se corta a la mitad | Corre `T --source admin -- cerrar_ronda --id <id>` (o `finalizar`) a mano, o simplemente vuelve a correr `demo.sh`: crea una tanda nueva y `#/demo` se va sola a la que está en curso |
 | Freighter da problemas | La demo proyectada **no usa billetera**: sigue igual. Solo se afecta la parte de que el jurado pruebe |
 | La pantalla va lenta | Recarga la página. El RPC público tiene límites de uso; no abras la demo en muchas pestañas |
-| Fondos de la bóveda bajos | `stellar contract invoke --id $TOKEN --source emisor --network testnet -- mint --to $BOVEDA --amount 100000000000` (10 000 TUSD) |
+| Fondos de la bóveda bajos | `stellar contract invoke --id $TOKEN --source emisor --network testnet -- mint --to $BOVEDA --amount 100000000000` (10 000 TUSD; para la rápida, `--to $BOVEDA_RAPIDA`). Si se agotan, la bóveda no falla: solo deja de dar rendimiento |
+| Una tanda en USDC no cierra la ronda o no finaliza ("Blend no tiene liquidez") | No se perdió nada: reintenta en unos minutos (cualquiera puede). Mira la liquidez en `#/estado`. Para la demo, usa una tanda en TUSD |
+| "Recibir USDC de prueba" falla | El faucet de Blend da USDC **una vez por cuenta**. Si es otra cosa, el servicio de Blend puede estar caído: usa las cuentas de Ana, Beto y Carla (ya tienen USDC) |
 | Todo falló | Muestra la grabación del ensayo |
 
 ## Qué decir si preguntan
 
 - **¿Es dinero real?** No. Es testnet con TUSD de prueba.
-- **¿Y el rendimiento?** La bóveda es simulada (misma interfaz que tendría un adaptador a Blend, que está planeado). En la demo el tiempo corre más rápido.
+- **¿Y el rendimiento?** Depende de la moneda. En **USDC** es **real**: la garantía está en Blend, el protocolo de préstamos de Stellar, y gana los intereses que pagan sus prestatarios (en testnet, ~2 % anual en USDC; en minutos es muy poco, y se cuenta así). En **TUSD** la bóveda es simulada: en la tanda de la demo (rondas de 1 minuto) el tiempo corre más rápido para que se note; una tanda de semanas o meses rinde 5 % anual, al ritmo de la vida real.
+- **¿Y si Blend se queda sin liquidez o se congela?** Si todo está prestado, cerrar una ronda con impagos o finalizar espera a que vuelva la liquidez (cualquiera reintenta); no se pierde dinero. Si Blend congela el pool, no se pueden crear tandas nuevas en USDC, pero las que están en curso terminan bien. Lo revisamos en `docs/blend.md`.
+- **¿Funciona para una tanda de verdad, de meses?** Sí: rondas de hasta 3 meses y tandas de hasta un año o más, con fechas de pago fijas. El contrato renueva solo sus datos en la red para que nada se archive a mitad de la tanda.
+- **¿Y si alguien queda en mora?** Puede pagar su deuda cuando quiera (o un familiar por él). El dinero le llega a quien cobró de menos y la persona vuelve a estar al día.
 - **¿Qué pasa si alguien no paga?** Su garantía cubre su cuota. Si no alcanza, queda en mora y su parte se reparte entre quienes cumplieron.
+- **¿Qué es el historial crediticio?** Un contrato aparte que anota cada cuota pagada, atraso y deuda saldada de cada dirección. Empieza en cero, lo negativo no se borra, nadie (ni nosotros) puede editarlo, y solo guarda direcciones, ningún dato personal. Quien cumple sube de nivel y recibe descuento de garantía en las tandas que lo ofrezcan.
+- **¿No se puede hacer trampa con billeteras propias?** Una billetera nueva empieza en cero y el cero no da beneficios. Solo suman tandas con cuota de 10 TUSD o más, con máximo 150 puntos por tanda: llegar a Oro exige al menos 4 tandas completas con dinero inmovilizado.
 - **¿Está auditado?** No. Es un prototipo de hackathon.
 - **¿Quién puede cerrar las rondas?** Cualquiera: así nadie puede bloquear la tanda.

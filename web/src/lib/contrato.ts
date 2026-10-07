@@ -4,6 +4,7 @@
 //  - clienteFirma(dir): para ACCIONES (unirse, pagar_cuota...). Firma Freighter o la cuenta de Google (firmante.ts).
 //  - leer(tx) / enviar(tx): ejecutan la llamada y convierten los errores a mensajes en español.
 import { Client } from 'tanda'
+import type { ClientOptions as ContractClientOptions } from '@stellar/stellar-sdk/contract'
 import { rpc } from '@stellar/stellar-sdk'
 import type { contract } from '@stellar/stellar-sdk'
 import { firmarTransaccion } from './firmante'
@@ -16,11 +17,16 @@ export function clienteLectura(): Client {
 }
 
 export function clienteFirma(direccion: string): Client {
-  return new Client({
+  // `restore`: si algún dato de la tanda se archivó (Stellar archiva lo que nadie toca por meses) y la
+  // red no puede restaurarlo sola dentro de la misma transacción, el SDK manda antes una restauración.
+  // Esa firma extra también pasa por `firmarTransaccion`: sirve con Freighter y con la cuenta de Google.
+  const opciones: ContractClientOptions & Pick<contract.MethodOptions, 'restore'> = {
     ...base,
     publicKey: direccion,
     signTransaction: (xdr, opciones) => firmarTransaccion(xdr, { ...opciones, address: direccion }),
-  })
+    restore: true,
+  }
+  return new Client(opciones)
 }
 
 // ---------------------------------------------------------------------------
@@ -37,10 +43,49 @@ const MENSAJES: Record<number, string> = {
   7: 'Esta billetera no es miembro de la tanda.',
   8: 'Ya pagaste la cuota de esta ronda.',
   9: 'La ronda todavía no vence. Espera a que termine el plazo.',
-  10: 'Tienes una deuda pendiente en esta tanda, así que no puedes pagar esta ronda.',
+  10: 'Tienes una deuda pendiente en esta tanda. Págala con «Pagar mi deuda» para volver a pagar tus cuotas.',
   11: 'Tu dirección todavía no está verificada.',
   12: 'Esta billetera no tiene permiso para hacer esto.',
   13: 'El contrato todavía no se ha configurado.',
+  // M3: turnos
+  30: 'Revisa las opciones de turnos: algún valor está fuera de los límites.',
+  31: 'Esta tanda no usa ese mecanismo de turnos.',
+  32: 'Ese turno no existe en esta tanda.',
+  33: 'Alguien ya eligió ese turno. Elige otro.',
+  34: 'La oferta debe superar la mejor oferta actual sin pasar del máximo permitido.',
+  35: 'Solo puede ofertar quien todavía no tiene turno y está al día.',
+  36: 'En este momento no hay subasta abierta (la ronda ya venció o es la última).',
+  37: 'Ese intercambio no es posible: los dos turnos deben ser futuros y nadie puede estar en mora.',
+  38: 'Ya tienes una propuesta de intercambio abierta. Retírala antes de hacer otra.',
+  39: 'No hay una propuesta de intercambio pendiente entre ustedes.',
+  40: 'Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en «Mi historial».',
+  41: 'No es el momento: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.',
+  42: 'La oferta no coincide con la que sellaste en esta ronda (o no sellaste ninguna). Hay que revelarla desde el mismo navegador.',
+  43: 'Ese sello ya lo usó otra persona en esta ronda. Vuelve a sellar tu oferta.',
+  // M1: pagar deudas
+  14: 'Esa persona no tiene deuda en esta tanda.',
+  15: 'Ese monto es mayor que la deuda. Revisa cuánto falta por pagar.',
+  16: 'Escribe un monto mayor que cero.',
+  // Errores de la bóveda simulada (contrato aparte, mismo rango de M1)
+  17: 'La bóveda no aceptó ese monto.',
+  18: 'La bóveda no tiene suficientes participaciones para ese retiro. Avísanos: no debería pasar.',
+  // M2: historial crediticio
+  20: 'El historial crediticio no está disponible en este momento. Intenta de nuevo en unos minutos.',
+  21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en «Mi historial».',
+  22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
+  // M4: bóveda por token (contrato de la tanda)
+  55: 'Esa moneda todavía no se puede usar en tandas.',
+  56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
+  // M4: adaptador de Blend (contrato aparte; sus errores llegan tal cual al firmar)
+  50: 'El monto debe ser mayor que cero.',
+  51: 'La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar.',
+  52: 'Blend no tiene una reserva para esta moneda.',
+  53: 'Blend respondió algo inesperado y no se movió dinero. Intenta de nuevo en un momento.',
+  // M4: errores de Blend v2 que pueden llegar al unirse, cerrar una ronda o finalizar
+  1206: 'Blend no está aceptando depósitos ahora. Prueba más tarde.',
+  1207: 'Blend no tiene liquidez en este momento. Tu dinero está seguro; intenta de nuevo en unos minutos.',
+  1220: 'Blend alcanzó su límite de depósitos para esta moneda.',
+  1223: 'Blend no está aceptando depósitos de esta moneda.',
 }
 
 // A veces el SDK entrega el NOMBRE del error del contrato en vez del código.
@@ -58,6 +103,28 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   NoVerificado: 11,
   NoAutorizado: 12,
   NoInicializado: 13,
+  OpcionesInvalidas: 30,
+  ModoNoPermite: 31,
+  TurnoInvalido: 32,
+  TurnoOcupado: 33,
+  OfertaInvalida: 34,
+  NoPuedeOfertar: 35,
+  SinSubasta: 36,
+  IntercambioInvalido: 37,
+  PropuestaExistente: 38,
+  SinPropuesta: 39,
+  TurnoExigeHistorial: 40,
+  FaseEquivocada: 41,
+  SelloInvalido: 42,
+  SelloRepetido: 43,
+  SinDeuda: 14,
+  PagoExcesivo: 15,
+  MontoInvalido: 16,
+  HistorialNoConfigurado: 20,
+  PuntajeInsuficiente: 21,
+  RequisitosBloqueados: 22,
+  TokenSinBoveda: 55,
+  BovedaDeOtroToken: 56,
 }
 
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */

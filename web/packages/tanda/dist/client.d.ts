@@ -1,10 +1,11 @@
-import { Tanda, Miembro, ContractEvent } from './types.js';
+import { Requisitos, OpcionesTanda, EstadoTurnos, Deuda, Tanda, Miembro, ContractEvent } from './types.js';
 import { Result, AssembledTransaction, Client as ContractClient, ClientOptions as ContractClientOptions, MethodOptions, ExternalExecutableRef } from '@stellar/stellar-sdk/contract';
 import { Address, xdr } from '@stellar/stellar-sdk';
 export interface Client {
     /**
      * Unirse a una tanda abierta: paga el colateral, que va directo a la bóveda.
-     * El orden de llegada define el turno. Cuando entra el último, la tanda arranca.
+     * El orden de llegada define el turno (salvo que la tanda use otro modo de turnos,
+     * ver `turnos.rs`). Cuando entra el último, la tanda arranca.
      */
     unirse(args: {
         id: number;
@@ -70,6 +71,194 @@ export interface Client {
         miembro: string | Address;
         verificado: boolean;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    get_historial(options?: MethodOptions): Promise<AssembledTransaction<string | null>>;
+    get_requisitos(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Requisitos, Error>>>;
+    /**
+     * (admin) Conecta el contrato de historial (o lo desconecta con `None`).
+     * La tanda debe estar autorizada como emisor en el historial para que sus hechos cuenten.
+     */
+    configurar_historial(args: {
+        historial: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * (creador) Requisitos de historial de la tanda `id`. Solo mientras está abierta y sin miembros,
+     * para que nadie entre con unas reglas y después le cambien otras.
+     */
+    configurar_requisitos(args: {
+        id: number;
+        puntaje_minimo: number;
+        descuento: boolean;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Garantía que dejaría `miembro` si se uniera ahora, con el descuento de su historial
+     * (para mostrarla antes de firmar).
+     */
+    colateral_para_miembro(args: {
+        id: number;
+        miembro: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<bigint, Error>>>;
+    /**
+     * La bóveda registrada para `token`, o `None` si ese token sigue la regla general.
+     */
+    get_boveda_token(args: {
+        token: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<string | null>>;
+    /**
+     * (Solo el admin) Bóveda para las tandas nuevas en `token`. `None` quita el registro y el token
+     * vuelve a la regla general. Si la bóveda dice qué token guarda (el adaptador de Blend lo dice),
+     * tiene que ser `token`.
+     */
+    registrar_boveda(args: {
+        token: string | Address;
+        boveda: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Subasta: ofrecer recibir `descuento_bps` menos de la bolsa para cobrar en la ronda en
+     * curso. Debe superar la mejor oferta y se acepta solo hasta que vence la ronda.
+     */
+    ofertar(args: {
+        id: number;
+        miembro: string | Address;
+        descuento_bps: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Opciones de turnos de la tanda (`Llegada` sin intercambio si se creó con `crear_tanda`).
+     */
+    get_opciones(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<OpcionesTanda, Error>>>;
+    /**
+     * (garantía que dejaría `miembro` al unirse en el turno `posicion`, prima de ese turno).
+     * La garantía ya trae el descuento por historial (M2). Prima > 0: se descuenta de su bolsa;
+     * < 0: se le suma. En sorteo y subasta el turno no se elige: devuelve lo que se deja al unirse.
+     */
+    cotizar_turno(args: {
+        id: number;
+        miembro: string | Address;
+        posicion: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<[bigint, bigint], Error>>>;
+    /**
+     * Subasta sellada, segunda mitad de la ronda (hasta que vence): `miembro` revela la oferta que
+     * selló. Gana el mayor descuento; en empate, quien va antes en el orden de respaldo.
+     */
+    revelar_oferta(args: {
+        id: number;
+        miembro: string | Address;
+        descuento_bps: number;
+        sal: Uint8Array;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Subasta sellada, primera mitad de la ronda: `miembro` sella su oferta. `sello` =
+     * sha256(descuento_bps en 4 bytes big-endian ‖ sal de 32 bytes). Se puede cambiar mientras dure
+     * esta mitad. Un sello no se puede repetir en la ronda: nadie copia el de otro.
+     */
+    ofertar_sellada(args: {
+        id: number;
+        miembro: string | Address;
+        sello: Uint8Array;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Unirse eligiendo un turno libre (modos `Eleccion` y `PrecioPorTurno`). Mismo camino que
+     * `unirse`: verificación, ganchos del historial, colateral a la bóveda y arranque al llenarse.
+     * Si es de los primeros turnos que piden historial, se revisa el puntaje de quien se une.
+     */
+    unirse_en_turno(args: {
+        id: number;
+        miembro: string | Address;
+        posicion: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Todo lo de turnos en una sola lectura: opciones, mejor oferta, orden de respaldo,
+     * intercambios pendientes y fondo de primas.
+     */
+    get_estado_turnos(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<EstadoTurnos, Error>>>;
+    /**
+     * Retira la propuesta de `de`. La puede retirar `de` (se arrepintió) o `con` (la rechaza).
+     * Lo que `de` dejó guardado vuelve a `de`. Funciona en cualquier estado de la tanda.
+     */
+    cancelar_propuesta(args: {
+        id: number;
+        de: string | Address;
+        quien: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * `con` acepta la propuesta de `de`: cambian de turno y se mueve la compensación.
+     * La garantía no se mueve: quien adelanta su turno la completa al cobrar.
+     */
+    aceptar_intercambio(args: {
+        id: number;
+        con: string | Address;
+        de: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * Igual que `crear_tanda` (mismas reglas y validaciones), pero el creador elige cómo se
+     * reparten los turnos: llegada, elección, precio por turno, sorteo o subasta, y si se
+     * pueden intercambiar.
+     */
+    crear_tanda_avanzada(args: {
+        creador: string | Address;
+        token: string | Address;
+        cuota: bigint;
+        n_miembros: number;
+        periodo_seg: bigint;
+        penalidad_bps: number;
+        cobertura_bps: number;
+        opciones: OpcionesTanda;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<number, Error>>>;
+    /**
+     * `de` propone cambiar su turno por el de `con`. Si `compensacion` > 0, `de` la deja ahora en
+     * el contrato y `con` la recibe al aceptar; si es < 0, `con` le paga a `de` al aceptar.
+     */
+    proponer_intercambio(args: {
+        id: number;
+        de: string | Address;
+        con: string | Address;
+        compensacion: bigint;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
+    /**
+     * La deuda de `miembro` en la tanda `id`: a quién le debe (por ronda), su bolsa retenida si la
+     * tiene, y cuánto ha pagado. Si nunca debió nada, todo vacío.
+     */
+    get_deuda(args: {
+        id: number;
+        miembro: string | Address;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Deuda, Error>>>;
+    /**
+     * Las deudas de la tanda `id` en una sola consulta: solo de quienes alguna vez debieron algo
+     * (incluye a quienes ya saldaron: `faltantes` vacío y `pagado > 0`).
+     */
+    get_deudas(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<Array<[string, Deuda]>, Error>>>;
+    /**
+     * Paga (toda o una parte) la deuda de `miembro` en la tanda `id`. Puede pagarla otra persona
+     * (`pagador`, que es quien firma y de quien sale el dinero). Devuelve la deuda que queda.
+     *
+     * Solo mientras la tanda está `Activa` o `PorLiquidar`. No se puede pagar de más.
+     */
+    pagar_deuda(args: {
+        id: number;
+        miembro: string | Address;
+        pagador: string | Address;
+        monto: bigint;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<bigint, Error>>>;
+    /**
+     * La bóveda donde está la garantía de la tanda `id` (la web la usa para mostrar el rendimiento).
+     */
+    get_boveda(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<string, Error>>>;
+    /**
+     * (Solo el admin) Bóveda rápida para tandas de prueba (rondas de hasta 10 minutos).
+     * `None` la quita. Solo afecta a las tandas que se creen después: cada tanda conserva la suya.
+     */
+    configurar_boveda_rapida(args: {
+        boveda: string | Address | null;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
      * (ronda actual, fecha límite, quiénes ya pagaron)
      */
@@ -88,6 +277,7 @@ export interface Client {
     total_tandas(options?: MethodOptions): Promise<AssembledTransaction<number>>;
     /**
      * Colateral que pagaría el próximo en unirse (para mostrarlo antes de firmar).
+     * En los modos donde se elige turno, el del turno libre más bajo (ver `cotizar_turno`).
      */
     colateral_siguiente(args: {
         id: number;
@@ -117,6 +307,29 @@ export declare class Client extends ContractClient {
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
         marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_historial: (json: string) => AssembledTransaction<string | null>;
+        get_requisitos: (json: string) => AssembledTransaction<Result<Requisitos, Error>>;
+        configurar_historial: (json: string) => AssembledTransaction<Result<null, Error>>;
+        configurar_requisitos: (json: string) => AssembledTransaction<Result<null, Error>>;
+        colateral_para_miembro: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda_token: (json: string) => AssembledTransaction<string | null>;
+        registrar_boveda: (json: string) => AssembledTransaction<Result<null, Error>>;
+        ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
+        cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
+        revelar_oferta: (json: string) => AssembledTransaction<Result<null, Error>>;
+        ofertar_sellada: (json: string) => AssembledTransaction<Result<null, Error>>;
+        unirse_en_turno: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_estado_turnos: (json: string) => AssembledTransaction<Result<EstadoTurnos, Error>>;
+        cancelar_propuesta: (json: string) => AssembledTransaction<Result<null, Error>>;
+        aceptar_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
+        crear_tanda_avanzada: (json: string) => AssembledTransaction<Result<number, Error>>;
+        proponer_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
+        get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
+        pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda: (json: string) => AssembledTransaction<Result<string, Error>>;
+        configurar_boveda_rapida: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
         get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         get_miembros: (json: string) => AssembledTransaction<Result<[string, Miembro][], Error>>;
@@ -133,6 +346,29 @@ export declare class Client extends ContractClient {
         pagar_cuota: (json: string) => AssembledTransaction<Result<null, Error>>;
         cerrar_ronda: (json: string) => AssembledTransaction<Result<null, Error>>;
         marcar_verificado: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_historial: (json: string) => AssembledTransaction<string | null>;
+        get_requisitos: (json: string) => AssembledTransaction<Result<Requisitos, Error>>;
+        configurar_historial: (json: string) => AssembledTransaction<Result<null, Error>>;
+        configurar_requisitos: (json: string) => AssembledTransaction<Result<null, Error>>;
+        colateral_para_miembro: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda_token: (json: string) => AssembledTransaction<string | null>;
+        registrar_boveda: (json: string) => AssembledTransaction<Result<null, Error>>;
+        ofertar: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_opciones: (json: string) => AssembledTransaction<Result<OpcionesTanda, Error>>;
+        cotizar_turno: (json: string) => AssembledTransaction<Result<[bigint, bigint], Error>>;
+        revelar_oferta: (json: string) => AssembledTransaction<Result<null, Error>>;
+        ofertar_sellada: (json: string) => AssembledTransaction<Result<null, Error>>;
+        unirse_en_turno: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_estado_turnos: (json: string) => AssembledTransaction<Result<EstadoTurnos, Error>>;
+        cancelar_propuesta: (json: string) => AssembledTransaction<Result<null, Error>>;
+        aceptar_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
+        crear_tanda_avanzada: (json: string) => AssembledTransaction<Result<number, Error>>;
+        proponer_intercambio: (json: string) => AssembledTransaction<Result<null, Error>>;
+        get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
+        get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
+        pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_boveda: (json: string) => AssembledTransaction<Result<string, Error>>;
+        configurar_boveda_rapida: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
         get_tanda: (json: string) => AssembledTransaction<Result<Tanda, Error>>;
         get_miembros: (json: string) => AssembledTransaction<Result<[string, Miembro][], Error>>;
@@ -150,9 +386,27 @@ export declare class Client extends ContractClient {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvAbono" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evAbonoEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvPrima" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evPrimaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvRonda" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evRondaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvSello" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evSelloEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**
@@ -174,15 +428,45 @@ export declare class Client extends ContractClient {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvOferta" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evOfertaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvSorteo" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evSorteoEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvSubasta" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evSubastaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvCubierto" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evCubiertoEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvGarantia" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evGarantiaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvIniciada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evIniciadaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvOpciones" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evOpcionesEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**
@@ -198,9 +482,59 @@ export declare class Client extends ContractClient {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvPropuesta" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evPropuestaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvFinalizada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evFinalizadaEventFilter(topicValues?: {
         id?: number;
     }): string[];
+    /**
+     * Build a topics filter row for the "EvRequisitos" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evRequisitosEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvBovedaToken" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBovedaTokenEventFilter(topicValues?: {
+        token?: string | Address;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvDeudaPagada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evDeudaPagadaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvIntercambio" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evIntercambioEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvBovedaRapida" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBovedaRapidaEventFilter(): string[];
+    /**
+     * Build a topics filter row for the "EvBolsaRecuperada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evBolsaRecuperadaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvPropuestaRetirada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evPropuestaRetiradaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvHistorialConfigurado" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evHistorialConfiguradoEventFilter(): string[];
 }

@@ -1,0 +1,146 @@
+/* Historial crediticio (misión M2): insignias de nivel y página #/historial. */
+
+.insignia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-left: 0.5em;
+  padding: 0.05em 0.55em;
+  border: 1px solid var(--nivel-color, var(--borde));
+  border-radius: 999px;
+  font-size: 0.78em;
+  line-height: 1.5;
+  color: var(--nivel-color, var(--tinta-2));
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+a.insignia:hover,
+a.insignia:focus-visible {
+  background: var(--linea);
+}
+.insignia-punto {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: var(--nivel-color, var(--tinta-2));
+}
+.nivel-nuevo {
+  --nivel-color: var(--tinta-2);
+}
+.nivel-bronce {
+  --nivel-color: #e0a36b;
+}
+.nivel-plata {
+  --nivel-color: #c9d6dd;
+}
+.nivel-oro {
+  --nivel-color: var(--turno);
+}
+
+.historial {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+.historial-cabeza {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  background: var(--superficie);
+}
+.historial-nivel {
+  display: grid;
+  place-items: center;
+  width: 7.5rem;
+  height: 7.5rem;
+  border: 3px solid var(--nivel-color);
+  border-radius: 50%;
+  text-align: center;
+}
+.historial-nivel strong {
+  display: block;
+  font-family: var(--titulos);
+  font-size: 2rem;
+  line-height: 1;
+}
+.historial-nivel span {
+  color: var(--nivel-color);
+  font-weight: 700;
+}
+.historial-resumen {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.historial-resumen h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.4rem;
+}
+.historial-dir {
+  overflow-wrap: anywhere;
+  color: var(--tinta-2);
+  font-size: 0.85rem;
+}
+.historial-barra {
+  height: 0.5rem;
+  margin: 0.6rem 0 0.25rem;
+  border-radius: 999px;
+  background: var(--linea);
+  overflow: hidden;
+}
+.historial-barra > span {
+  display: block;
+  height: 100%;
+  background: var(--nivel-color);
+}
+.historial-lista {
+  padding-left: 1.2rem;
+}
+.historial-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+.historial-tabla td {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--linea);
+}
+.historial-tabla td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.historial-tabla .menos {
+  color: var(--alerta-texto);
+}
+.historial-tabla .mas {
+  color: var(--pago-texto);
+}
+.historial-buscar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.historial-buscar input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--papel);
+  color: var(--tinta);
+  font: inherit;
+}
+.historial-buscar .boton {
+  flex: 0 0 auto;
+}
+.historial h2 {
+  margin-top: 1.75rem;
+}
+.historial-form {
+  margin-top: 1rem;
+}
+.nota-historial {
+  margin: 0.5rem 0;
+}

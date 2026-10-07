@@ -20,6 +20,26 @@
   --alerta-texto: #ffb4a6;
   --titulos: 'Archivo', system-ui, sans-serif;
 
+  /* Profundidad: tres niveles de superficie y el brillo verde de la landing. */
+  --superficie-2: #11241b; /* superficie sobre superficie (hover, filas) */
+  --borde-luz: rgba(255, 255, 255, 0.07); /* filo de luz arriba de las tarjetas */
+  --brillo: rgba(62, 224, 143, 0.35);
+  --sombra: 0 1px 0 0 var(--borde-luz) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  --sombra-alta: 0 1px 0 0 var(--borde-luz) inset, 0 24px 60px -28px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(62, 224, 143, 0.18);
+  --radio: 18px;
+  --radio-chico: 12px;
+
+  /* Movimiento (curvas fuertes: las de CSS por defecto se sienten flojas).
+     Entrar o salir: --ease-out. Moverse en pantalla: --ease-in-out. Nunca ease-in en la interfaz. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-cajon: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-rebote: cubic-bezier(0.34, 1.4, 0.64, 1); /* solo para celebrar (un pago, un cobro) */
+  --t-presion: 140ms; /* apretar un botón */
+  --t-rapido: 200ms; /* hover, colores, avisos */
+  --t-medio: 280ms; /* entrar una página o una tarjeta */
+
   color-scheme: dark; /* campos, barras de scroll y desplegables en oscuro */
   font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
   font-size: 17px;
@@ -39,6 +59,8 @@ body {
   margin: 0;
   min-height: 100vh;
   background: var(--papel);
+  /* Lo que se sale de lado (el vidrio de la barra) no crea barra de desplazamiento horizontal. */
+  overflow-x: clip;
 }
 
 h1,

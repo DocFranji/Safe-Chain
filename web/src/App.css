@@ -13,6 +13,26 @@
   padding: 18px 0;
   border-bottom: 1px solid var(--linea);
 }
+@media (min-width: 601px) {
+  /* Pegada arriba: al bajar por una tanda larga, el menú y la billetera siguen a mano. El vidrio va en un
+     pseudo-elemento de lado a lado de la pantalla y aparece al empezar a bajar (movimiento/barra-vidrio). */
+  .barra {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: 14px 0;
+  }
+  .barra::before {
+    content: '';
+    position: absolute;
+    inset: 0 calc(50% - 50vw);
+    z-index: -1;
+    background: color-mix(in srgb, var(--papel) 88%, transparent);
+    box-shadow: 0 12px 30px -22px rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+  }
+}
 
 .marca {
   display: flex;
@@ -73,11 +93,22 @@
   font-weight: 600;
   text-decoration: none;
   color: var(--tinta-2);
+  transition:
+    background-color var(--t-rapido) ease,
+    color var(--t-rapido) ease,
+    transform var(--t-presion) var(--ease-out);
 }
-.menu a:hover {
-  background: var(--superficie);
+.menu a:active {
+  transform: scale(0.96);
 }
-.menu a[aria-current='page'] {
+@media (hover: hover) and (pointer: fine) {
+  .menu a:hover {
+    background: var(--superficie-2);
+    color: var(--tinta);
+  }
+}
+.menu a[aria-current='page'],
+.menu a[aria-current='page']:hover {
   background: var(--tinta);
   color: var(--superficie);
 }
@@ -86,10 +117,24 @@
   .barra {
     flex-wrap: wrap;
   }
+  /* En el celular, el menú es una sola fila que se desliza de lado (antes los enlaces largos se partían en
+     tres renglones y la píldora activa se volvía un círculo enorme). */
   .menu {
     order: 3;
-    width: 100%;
-    margin: 0;
+    width: calc(100% + 40px);
+    margin: 0 -20px;
+    padding: 0 20px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+  }
+  .menu::-webkit-scrollbar {
+    display: none;
+  }
+  .menu a {
+    flex: none;
+    white-space: nowrap;
   }
 }
 
@@ -346,10 +391,11 @@
 
 /* ---------- Panel de la ronda ---------- */
 .panel {
-  background: var(--superficie);
+  background: linear-gradient(180deg, var(--superficie-2), var(--superficie) 160px);
   border: 1px solid var(--linea);
-  border-radius: 18px;
+  border-radius: var(--radio);
   padding: 24px;
+  box-shadow: var(--sombra);
 }
 
 .panel h2 {
@@ -447,22 +493,32 @@
   min-height: 48px;
   padding: 12px 18px;
   border: 2px solid var(--borde);
-  border-radius: 12px;
+  border-radius: var(--radio-chico);
   font: inherit;
   font-weight: 700;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--t-presion) var(--ease-out),
+    background-color var(--t-rapido) ease,
+    border-color var(--t-rapido) ease,
+    box-shadow var(--t-rapido) ease,
+    filter var(--t-rapido) ease;
+}
+/* Al apretar, el botón cede un poco: la interfaz "escuchó". */
+.boton:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .boton.principal {
-  background: var(--acento);
+  background: linear-gradient(180deg, #62f0a9, var(--acento) 70%);
   border-color: var(--acento);
   color: var(--sobre-acento);
-}
-.boton.principal:hover:not(:disabled) {
-  filter: brightness(1.1);
-  box-shadow: 0 10px 28px -12px var(--acento);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 10px 26px -14px var(--brillo);
 }
 
 .boton.secundario,
@@ -470,9 +526,18 @@
   background: transparent;
   color: var(--tinta);
 }
-.boton.secundario:hover:not(:disabled),
-.boton.chico:hover:not(:disabled) {
-  background: var(--papel);
+@media (hover: hover) and (pointer: fine) {
+  .boton.principal:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 14px 32px -12px var(--brillo);
+  }
+  .boton.secundario:hover:not(:disabled),
+  .boton.chico:hover:not(:disabled) {
+    background: var(--superficie-2);
+    border-color: var(--tinta);
+  }
 }
 
 .boton.chico {
@@ -537,7 +602,16 @@ td.num {
   font-variant-numeric: tabular-nums;
 }
 
-.fila-yo td {
+tbody tr td {
+  transition: background-color var(--t-rapido) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  tbody tr:hover td {
+    background: rgba(255, 255, 255, 0.025);
+  }
+}
+.fila-yo td,
+.fila-yo:hover td {
   background: var(--turno-suave);
 }
 
@@ -649,9 +723,20 @@ td .dir {
   border-color: var(--turno);
 }
 .etiqueta.en-curso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--pago-suave);
   border-color: var(--pago);
   color: var(--pago-texto);
+}
+.etiqueta.en-curso::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pago);
+  animation: punto-vivo 2s ease-in-out infinite; /* solo opacidad: no repinta en cada cuadro */
 }
 .etiqueta.cancelada {
   background: var(--alerta-suave);
@@ -683,9 +768,20 @@ td .dir {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--t-rapido) ease,
+    border-color var(--t-rapido) ease,
+    color var(--t-rapido) ease,
+    transform var(--t-presion) var(--ease-out);
 }
-.filtro:hover {
-  border-color: var(--tinta);
+.filtro:active {
+  transform: scale(0.96);
+}
+@media (hover: hover) and (pointer: fine) {
+  .filtro:hover {
+    border-color: var(--tinta);
+  }
 }
 .filtro.activo {
   background: var(--tinta);
@@ -703,18 +799,38 @@ td .dir {
 }
 
 .tarjeta {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
   height: 100%;
   padding: 20px;
   border: 1px solid var(--linea);
-  border-radius: 18px;
-  background: var(--superficie);
+  border-radius: var(--radio);
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(62, 224, 143, 0.07), transparent 60%),
+    linear-gradient(180deg, var(--superficie-2), var(--superficie) 140px);
+  box-shadow: var(--sombra);
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--t-medio) var(--ease-out),
+    border-color var(--t-rapido) ease,
+    box-shadow var(--t-medio) var(--ease-out);
 }
-.tarjeta:hover {
-  border-color: var(--tinta);
+.tarjeta:active {
+  transform: scale(0.985);
+  transition-duration: var(--t-presion);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tarjeta:hover {
+    transform: translateY(-3px);
+    border-color: rgba(62, 224, 143, 0.45);
+    box-shadow: var(--sombra-alta);
+  }
+  .tarjeta:hover:active {
+    transform: translateY(-1px) scale(0.985);
+  }
 }
 
 .tarjeta-cabeza {
@@ -753,6 +869,7 @@ td .dir {
 .lugar.lleno {
   border: 2px solid var(--borde);
   background: var(--turno);
+  box-shadow: 0 0 10px -2px rgba(242, 193, 78, 0.6);
 }
 
 .tarjeta-datos {
@@ -840,12 +957,22 @@ td .dir {
   min-height: 48px;
   padding: 8px 12px;
   border: 2px solid var(--borde);
-  border-radius: 12px;
+  border-radius: var(--radio-chico);
   background: var(--papel);
   color: var(--tinta);
   font: inherit;
   font-size: 18px;
   font-variant-numeric: tabular-nums;
+  transition:
+    border-color var(--t-rapido) ease,
+    box-shadow var(--t-rapido) ease,
+    background-color var(--t-rapido) ease;
+}
+.campo input:not([type='range']):not([type='checkbox']):focus,
+.campo select:focus {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 4px rgba(62, 224, 143, 0.16);
+  outline: none;
 }
 .campo input[aria-invalid='true'] {
   border-color: var(--alerta);
@@ -955,8 +1082,11 @@ td .dir {
   border-color: var(--alerta);
   color: var(--alerta);
 }
-.boton.peligro:hover:not(:disabled) {
-  background: var(--alerta-suave);
+@media (hover: hover) and (pointer: fine) {
+  .boton.peligro:hover:not(:disabled) {
+    background: var(--alerta-suave);
+    border-color: var(--alerta);
+  }
 }
 
 /* ---------- Resultados ---------- */
@@ -974,7 +1104,8 @@ td .dir {
   padding: 12px 16px;
   border: 1px solid var(--linea);
   border-radius: 14px;
-  background: var(--superficie);
+  background: linear-gradient(180deg, var(--superficie-2), var(--superficie));
+  box-shadow: var(--sombra);
 }
 .barra-cuenta-fila {
   display: flex;
@@ -1018,8 +1149,8 @@ td .dir {
   gap: 10px;
   padding: 10px 14px;
   border-left: 4px solid var(--linea);
-  background: var(--superficie);
-  border-radius: 0 10px 10px 0;
+  background: linear-gradient(90deg, var(--superficie-2), var(--superficie) 60%);
+  border-radius: 0 12px 12px 0;
 }
 .historia-item time {
   padding-top: 2px;
@@ -1108,8 +1239,11 @@ td .dir {
 .demo-ahora {
   padding: 20px 24px;
   border: 1px solid var(--linea);
-  border-radius: 18px;
-  background: var(--superficie);
+  border-radius: var(--radio);
+  background:
+    radial-gradient(90% 120% at 0% 0%, rgba(242, 193, 78, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--superficie-2), var(--superficie));
+  box-shadow: var(--sombra);
 }
 .demo-grande {
   font-size: clamp(44px, 6vw, 80px);
@@ -1148,9 +1282,16 @@ td .dir {
   border-radius: 14px;
   background: var(--superficie);
 }
+.demo-persona {
+  transition:
+    border-color var(--t-medio) ease,
+    background-color var(--t-medio) ease,
+    box-shadow var(--t-medio) ease;
+}
 .demo-persona.turno {
   border-color: var(--turno);
   background: var(--turno-suave);
+  box-shadow: 0 0 28px -10px rgba(242, 193, 78, 0.55);
 }
 .demo-persona.moroso {
   border-color: var(--alerta);
@@ -1207,8 +1348,8 @@ td .dir {
 .demo-garantia-barra i {
   display: block;
   height: 100%;
-  background: var(--pago);
-  transition: width 0.6s ease;
+  background: linear-gradient(90deg, #2fbf78, var(--pago));
+  transition: width 0.6s var(--ease-in-out);
 }
 .demo-persona.moroso .demo-garantia-barra i {
   background: var(--alerta);
@@ -1369,7 +1510,7 @@ td .dir {
   padding: 14px 16px;
   border: 1.5px solid var(--linea);
   border-radius: 14px;
-  background: var(--superficie);
+  background: linear-gradient(180deg, var(--superficie-2), var(--superficie));
 }
 .chequeo.ok {
   border-color: var(--pago);
@@ -1424,4 +1565,318 @@ td .dir {
   overflow-wrap: anywhere;
   font-size: 16px !important;
   font-weight: 600 !important;
+}
+
+/* ---------- Mecanismos de turnos (M3) ---------- */
+.turnos-opciones {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.turnos-opciones > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.modos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.modo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--linea);
+  border-radius: 12px;
+  background: var(--papel);
+  cursor: pointer;
+}
+.modo {
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--t-rapido) ease,
+    background-color var(--t-rapido) ease,
+    box-shadow var(--t-rapido) ease,
+    transform var(--t-presion) var(--ease-out);
+}
+.modo:active {
+  transform: scale(0.98);
+}
+@media (hover: hover) and (pointer: fine) {
+  .modo:hover {
+    border-color: var(--borde);
+  }
+}
+.modo.elegido {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+}
+.modo input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.modo:has(input:focus-visible) {
+  outline: 3px solid var(--turno);
+  outline-offset: 2px;
+}
+.modo-titulo {
+  font-weight: 800;
+}
+.modo-lema {
+  font-size: 14px;
+  color: var(--tinta-2);
+}
+/* La tabla de turnos puede ser más ancha que el celular: que se desplace dentro, sin ensanchar el formulario. */
+.crear-columnas > .formulario {
+  min-width: 0;
+}
+.turnos-previa h3 {
+  margin: 8px 0 6px;
+  font-size: 17px;
+}
+.turnos-previa .explica {
+  margin-top: 8px;
+}
+
+.turnos-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linea);
+}
+.turnos-acciones h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+}
+.rejilla-turnos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.turno-casilla {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--borde);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--tinta);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.turno-casilla:hover:not(:disabled) {
+  background: var(--papel);
+}
+.turno-casilla.elegido {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+}
+.turno-casilla:disabled {
+  border-style: dashed;
+  border-color: var(--linea);
+  color: var(--tinta-2);
+  cursor: not-allowed;
+}
+.turno-casilla strong {
+  font-size: 17px;
+}
+.turno-casilla .sub {
+  font-size: 13px;
+}
+/* Turnos que piden historial (M2 + M3): una etiqueta chica con el nivel. */
+.etiqueta-historial {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--borde);
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+.turno-casilla .etiqueta-historial {
+  margin-left: 0;
+}
+/* En la tabla de la vista previa, el nivel va debajo del número del turno (sin agrandar la columna). */
+.nivel-turno {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+.fila-oferta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.propuesta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--linea);
+  border-radius: 12px;
+}
+.propuesta.recibida {
+  border-color: var(--turno);
+  background: var(--turno-suave);
+}
+
+/* ---------- M1: pagar una deuda ---------- */
+.pagar-deuda {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 2px solid var(--alerta);
+  border-radius: 14px;
+  background: var(--alerta-suave);
+}
+.pagar-deuda h3 {
+  margin: 0;
+  font-family: var(--titulos);
+}
+.pagar-deuda .explica {
+  margin: 0;
+  color: var(--tinta);
+}
+/* M1: bajar las fechas de pago al calendario del teléfono (.ics). */
+.agregar-calendario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+}
+.agregar-calendario .explica {
+  flex: 1 1 240px;
+  margin: 0;
+}
+/* M1: en el lobby, a quien le toca cobrar (al cobrar cierra la ronda). */
+.tarjeta-cobro {
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--pago-suave);
+  color: var(--pago-texto);
+  font-weight: 700;
+}
+.lista-deudas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lista-deudas li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--papel);
+}
+.deuda-parcial summary,
+.deuda-otros summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.deuda-parcial[open],
+.deuda-otros[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.saldo-deuda {
+  display: block;
+  color: var(--pago-texto);
+}
+
+/* --- M4: USDC de Blend (barra de cuenta) e indicador de liquidez --- */
+.cuenta-usdc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--linea);
+}
+.cuenta-usdc p {
+  margin: 0;
+}
+.cuenta-usdc .aviso {
+  flex-basis: 100%;
+}
+.liquidez-blend.alerta {
+  color: var(--alerta-texto);
+}
+
+/* --- M4: selector de moneda al crear (mismo aspecto que las tarjetas de turnos) --- */
+.opciones-moneda {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.opciones-moneda > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.monedas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.moneda {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--linea);
+  border-radius: 12px;
+  background: var(--papel);
+  cursor: pointer;
+}
+.moneda:hover {
+  border-color: var(--borde);
+}
+.moneda.elegida {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+}
+.moneda input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.moneda:has(input:focus-visible) {
+  outline: 3px solid var(--turno);
+  outline-offset: 2px;
+}
+.moneda-titulo {
+  font-weight: 800;
+}
+.moneda-lema {
+  font-size: 14px;
+  color: var(--tinta-2);
 }

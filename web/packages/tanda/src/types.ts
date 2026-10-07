@@ -1,6 +1,24 @@
 import {Address} from '@stellar/stellar-sdk';
 
     /**
+ * La deuda de un miembro, ronda por ronda (`get_deuda`).
+ */
+export interface Deuda {
+  /**
+   * Su bolsa, si se retuvo porque era moroso cuando le tocaba cobrar. La recupera al saldar.
+   */
+  bolsa_retenida: bigint;
+  /**
+   * Lo que todavía debe, del faltante más viejo al más nuevo. Suman `Miembro.deuda`.
+   */
+  faltantes: Array<Faltante>;
+  /**
+   * Cuánto se ha pagado de su deuda hasta ahora (por el miembro o por otras personas).
+   */
+  pagado: bigint;
+}
+
+/**
  * Error Enum: Error
  */
 export const Error = {
@@ -16,7 +34,29 @@ export const Error = {
   10 : { message: "MiembroMoroso" },
   11 : { message: "NoVerificado" },
   12 : { message: "NoAutorizado" },
-  13 : { message: "NoInicializado" }
+  13 : { message: "NoInicializado" },
+  14 : { message: "SinDeuda" },
+  15 : { message: "PagoExcesivo" },
+  16 : { message: "MontoInvalido" },
+  20 : { message: "HistorialNoConfigurado" },
+  21 : { message: "PuntajeInsuficiente" },
+  22 : { message: "RequisitosBloqueados" },
+  30 : { message: "OpcionesInvalidas" },
+  31 : { message: "ModoNoPermite" },
+  32 : { message: "TurnoInvalido" },
+  33 : { message: "TurnoOcupado" },
+  34 : { message: "OfertaInvalida" },
+  35 : { message: "NoPuedeOfertar" },
+  36 : { message: "SinSubasta" },
+  37 : { message: "IntercambioInvalido" },
+  38 : { message: "PropuestaExistente" },
+  39 : { message: "SinPropuesta" },
+  40 : { message: "TurnoExigeHistorial" },
+  41 : { message: "FaseEquivocada" },
+  42 : { message: "SelloInvalido" },
+  43 : { message: "SelloRepetido" },
+  55 : { message: "TokenSinBoveda" },
+  56 : { message: "BovedaDeOtroToken" }
 }
 
 /**
@@ -90,6 +130,134 @@ export interface Miembro {
 }
 
 /**
+ * Una parte de la deuda de un moroso: lo que su garantía no alcanzó a cubrir en la ronda `ronda`
+ * y a quién se le debe (`acreedor`: quien cobró esa ronda y recibió de menos).
+ */
+export interface Faltante {
+  acreedor: string;
+  monto: bigint;
+  ronda: number;
+}
+
+/**
+ * Intercambio pendiente: `de` propone cambiar su turno por el de `con`.
+ * `compensacion` > 0: `de` le paga a `con` (queda guardada en el contrato hasta aceptar o retirar).
+ * `compensacion` < 0: `con` le paga a `de` al aceptar.
+ */
+export interface Propuesta {
+  compensacion: bigint;
+  con: string;
+  de: string;
+}
+
+/**
+ * Union: ModoTurnos
+ */
+ export type ModoTurnos =
+  /**
+   * El orden de llegada decide el turno (como siempre).
+   */
+  { tag: "Llegada"; values: void } |
+  /**
+   * Cada quien elige un turno libre al unirse, gratis.
+   */
+  { tag: "Eleccion"; values: void } |
+  /**
+   * Cada quien elige turno: los primeros pagan una prima y los últimos la reciben.
+   */
+  { tag: "PrecioPorTurno"; values: void } |
+  /**
+   * El contrato sortea el orden cuando se llena la tanda.
+   */
+  { tag: "Sorteo"; values: void } |
+  /**
+   * Cada ronda cobra quien ofrezca el mayor descuento sobre la bolsa.
+   */
+  { tag: "Subasta"; values: void };
+
+/**
+ * Requisitos de historial de una tanda (`configurar_requisitos`). Por defecto: ninguno.
+ */
+export interface Requisitos {
+  /**
+   * Dar descuento de garantía según el nivel del historial.
+   */
+  descuento: boolean;
+  /**
+   * Puntaje mínimo para unirse (0 = cualquiera puede).
+   */
+  puntaje_minimo: number;
+}
+
+/**
+ * Todo lo de turnos que la web necesita, en una sola lectura (`get_estado_turnos`).
+ */
+export interface EstadoTurnos {
+  /**
+   * Subasta sellada en curso: hasta este momento se sella; después, hasta que vence, se revela
+   * (0 si no aplica).
+   */
+  fin_sellado: bigint;
+  /**
+   * PrecioPorTurno: primas ya cobradas que esperan a los últimos turnos.
+   */
+  fondo_primas: bigint;
+  /**
+   * Subasta: descuento de esa oferta, en bps sobre la bolsa (0 si nadie ha ofertado).
+   */
+  mejor_oferta_bps: number;
+  /**
+   * Subasta: quién hizo la mejor oferta de la ronda en curso (nadie todavía: `None`).
+   */
+  mejor_postor: string | null;
+  opciones: OpcionesTanda;
+  /**
+   * Intercambios pendientes.
+   */
+  propuestas: Array<Propuesta>;
+  /**
+   * Subasta: orden sorteado al llenarse; decide quién cobra en las rondas sin ofertas.
+   */
+  respaldo: Array<string>;
+  /**
+   * Subasta sellada: quiénes sellaron una oferta en la ronda en curso y aún no la revelan.
+   */
+  sellos: Array<string>;
+}
+
+/**
+ * Opciones de turnos que elige el creador (`crear_tanda_avanzada`).
+ */
+export interface OpcionesTanda {
+  /**
+   * Subasta: descuento máximo que se puede ofrecer, en bps sobre la bolsa.
+   */
+  descuento_max_bps: number;
+  modo: ModoTurnos;
+  /**
+   * Subasta: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.
+   */
+  ofertas_selladas: boolean;
+  /**
+   * Dos miembros pueden cambiar sus turnos futuros (no aplica a la subasta).
+   */
+  permitir_intercambio: boolean;
+  /**
+   * PrecioPorTurno: prima del primer turno, en bps sobre la bolsa. El último recibe lo mismo.
+   */
+  prima_max_bps: number;
+  /**
+   * Elegir turno y precio por turno: cuántos de los primeros turnos piden historial (M2).
+   * 0 = ninguno. Esos turnos solo los toma quien tenga al menos `puntaje_primeros`.
+   */
+  primeros_con_historial: number;
+  /**
+   * Puntaje de historial que piden los primeros turnos (0 si `primeros_con_historial` es 0).
+   */
+  puntaje_primeros: number;
+}
+
+/**
  * Event: EvPago
  */
 export interface EvPagoEvent {
@@ -103,6 +271,35 @@ export interface EvPagoEvent {
 }
 
 /**
+ * Una parte de ese pago llegó a quien cobró de menos en la ronda `ronda`.
+ * Si su bolsa estaba retenida (también era moroso), `retenida` es `true` y el monto se sumó a esa bolsa.
+ */
+export interface EvAbonoEvent {
+  name: "EvAbono";
+  data: {
+    id: number;
+    deudor?: string;
+    acreedor?: string;
+    ronda?: number;
+    monto?: bigint;
+    retenida?: boolean;
+  };
+}
+
+/**
+ * Precio por turno: `prima` > 0 la pagó quien cobró (se apartó de su bolsa); < 0 la recibió.
+ */
+export interface EvPrimaEvent {
+  name: "EvPrima";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
+    prima?: bigint;
+  };
+}
+
+/**
  * Event: EvRonda
  */
 export interface EvRondaEvent {
@@ -112,6 +309,18 @@ export interface EvRondaEvent {
     ronda?: number;
     beneficiario?: string;
     monto_pagado?: bigint;
+  };
+}
+
+/**
+ * Subasta sellada: `miembro` selló una oferta en la ronda `ronda` (el monto se verá al revelarla).
+ */
+export interface EvSelloEvent {
+  name: "EvSello";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
   };
 }
 
@@ -154,6 +363,55 @@ export interface EvMorosoEvent {
 }
 
 /**
+ * Subasta: alguien ofreció recibir `descuento` menos para cobrar en esta ronda.
+ */
+export interface EvOfertaEvent {
+  name: "EvOferta";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
+    descuento_bps?: number;
+    /**
+     * En dinero, si todos pagan la ronda.
+     */
+    descuento?: bigint;
+  };
+}
+
+/**
+ * El contrato sorteó el orden de cobro: `orden[i]` cobra en la ronda `i`.
+ */
+export interface EvSorteoEvent {
+  name: "EvSorteo";
+  data: {
+    id: number;
+    orden?: Array<string>;
+  };
+}
+
+/**
+ * Subasta: quién se quedó con la bolsa de la ronda y cuánto recibió cada uno de los demás.
+ */
+export interface EvSubastaEvent {
+  name: "EvSubasta";
+  data: {
+    id: number;
+    ronda?: number;
+    ganador?: string;
+    descuento?: bigint;
+    /**
+     * Lo que se sumó a la garantía de cada uno de los demás.
+     */
+    dividendo?: bigint;
+    /**
+     * Nadie ofertó (o la oferta no valía): cobró el siguiente del orden de respaldo.
+     */
+    por_respaldo?: boolean;
+  };
+}
+
+/**
  * El momento clave de la demo: "el colateral de Ana cubrió su cuota".
  */
 export interface EvCubiertoEvent {
@@ -167,6 +425,19 @@ export interface EvCubiertoEvent {
 }
 
 /**
+ * De la bolsa de quien cobró se apartó `monto` para completar su garantía (vuelve al final).
+ */
+export interface EvGarantiaEvent {
+  name: "EvGarantia";
+  data: {
+    id: number;
+    ronda?: number;
+    miembro?: string;
+    monto?: bigint;
+  };
+}
+
+/**
  * Event: EvIniciada
  */
 export interface EvIniciadaEvent {
@@ -174,6 +445,23 @@ export interface EvIniciadaEvent {
   data: {
     id: number;
     inicio_ronda?: bigint;
+  };
+}
+
+/**
+ * La tanda se creó con opciones de turnos (`crear_tanda_avanzada`).
+ */
+export interface EvOpcionesEvent {
+  name: "EvOpciones";
+  data: {
+    id: number;
+    modo?: ModoTurnos;
+    permitir_intercambio?: boolean;
+    prima_max_bps?: number;
+    descuento_max_bps?: number;
+    primeros_con_historial?: number;
+    puntaje_primeros?: number;
+    ofertas_selladas?: boolean;
   };
 }
 
@@ -200,6 +488,19 @@ export interface EvLiquidadoEvent {
 }
 
 /**
+ * Event: EvPropuesta
+ */
+export interface EvPropuestaEvent {
+  name: "EvPropuesta";
+  data: {
+    id: number;
+    de?: string;
+    con?: string;
+    compensacion?: bigint;
+  };
+}
+
+/**
  * Event: EvFinalizada
  */
 export interface EvFinalizadaEvent {
@@ -215,5 +516,104 @@ export interface EvFinalizadaEvent {
     sin_repartir?: bigint;
   };
 }
-    export type ContractEvent = EvPagoEvent | EvRondaEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvCubiertoEvent | EvIniciadaEvent | EvCanceladaEvent | EvLiquidadoEvent | EvFinalizadaEvent;
+
+/**
+ * El creador de la tanda `id` fijó sus requisitos de historial.
+ */
+export interface EvRequisitosEvent {
+  name: "EvRequisitos";
+  data: {
+    id: number;
+    puntaje_minimo?: number;
+    descuento?: boolean;
+  };
+}
+
+/**
+ * El admin registró (o quitó) la bóveda de un token. Solo afecta a las tandas que se creen después.
+ */
+export interface EvBovedaTokenEvent {
+  name: "EvBovedaToken";
+  data: {
+    token: string;
+    boveda?: string | null;
+  };
+}
+
+/**
+ * Alguien pagó (toda o una parte) la deuda de `miembro`. Puede ser el miembro u otra persona.
+ */
+export interface EvDeudaPagadaEvent {
+  name: "EvDeudaPagada";
+  data: {
+    id: number;
+    miembro?: string;
+    pagador?: string;
+    monto?: bigint;
+    deuda_restante?: bigint;
+  };
+}
+
+/**
+ * Dos miembros cambiaron de turno: `de` ahora cobra en `turno_de` y `con` en `turno_con`.
+ */
+export interface EvIntercambioEvent {
+  name: "EvIntercambio";
+  data: {
+    id: number;
+    de?: string;
+    con?: string;
+    turno_de?: number;
+    turno_con?: number;
+    compensacion?: bigint;
+  };
+}
+
+/**
+ * El admin cambió la bóveda rápida (solo afecta a las tandas que se creen después).
+ */
+export interface EvBovedaRapidaEvent {
+  name: "EvBovedaRapida";
+  data: {
+    boveda?: string | null;
+  };
+}
+
+/**
+ * Un moroso saldó su deuda y recuperó su bolsa retenida: recibió `monto`; se descontaron `multas`
+ * (al fondo de premios) y `garantia` (repone su garantía para las cuotas que aún debe).
+ */
+export interface EvBolsaRecuperadaEvent {
+  name: "EvBolsaRecuperada";
+  data: {
+    id: number;
+    miembro?: string;
+    monto?: bigint;
+    multas?: bigint;
+    garantia?: bigint;
+  };
+}
+
+/**
+ * Se retiró una propuesta de intercambio (lo guardado volvió a `de`).
+ */
+export interface EvPropuestaRetiradaEvent {
+  name: "EvPropuestaRetirada";
+  data: {
+    id: number;
+    de?: string;
+    con?: string;
+  };
+}
+
+/**
+ * El admin conectó (o desconectó, con `None`) el contrato de historial.
+ */
+export interface EvHistorialConfiguradoEvent {
+  name: "EvHistorialConfigurado";
+  data: {
+    historial?: string | null;
+  };
+}
+    export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
     

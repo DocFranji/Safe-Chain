@@ -3,12 +3,20 @@ import type { ResumenTanda } from '../lib/lectura'
 import { bolsa, colateralDeTurno } from '../lib/colateral'
 import { claseEstado, duracion, etiquetaEstado, monto } from '../lib/formato'
 import { rutaTanda } from '../lib/rutas'
-import { SIMBOLO } from '../config'
+import { bolsaListaParaCobrar } from '../lib/cobro'
+import { tituloModo } from '../lib/turnos'
+import { monedaDe } from '../lib/monedas'
 
-type Props = { resumen: ResumenTanda; yo: string | null }
+type Props = {
+  resumen: ResumenTanda
+  yo: string | null
+  /** Segundos Unix actuales (para avisar si la bolsa de quien está conectado ya se puede cobrar). */
+  ahora: number
+}
 
-export function TarjetaTanda({ resumen, yo }: Props) {
-  const { id, tanda, miembros } = resumen
+export function TarjetaTanda({ resumen, yo, ahora }: Props) {
+  const { id, tanda, miembros, modo } = resumen
+  const SIMBOLO = monedaDe(tanda.token).simbolo
   const estado = tanda.estado.tag
   const n = tanda.n_miembros
   const params = { cuota: tanda.cuota, nMiembros: n, coberturaBps: tanda.cobertura_bps }
@@ -19,9 +27,13 @@ export function TarjetaTanda({ resumen, yo }: Props) {
   if (estado === 'Abierta') {
     const libres = n - miembros.length
     detalle =
-      libres > 0
-        ? `Entras con ${monto(colateralDeTurno(params, miembros.length))} ${SIMBOLO} de garantía (turno ${miembros.length + 1})`
-        : 'Cupo completo'
+      libres === 0
+        ? 'Cupo completo'
+        : modo === 'Sorteo' || modo === 'Subasta'
+          ? `Entras con ${monto(tanda.cuota)} ${SIMBOLO} de garantía (${modo === 'Sorteo' ? 'el orden se sortea' : 'los turnos se subastan'})`
+          : modo === 'Eleccion' || modo === 'PrecioPorTurno'
+            ? 'Eliges tu turno al entrar'
+            : `Entras con ${monto(colateralDeTurno(params, miembros.length))} ${SIMBOLO} de garantía (turno ${miembros.length + 1})`
   } else if (estado === 'Activa') {
     detalle = `Ronda ${tanda.ronda_actual + 1} de ${n}`
   } else if (estado === 'PorLiquidar') {
@@ -57,6 +69,7 @@ export function TarjetaTanda({ resumen, yo }: Props) {
           {duracion(Number(tanda.periodo_seg))}
         </p>
         <p className="tarjeta-detalle">{detalle}</p>
+        {modo !== 'Llegada' && <p className="tarjeta-datos">Turnos: {tituloModo(modo).toLowerCase()}</p>}
 
         {(participo || creada) && (
           <p className="tarjeta-pie">
@@ -64,6 +77,8 @@ export function TarjetaTanda({ resumen, yo }: Props) {
             {creada && <span className="marca-yo">La creaste tú</span>}
           </p>
         )}
+        {/* M1: a quien le toca cobrar, su bolsa lo espera (al cobrarla cierra la ronda). */}
+        {bolsaListaParaCobrar(tanda, miembros, yo, ahora) && <p className="tarjeta-cobro">Tu bolsa está lista: cóbrala</p>}
       </a>
     </li>
   )

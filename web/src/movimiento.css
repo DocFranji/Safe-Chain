@@ -1,0 +1,360 @@
+/*
+ * Movimiento y acabados de la app (no de la landing, que trae los suyos en landing/landing.css).
+ *
+ * Reglas que seguimos (las de Emil Kowalski):
+ * - Cada animación tiene un porqué: entrar sin saltos, confirmar una acción o mostrar un cambio de estado.
+ * - Entrar o salir: --ease-out. Moverse en pantalla: --ease-in-out. Nunca ease-in.
+ * - Rápido: botones ~140 ms, avisos ~200 ms, páginas ~280 ms. Nada de la interfaz pasa de 300 ms
+ *   (salvo lo decorativo o lo que celebra un pago).
+ * - Solo se anima transform y opacity (no tocan el diseño de la página).
+ * - Nada aparece desde scale(0): como mínimo 0.9, junto con opacidad.
+ * - Con "reducir movimiento" quedan solo los fundidos de opacidad (sin desplazamientos ni bucles).
+ */
+
+/* ---------- Fondo de la app: el mismo brillo y la misma cuadrícula de la landing, más tenues ---------- */
+.app {
+  position: relative;
+  isolation: isolate;
+}
+.app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60vw 40vh at 15% -10%, rgba(62, 224, 143, 0.13), transparent 70%),
+    radial-gradient(40vw 30vh at 95% 10%, rgba(242, 193, 78, 0.05), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px) 0 0 / 48px 48px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.35) 60%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.35) 60%, transparent 100%);
+}
+
+/* ---------- La barra se vuelve de vidrio al empezar a bajar (animación atada al scroll, sin JavaScript).
+   Navegadores sin animation-timeline: la animación termina al instante y el vidrio queda siempre. ---------- */
+@supports (animation-timeline: scroll()) {
+  .barra::before {
+    animation: barra-vidrio linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 64px;
+  }
+}
+@keyframes barra-vidrio {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- Al cambiar de página, el contenido entra (no aparece de golpe) ---------- */
+main > * {
+  animation: aparecer var(--t-medio) var(--ease-out) backwards;
+}
+
+/* ---------- Listas que entran escalonadas (30–50 ms entre una y otra) ---------- */
+.tarjetas > li,
+.historia > li,
+.chequeos > li,
+.demo-personas > li,
+.pasos > li {
+  animation: aparecer var(--t-medio) var(--ease-out) backwards;
+}
+:is(.tarjetas, .chequeos, .demo-personas, .pasos) > li:nth-child(2),
+.historia > li:nth-child(2) {
+  animation-delay: 40ms;
+}
+:is(.tarjetas, .chequeos, .demo-personas, .pasos) > li:nth-child(3),
+.historia > li:nth-child(3) {
+  animation-delay: 80ms;
+}
+:is(.tarjetas, .chequeos, .demo-personas, .pasos) > li:nth-child(4),
+.historia > li:nth-child(4) {
+  animation-delay: 120ms;
+}
+:is(.tarjetas, .chequeos, .demo-personas, .pasos) > li:nth-child(5),
+.historia > li:nth-child(5) {
+  animation-delay: 160ms;
+}
+:is(.tarjetas, .chequeos, .demo-personas, .pasos) > li:nth-child(6),
+.historia > li:nth-child(6) {
+  animation-delay: 200ms;
+}
+:is(.tarjetas, .chequeos, .demo-personas, .pasos) > li:nth-child(n + 7),
+.historia > li:nth-child(n + 7) {
+  animation-delay: 240ms;
+}
+
+/* ---------- Avisos y mensajes: bajan un poquito al aparecer ---------- */
+.aviso,
+.tarjeta-cobro,
+.estado-resumen,
+.mi-situacion {
+  animation: aparecer-arriba var(--t-rapido) var(--ease-out) backwards;
+}
+
+/* ---------- "Leyendo…": un aro que gira rápido (se siente más ágil) y el texto con un brillo que pasa ---------- */
+.cargando {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cargando::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--linea);
+  border-top-color: var(--acento);
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .cargando {
+    background: linear-gradient(90deg, var(--tinta-2) 20%, var(--tinta) 50%, var(--tinta-2) 80%) 0 0 / 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: brillo-texto 1.8s linear infinite;
+  }
+}
+
+/* ---------- La rueda ---------- */
+/* Cada persona entra en su lugar, una tras otra. */
+.rueda .nodo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nodo-entra 420ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+.nodo-punto {
+  transition:
+    fill var(--t-medio) ease,
+    stroke var(--t-medio) ease;
+}
+/* A quien le toca cobrar: un halo late tres veces cuando cambia el turno (dice "es ahora") y se queda quieto.
+   No es infinito: en SVG, animar transform recalcula el diseño en cada cuadro (gasta batería en el celular). */
+.nodo-halo {
+  fill: none;
+  stroke: var(--turno);
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: halo 1.8s var(--ease-out) 0.5s 3;
+}
+.nodo.turno .nodo-punto {
+  filter: drop-shadow(0 0 10px rgba(242, 193, 78, 0.55));
+}
+/* Pagó: el anillo verde se dibuja alrededor (vuelta completa de un círculo de r = 31). */
+.nodo-anillo {
+  stroke-dasharray: 195;
+  stroke-dashoffset: 0;
+  animation: dibujar-anillo 650ms var(--ease-out) backwards;
+}
+/* Cobró: la marca salta con un rebote corto. */
+.nodo-cobro {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: saltar 420ms var(--ease-rebote) backwards;
+}
+.rueda-tiempo {
+  transition:
+    stroke-dashoffset 1s linear,
+    stroke var(--t-medio) ease;
+}
+.centro {
+  animation: aparecer-suave var(--t-medio) var(--ease-out) backwards;
+}
+
+/* ---------- Desplegables (<details>): la flecha gira y el contenido aparece suave ---------- */
+details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 0 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--t-rapido) var(--ease-out);
+}
+details[open] > summary::before {
+  transform: rotate(45deg);
+}
+/* El contenido está desde el primer instante (lectores de pantalla, búsqueda); solo se funde al abrir.
+   No animamos la altura: mover el diseño de la página es caro y, si tarda, el contenido "no está" aún. */
+details[open] > :not(summary) {
+  animation: aparecer-arriba var(--t-rapido) var(--ease-out) backwards;
+}
+
+/* ---------- Opciones elegidas (moneda, modo de turnos): el borde se enciende ---------- */
+.modo.elegido {
+  box-shadow:
+    0 0 0 1px var(--acento) inset,
+    0 10px 30px -18px var(--brillo);
+}
+.moneda {
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--t-rapido) ease,
+    background-color var(--t-rapido) ease,
+    box-shadow var(--t-rapido) ease,
+    transform var(--t-presion) var(--ease-out);
+}
+.moneda:active {
+  transform: scale(0.98);
+}
+
+/* ---------- "Tu bolsa está lista: cóbrala": un destello cruza la etiqueta de vez en cuando ---------- */
+.tarjeta-cobro {
+  position: relative;
+  overflow: hidden;
+}
+.tarjeta-cobro::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: destello 3.2s var(--ease-in-out) 0.6s infinite;
+}
+
+/* ---------- Logo: la órbita acelera al pasar el puntero por la marca ---------- */
+@media (hover: hover) and (pointer: fine) {
+  .marca:hover .logo-orbita {
+    animation-duration: 1.2s;
+  }
+}
+
+/* ---------- Animaciones ---------- */
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes aparecer-arriba {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes aparecer-suave {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes nodo-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes halo {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+@keyframes dibujar-anillo {
+  from {
+    stroke-dashoffset: 195;
+  }
+}
+@keyframes saltar {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes punto-vivo {
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes brillo-texto {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@keyframes destello {
+  0%,
+  55% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ---------- Reducir movimiento: solo fundidos, sin desplazamientos ni bucles ---------- */
+@media (prefers-reduced-motion: reduce) {
+  main > *,
+  .tarjetas > li,
+  .historia > li,
+  .chequeos > li,
+  .demo-personas > li,
+  .pasos > li,
+  .aviso,
+  .tarjeta-cobro,
+  .estado-resumen,
+  .mi-situacion,
+  .rueda .nodo,
+  .nodo-cobro {
+    animation-name: aparecer-suave;
+    animation-delay: 0ms;
+  }
+  .nodo-halo,
+  .etiqueta.en-curso::before,
+  .tarjeta-cobro::after,
+  .nodo-anillo {
+    animation: none;
+  }
+  .cargando {
+    animation: none;
+    color: var(--tinta-2);
+    background: none;
+  }
+  .cargando::before {
+    animation-duration: 2.4s;
+  }
+  .boton:active:not(:disabled),
+  .tarjeta:active,
+  .tarjeta:hover,
+  .tarjeta:hover:active,
+  .filtro:active,
+  .modo:active,
+  .moneda:active,
+  .menu a:active {
+    transform: none;
+  }
+  details[open] > :not(summary) {
+    animation-name: aparecer-suave;
+  }
+  details > summary::before {
+    transition: none;
+  }
+}

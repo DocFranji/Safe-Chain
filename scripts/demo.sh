@@ -9,6 +9,8 @@
 #   WEB       dirección de la web, para imprimir el enlace completo de la demo (por defecto, la de `npm run dev`)
 #   PAUSAR=1  espera un ENTER antes de empezar, para abrir primero la pantalla proyectada
 #   PERIODO   segundos que dura cada ronda (por defecto 60, el mínimo que acepta el contrato)
+#   DEUDA=1   variante con deuda (misión M1): garantía mínima, así Ana queda en mora en la ronda 3 y
+#             Carla cobra 100 de menos; al final Ana vuelve, paga su deuda y Carla recibe lo que le faltaba
 set -euo pipefail
 
 if [ ! -f scripts/.contratos ]; then
@@ -41,9 +43,13 @@ cerrar() {
   return 1
 }
 
-echo "== Crear tanda: 3 miembros, cuota 100 TUSD, rondas de $PERIODO s, multa 10%, cobertura 100% =="
+DEUDA="${DEUDA:-0}"
+COBERTURA=10000
+[ "$DEUDA" = "1" ] && COBERTURA=0 # garantía mínima (una cuota): la de Ana se acaba en la ronda 2
+
+echo "== Crear tanda: 3 miembros, cuota 100 TUSD, rondas de $PERIODO s, multa 10%, cobertura $((COBERTURA / 100))% =="
 ID=$(T --source admin -- crear_tanda --creador "$(stellar keys address admin)" --token "$TOKEN" \
-  --cuota 1000000000 --n_miembros 3 --periodo_seg "$PERIODO" --penalidad_bps 1000 --cobertura_bps 10000)
+  --cuota 1000000000 --n_miembros 3 --periodo_seg "$PERIODO" --penalidad_bps 1000 --cobertura_bps "$COBERTURA")
 echo "   id = $ID"
 echo
 echo ">> Proyecta la demo en vivo en:  $WEB/#/demo/$ID"
@@ -52,7 +58,11 @@ if [ "${PAUSAR:-0}" = "1" ]; then
   read -r -p "   Pulsa ENTER cuando la pantalla esté lista para empezar... " _
 fi
 
-echo "== Se unen Ana (turno 1, colateral 200), Beto y Carla (colateral 100) =="
+if [ "$DEUDA" = "1" ]; then
+  echo "== Se unen Ana, Beto y Carla (colateral 100 cada uno: garantía mínima) =="
+else
+  echo "== Se unen Ana (turno 1, colateral 200), Beto y Carla (colateral 100) =="
+fi
 for p in ana beto carla; do T --source "$p" -- unirse --id "$ID" --miembro "$(stellar keys address "$p")"; done
 
 echo "== Ronda 1: todos pagan; Ana cobra 300 =="
@@ -63,13 +73,35 @@ echo "== Ronda 2: Ana desaparece. Su colateral cubre su cuota; Beto cobra 300 co
 for p in beto carla; do T --source "$p" -- pagar_cuota --id "$ID" --miembro "$(stellar keys address "$p")"; done
 sleep "$PERIODO"; cerrar
 
-echo "== Ronda 3: Carla paga a tiempo; Beto paga TARDE; Carla cobra 300 =="
-T --source carla -- pagar_cuota --id "$ID" --miembro "$(stellar keys address carla)"
-sleep $((PERIODO + 10))
-T --source beto -- pagar_cuota --id "$ID" --miembro "$(stellar keys address beto)"
-cerrar
+if [ "$DEUDA" = "1" ]; then
+  echo "== Ronda 3: Ana sigue sin pagar y ya no le queda garantía: queda en mora (debe 100). Carla cobra 200 =="
+  for p in beto carla; do T --source "$p" -- pagar_cuota --id "$ID" --miembro "$(stellar keys address "$p")"; done
+  sleep "$PERIODO"; cerrar
+
+  echo "== Ana vuelve y paga su deuda: Carla recibe los 100 TUSD que le faltaban =="
+  T --source ana -- pagar_deuda --id "$ID" --miembro "$(stellar keys address ana)" \
+    --pagador "$(stellar keys address ana)" --monto 1000000000
+else
+  echo "== Ronda 3: Carla paga a tiempo; Beto paga TARDE; Carla cobra 300 =="
+  T --source carla -- pagar_cuota --id "$ID" --miembro "$(stellar keys address carla)"
+  sleep $((PERIODO + 10))
+  T --source beto -- pagar_cuota --id "$ID" --miembro "$(stellar keys address beto)"
+  cerrar
+fi
 
 echo "== Final: devolver colateral + rendimiento, repartir multas =="
 T --source admin -- finalizar --id "$ID"
 T --source admin -- get_miembros --id "$ID"
 for p in ana beto carla; do echo "   saldo $p: $(saldo "$p")  (empezó con 10000000000)"; done
+
+# Historial crediticio (misión M2): cada cuota quedó escrita en el contrato de historial.
+if [ -n "${HISTORIAL:-}" ]; then
+  echo "== Historial crediticio: lo que cada uno se ganó (o perdió) en esta tanda =="
+  for p in ana beto carla; do
+    dir="$(stellar keys address "$p")"
+    nivel=$(stellar contract invoke --id "$HISTORIAL" $NET --source admin -- nivel --dir "$dir")
+    case "$nivel" in 0) nivel=Nuevo ;; 1) nivel=Bronce ;; 2) nivel=Plata ;; 3) nivel=Oro ;; esac
+    echo "   $p: puntaje $(stellar contract invoke --id "$HISTORIAL" $NET --source admin -- puntaje --dir "$dir"), nivel $nivel"
+    echo "      página pública: $WEB/#/historial/$dir"
+  done
+fi

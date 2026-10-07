@@ -34,7 +34,7 @@ Otros comandos:
 | Crear tanda | `#/crear` | Formulario con ejemplos y vista previa de la garantía de cada turno, la bolsa, la duración y el riesgo del grupo |
 | Una tanda | `#/tanda/N` | Rueda de turnos, acciones (unirse, pagar, cerrar ronda, repartir, cancelar), invitación por link o WhatsApp, rendimiento en vivo y resultados finales |
 | Demo en vivo | `#/demo` o `#/demo/N` | Vista **para proyectar**, sin billetera: reloj grande, una tarjeta por persona con su garantía y una línea de tiempo narrada con los momentos clave resaltados. Con `#/demo/N` se queda fija en la tanda N |
-| Estado | `#/estado` | Chequeo previo a la demo: RPC, contrato, bóveda y su saldo, token y faucet, con qué hacer si algo falla |
+| Estado | `#/estado` | Chequeo previo a la demo: RPC, contrato (y que sea de la misma versión que la web), bóveda y su saldo, token y faucet, con qué hacer si algo falla |
 
 Además, una barra bajo el encabezado guía a una cuenta nueva: activarla con Friendbot, aceptar TUSD (trustline) y pedir TUSD de prueba al faucet. Muestra el saldo y evita pedir una firma que va a fallar por falta de fondos.
 

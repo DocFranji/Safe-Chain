@@ -1,4 +1,5 @@
 import './App.css'
+import './movimiento.css'
 import { useBilletera, type Billetera } from './hooks/useBilletera'
 import { useRuta } from './hooks/useRuta'
 import { useCuenta } from './hooks/useCuenta'
@@ -7,12 +8,13 @@ import { CrearTanda } from './pages/CrearTanda'
 import { PaginaTanda } from './pages/PaginaTanda'
 import { Demo } from './pages/Demo'
 import { Estado } from './pages/Estado'
+import { Historial } from './pages/Historial'
 import { Landing } from './landing/Landing'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { BotonesEntrar } from './components/BotonesEntrar'
 import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
-import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY } from './lib/rutas'
+import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_MI_HISTORIAL } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
 
 export default function App() {
@@ -42,6 +44,11 @@ export default function App() {
           <a href={RUTA_DEMO} aria-current={ruta.tipo === 'demo' ? 'page' : undefined}>
             Demo en vivo
           </a>
+          {billetera.direccion && (
+            <a href={RUTA_MI_HISTORIAL} aria-current={ruta.tipo === 'historial' ? 'page' : undefined}>
+              Mi historial
+            </a>
+          )}
         </nav>
         <BotonBilletera billetera={billetera} />
       </header>
@@ -63,6 +70,8 @@ export default function App() {
           <Demo idFijo={ruta.id} />
         ) : ruta.tipo === 'estado' ? (
           <Estado billetera={billetera} />
+        ) : ruta.tipo === 'historial' ? (
+          <Historial key={ruta.dir ?? 'mio'} dir={ruta.dir} billetera={billetera} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>

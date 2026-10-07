@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
-# Despliega todo en testnet: token TUSD, bóveda simulada y contrato de la tanda.
+# Despliega todo en testnet: token TUSD, bóvedas simuladas, contrato de la tanda e historial crediticio.
 # Crea 5 cuentas de prueba (admin, emisor, ana, beto, carla) con XLM de Friendbot.
 # Al final guarda las direcciones en scripts/.contratos para que demo.sh las use.
 #
 # Uso (desde la carpeta raíz del proyecto):   bash scripts/desplegar_testnet.sh
+#
+# Bóvedas (misión M1, docs/tiempos-y-deudas.md):
+#   - principal: rinde 5 % anual al ritmo de la vida real (ACELERADOR=1). La usan las tandas de días,
+#     semanas o meses: con el tiempo acelerado, una tanda de meses dejaría a la bóveda sin fondos.
+#   - rápida: acelerada (ACELERADOR_RAPIDA=52560: 1 minuto = 36,5 días) solo para tandas de prueba con
+#     rondas de 10 minutos o menos, para que el rendimiento se note en la demo. Para no crearla:
+#     SIN_BOVEDA_RAPIDA=1. Para cambiarla por una nueva antes de la presentación (la acelerada rinde
+#     menos cuanto más vieja es): bash scripts/renovar_boveda_rapida.sh
+#
+# USDC de Blend con rendimiento real (misión M4, docs/blend.md): despliega el adaptador de Blend para el USDC
+# de prueba de Blend y lo registra en la tanda (registrar_boveda). Las tandas en USDC guardan su garantía en
+# el pool TestnetV2 de Blend. Ana, Beto y Carla reciben USDC de prueba del faucet de Blend. Sin Blend: SIN_BLEND=1.
 set -euo pipefail
 NET="--network testnet"
 
@@ -30,23 +42,72 @@ for p in ana beto carla; do
   stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$(stellar keys address $p)" --amount 10000000000
 done
 
-echo "== 6. Bóveda simulada: 5% anual, acelerada para la demo (ACELERADOR=${ACELERADOR:-52560}) =="
+echo "== 6. Bóveda principal: 5% anual al ritmo real (ACELERADOR=${ACELERADOR:-1}) =="
 BOVEDA=$(stellar contract deploy --wasm target/wasm32v1-none/release/boveda_simulada.wasm \
-  --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR:-52560}")
+  --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR:-1}")
 echo "   BOVEDA=$BOVEDA"
 # La bóveda necesita fondos para pagar intereses (los contratos no necesitan trustline).
 stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$BOVEDA" --amount 100000000000
+
+BOVEDA_RAPIDA=""
+if [ "${SIN_BOVEDA_RAPIDA:-0}" != "1" ]; then
+  echo "== 6b. Bóveda rápida para tandas de prueba (ACELERADOR_RAPIDA=${ACELERADOR_RAPIDA:-52560}) =="
+  BOVEDA_RAPIDA=$(stellar contract deploy --wasm target/wasm32v1-none/release/boveda_simulada.wasm \
+    --source admin $NET -- --token "$TOKEN" --apr_bps 500 --acelerador "${ACELERADOR_RAPIDA:-52560}")
+  echo "   BOVEDA_RAPIDA=$BOVEDA_RAPIDA"
+  stellar contract invoke --id "$TOKEN" --source emisor $NET -- mint --to "$BOVEDA_RAPIDA" --amount 100000000000
+fi
 
 echo "== 7. Contrato de la tanda =="
 TANDA=$(stellar contract deploy --wasm target/wasm32v1-none/release/tanda.wasm --source admin $NET)
 echo "   TANDA=$TANDA"
 stellar contract invoke --id "$TANDA" --source admin $NET -- inicializar \
   --admin "$(stellar keys address admin)" --boveda "$BOVEDA"
+if [ -n "$BOVEDA_RAPIDA" ]; then
+  # Las tandas con rondas de hasta 10 minutos usan la bóveda rápida (cada tanda guarda la suya al crearse).
+  # (La CLI recibe los argumentos opcionales como JSON: por eso la dirección va entre comillas.)
+  stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_boveda_rapida --boveda "\"$BOVEDA_RAPIDA\""
+fi
+
+echo "== 8. Historial crediticio (misión M2, docs/historial.md) =="
+# Contrato aparte: guarda lo que cada dirección hizo en las tandas. Solo escriben los contratos de
+# tanda autorizados (autorizar_emisor). Sin historial (SIN_HISTORIAL=1) la tanda funciona como antes.
+HISTORIAL=""
+if [ "${SIN_HISTORIAL:-0}" != "1" ]; then
+  HISTORIAL=$(stellar contract deploy --wasm target/wasm32v1-none/release/historial.wasm --source admin $NET)
+  echo "   HISTORIAL=$HISTORIAL"
+  stellar contract invoke --id "$HISTORIAL" --source admin $NET -- inicializar --admin "$(stellar keys address admin)"
+  stellar contract invoke --id "$HISTORIAL" --source admin $NET -- autorizar_emisor --emisor "$TANDA"
+  # Argumento opcional: va como JSON (entre comillas), igual que configurar_boveda_rapida.
+  stellar contract invoke --id "$TANDA" --source admin $NET -- configurar_historial --historial "\"$HISTORIAL\""
+fi
+
+echo "== 9. USDC de Blend con rendimiento real (misión M4, docs/blend.md) =="
+POOL_BLEND=CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF   # pool TestnetV2 de Blend
+USDC=CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU         # USDC de prueba de Blend (SAC)
+ADAPTADOR_USDC=""
+if [ "${SIN_BLEND:-0}" != "1" ]; then
+  # El constructor lee la reserva del pool: si Blend no tuviera USDC, el despliegue falla aquí.
+  ADAPTADOR_USDC=$(stellar contract deploy --wasm target/wasm32v1-none/release/adaptador_blend.wasm \
+    --source admin $NET -- --pool "$POOL_BLEND" --token "$USDC")
+  echo "   ADAPTADOR_USDC=$ADAPTADOR_USDC"
+  # Argumento opcional: va como JSON (entre comillas), igual que configurar_boveda_rapida.
+  stellar contract invoke --id "$TANDA" --source admin $NET -- registrar_boveda --token "$USDC" --boveda "\"$ADAPTADOR_USDC\""
+  echo "   USDC de prueba para las cuentas de la demo (faucet de Blend, una vez por cuenta):"
+  for p in ana beto carla; do
+    SECRETO="$(stellar keys show "$p")" node scripts/usdc_blend.mjs || echo "   ($p: no se pudo; pídelo después desde la web)"
+  done
+fi
 
 cat > scripts/.contratos <<EOF
 TOKEN=$TOKEN
 BOVEDA=$BOVEDA
+BOVEDA_RAPIDA=$BOVEDA_RAPIDA
 TANDA=$TANDA
+HISTORIAL=$HISTORIAL
+USDC=$USDC
+POOL_BLEND=$POOL_BLEND
+ADAPTADOR_USDC=$ADAPTADOR_USDC
 EOF
 echo "Listo. Direcciones guardadas en scripts/.contratos"
 
@@ -58,6 +119,7 @@ if [ -d web ]; then
   cat > web/.env.local <<ENV
 VITE_TANDA_ID=$TANDA
 VITE_TOKEN_ID=$TOKEN
+VITE_HISTORIAL_ID=$HISTORIAL
 VITE_NOMBRES='$NOMBRES'
 ENV
   echo "   web/.env.local actualizado (reinicia 'npm run dev' si estaba corriendo)"
@@ -66,5 +128,6 @@ echo
 echo "Si la web está en Vercel: Settings -> Environment Variables, pongan estas y vuelvan a desplegar:"
 echo "   VITE_TANDA_ID=$TANDA"
 echo "   VITE_TOKEN_ID=$TOKEN"
+echo "   VITE_HISTORIAL_ID=$HISTORIAL"
 echo "   VITE_NOMBRES=$NOMBRES"
 echo "   FAUCET_ISSUER_SECRET=<la llave del emisor: stellar keys show emisor>"
