@@ -91,6 +91,8 @@ export function nuevoEstado() {
     // M2: historial de cada dirección (lo que no está, vale cero). `historialActivo: false` simula un
     // contrato de tanda anterior a M2 (sin `get_historial`).
     historialActivo: true,
+    // M2 v4: apodos públicos (dirección → apodo). Vacío por defecto para no cambiar los demás escenarios.
+    apodos: {},
     historiales: {
       [ANA]: historial({ cuotas_a_tiempo: 30, tandas_cumplidas: 3, cobros: 3, puntos_positivos: 330 }),
       [BETO]: historial({ cuotas_a_tiempo: 11, cuotas_tarde: 1, tandas_con_atrasos: 1, cobros: 1, puntos_positivos: 138 }),
@@ -377,6 +379,12 @@ function valorSim(est, contrato, fn, args) {
     if (fn === 'historial') return specHistorial.nativeToUdt(h, 'Historial')
     if (fn === 'puntaje') return u32(puntaje(h))
     if (fn === 'beneficio_colateral_bps') return u32(beneficioDe(h))
+    // --- M2 v4 ---
+    if (fn === 'tiene_mora') return xdr.ScVal.scvBool(h.veces_moroso > h.deudas_saldadas)
+    if (fn === 'apodo') {
+      const a = est.apodos?.[nativos[0]]
+      return a ? nativeToScVal(a, { type: 'string' }) : xdr.ScVal.scvVoid()
+    }
   }
   if (contrato === TOKEN_ID) {
     if (fn === 'balance') return i128(est.cuentas[nativos[0]]?.saldo ?? 0n)

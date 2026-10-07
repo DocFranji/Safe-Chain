@@ -941,11 +941,10 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   // Mi historial (menú) y una dirección sin historial
   const est = nuevoEstado()
   const { page, errores } = await nuevaPagina(browser, { est })
-  await page.goto(BASE + '#/tandas')
-  await page.getByRole('link', { name: 'Mi historial' }).click()
+  await page.goto(BASE + '#/historial') // (v4: el menú dice "Perfil"; #/historial sigue siendo el mío)
   await page.waitForSelector('.historial-cabeza', { timeout: 15000 }).catch(() => {})
   const t = await texto(page)
-  check('Mi historial: desde el menú, con 110 puntos (Bronce)', /Tu historial/.test(t) && /110 puntos/.test(t) && /Bronce/.test(t), t.slice(0, 300))
+  check('Mi historial (#/historial): con 110 puntos (Bronce)', /Tu historial/.test(t) && /110 puntos/.test(t) && /Bronce/.test(t), t.slice(0, 300))
   est.historiales[ME] = historial()
   await page.goto(BASE + `#/historial/${StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 3))}`)
   await page.waitForFunction(() => /no tiene historial/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
@@ -1211,6 +1210,91 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.goto(BASE + '#/crear')
   await page.waitForSelector('.opciones-moneda', { timeout: 15000 }).catch(() => {})
   check('Móvil (390px): crear con el selector de moneda no se desborda', !(await desborde()))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- M2 v4. Perfil, apodo, deudas y cerrar sesión
+{
+  // Perfil con deuda (tanda 6 de M1: "yo" debo 100 TUSD) y la mora anotada en el historial.
+  const est = conTandaMorosa(nuevoEstado())
+  est.historiales[ME] = historial({ cuotas_a_tiempo: 6, veces_moroso: 1, puntos_positivos: 60, puntos_negativos: 100 })
+  est.apodos[ANA] = 'Doña Ana'
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tandas')
+  await page.getByRole('link', { name: 'Perfil' }).click()
+  await page.waitForFunction(() => /Mis deudas/.test(document.body.innerText) && /Tanda 6/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  const t = (await texto(page)).replace(/ /g, ' ')
+  check('Perfil: desde el menú, con tu dirección y cómo entraste', /Tu perfil/.test(t) && t.includes(ME) && /Entraste con Freighter/.test(t), t.slice(0, 400))
+  check('Perfil: "Mis deudas" lista la tanda 6 con lo que debo y un botón para pagar', /Tanda 6 \(en curso\): debes 100 TUSD/.test(t) && (await page.getByRole('button', { name: 'Pagar 100 TUSD' }).count()) === 1, t.slice(0, 900))
+  check('Perfil: explica que con deuda no se puede unir a otra tanda', /no puedes unirte a otra tanda/.test(t))
+  check('Perfil: "Ver detalle" lleva a la tanda (el desglose de M1)', (await page.getByRole('link', { name: 'Ver detalle' }).getAttribute('href')) === '#/tanda/6')
+  check('Perfil: muestra el historial y el aviso de mora sin saldar', /Tu historial/.test(t) && /deuda sin saldar/.test(t))
+  check('Perfil: ya no está "Mi historial" en el menú', (await page.getByRole('link', { name: 'Mi historial' }).count()) === 0)
+  await shot(page, 'm2v4-01-perfil')
+
+  // Apodo: validación en vivo, igual que el contrato
+  await page.locator('#apodo').fill(' Ana')
+  check('Apodo: con un espacio al inicio explica el problema y no deja guardar', /espacios del inicio/.test(await texto(page)) && (await page.getByRole('button', { name: 'Guardar' }).isDisabled()))
+  await page.locator('#apodo').fill('Mamá Rosa')
+  const ayuda = await page.locator('#apodo-ayuda').innerText()
+  check('Apodo: uno válido se puede guardar y dice que es público', !(await page.getByRole('button', { name: 'Guardar' }).isDisabled()) && /Es público/.test(ayuda) && /Mamá Rosa · /.test(ayuda), ayuda)
+
+  // El aviso de deuda antes de unirse a otra tanda
+  await page.goto(BASE + '#/tanda/3')
+  await page.waitForFunction(() => /deuda pendiente/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  const t3 = await texto(page)
+  check('Unirse con deuda: avisa antes de firmar y lleva a Perfil', /Tienes una deuda pendiente en otra tanda/.test(t3) && (await page.getByRole('link', { name: 'Ver y pagar mis deudas' }).getAttribute('href')) === '#/perfil', t3.slice(0, 600))
+
+  // El apodo se ve en lugar de la dirección, siempre con la dirección corta
+  await page.waitForFunction(() => /Doña Ana · GADM…TVPD/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  check('Apodo: "Doña Ana · GADM…TVPD" en la lista de miembros', /Doña Ana · GADM…TVPD/.test(await texto(page)))
+  await shot(page, 'm2v4-02-aviso-deuda')
+  check('Perfil y deudas: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Sin deudas
+  const est = nuevoEstado()
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/perfil')
+  await page.waitForFunction(() => /No debes nada|Revisando/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  await page.waitForFunction(() => /No debes nada/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  check('Perfil sin deudas: "No debes nada"', /No debes nada/.test(await texto(page)))
+  await page.close()
+}
+{
+  // Cerrar sesión con Freighter: al recargar sigue fuera, hasta volver a entrar
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/perfil')
+  await page.waitForSelector('.perfil-salir', { timeout: 15000 }).catch(() => {})
+  check('Cerrar sesión: explica cómo quitar el permiso desde Freighter', /Sitios conectados/.test(await texto(page)))
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+  await page.waitForFunction(() => /Entra para ver tu perfil/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {})
+  check('Cerrar sesión: el perfil pide entrar de nuevo', /Entra para ver tu perfil/.test(await texto(page)))
+  await page.waitForTimeout(2500) // el vigilante de Freighter no debe reconectarla
+  check('Cerrar sesión: Freighter no se reconecta sola', /Entra para ver tu perfil/.test(await texto(page)) && (await page.getByRole('link', { name: 'Perfil' }).count()) === 0)
+  await page.reload()
+  await page.waitForTimeout(2500)
+  check('Cerrar sesión: al recargar sigue fuera', /Entra para ver tu perfil/.test(await texto(page)))
+  await page.getByRole('button', { name: 'Conectar billetera' }).first().click()
+  await page.waitForFunction(() => /Tu cuenta/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {})
+  check('Cerrar sesión: "Conectar billetera" vuelve a conectar', /Tu cuenta/.test(await texto(page)))
+  await page.reload()
+  await page.waitForFunction(() => /Tu cuenta/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {})
+  check('Cerrar sesión: después de volver a entrar, recargar ya no la olvida', /Tu cuenta/.test(await texto(page)))
+  check('Cerrar sesión: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // 390 px
+  const est = conTandaMorosa(nuevoEstado())
+  const { page } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/perfil')
+  await page.waitForFunction(() => /Tanda 6/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {})
+  const desborde = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+  check('Móvil (390px): el perfil no se desborda', !desborde)
+  await shot(page, 'm2v4-03-perfil-390')
   await page.close()
 }
 

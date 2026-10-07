@@ -8,7 +8,7 @@ use soroban_sdk::{
         storage::{Instance as _, Persistent as _},
         Address as _, Events as _, Ledger, MockAuth, MockAuthInvoke,
     },
-    vec, Env, Event as _, IntoVal,
+    vec, Env, Event as _, IntoVal, String,
 };
 
 const U: i128 = 10_000_000;
@@ -491,4 +491,153 @@ fn renueva_la_vida_de_los_datos() {
         assert_eq!(s.persistent().get_ttl(&Clave::Emisor(c.tanda.clone())), max);
         assert_eq!(s.instance().get_ttl(), max);
     });
+}
+
+// ===========================================================================
+// v4: deuda pendiente (N2) y apodo público (N4)
+// ===========================================================================
+
+#[test]
+fn tiene_mora_hasta_saldar_cada_caida() {
+    let c = setup();
+    let ana = Address::generate(&c.env);
+    assert!(!c.h.tiene_mora(&ana));
+    c.uno(1, &ana, Hecho::Moroso);
+    assert!(c.h.tiene_mora(&ana));
+    c.uno(1, &ana, Hecho::DeudaSaldada);
+    assert!(!c.h.tiene_mora(&ana));
+    // Vuelve a caer (en otra tanda) y vuelve a saldar.
+    c.uno(2, &ana, Hecho::Moroso);
+    assert!(c.h.tiene_mora(&ana));
+    c.uno(2, &ana, Hecho::DeudaSaldada);
+    assert!(!c.h.tiene_mora(&ana));
+    // Cubiertas y cuotas no cuentan como mora.
+    c.uno(3, &ana, Hecho::CuotaCubierta);
+    assert!(!c.h.tiene_mora(&ana));
+}
+
+#[test]
+fn apodo_valido_e_invalido() {
+    let ok = [
+        "Ana",
+        "Jo",
+        "Doña Ñeca",
+        "José_23",
+        "a.b-c",
+        "Ü",
+        "Mamá Rosa",
+    ];
+    for a in ok {
+        assert_eq!(apodo_valido(a.as_bytes()), a.chars().count() >= 2, "{a}");
+    }
+    let mal = [
+        "",
+        "A",
+        " Ana",
+        "Ana ",
+        "Ana  Bo",
+        "ana@x",
+        "Ana\n",
+        "аna", // la "а" es cirílica
+        "😀😀",
+        "abcdefghijklmnopqrstuvwxy", // 25
+    ];
+    for a in mal {
+        assert!(!apodo_valido(a.as_bytes()), "{a:?}");
+    }
+    assert!(apodo_valido("abcdefghijklmnopqrstuvwx".as_bytes())); // 24
+    assert!(apodo_valido(
+        "ÁÉÍÓÚáéíóúñÑüÜàèìòùçÇãõâê".as_bytes()[..48].as_ref()
+    )); // 24 con tilde
+    assert!(!apodo_valido(&[0xC3])); // UTF-8 roto
+}
+
+#[test]
+fn poner_cambiar_y_quitar_apodo() {
+    let c = setup();
+    let ana = Address::generate(&c.env);
+    assert_eq!(c.h.apodo(&ana), None);
+    c.h.poner_apodo(&ana, &String::from_str(&c.env, "Doña Ana"));
+    assert_eq!(
+        c.env.events().all().events().last().unwrap().clone(),
+        EvApodo {
+            quien: ana.clone(),
+            apodo: Some(String::from_str(&c.env, "Doña Ana"))
+        }
+        .to_xdr(&c.env, &c.contrato)
+    );
+    assert_eq!(c.h.apodo(&ana), Some(String::from_str(&c.env, "Doña Ana")));
+    c.h.poner_apodo(&ana, &String::from_str(&c.env, "Anita"));
+    assert_eq!(c.h.apodo(&ana), Some(String::from_str(&c.env, "Anita")));
+    // Un apodo inválido no cambia el que había.
+    assert_eq!(
+        c.h.try_poner_apodo(&ana, &String::from_str(&c.env, " ")),
+        Err(Ok(Error::ApodoInvalido))
+    );
+    let largo = String::from_str(&c.env, &"x".repeat(49));
+    assert_eq!(
+        c.h.try_poner_apodo(&ana, &largo),
+        Err(Ok(Error::ApodoInvalido))
+    );
+    assert_eq!(c.h.apodo(&ana), Some(String::from_str(&c.env, "Anita")));
+    c.h.quitar_apodo(&ana);
+    assert_eq!(c.h.apodo(&ana), None);
+    // El apodo no toca el historial ni el puntaje.
+    assert_eq!(c.h.historial(&ana), Historial::default());
+    // Vive lo máximo de la red.
+    c.h.poner_apodo(&ana, &String::from_str(&c.env, "Ana"));
+    let max = c.env.storage().max_ttl();
+    c.env.as_contract(&c.contrato, || {
+        assert_eq!(
+            c.env
+                .storage()
+                .persistent()
+                .get_ttl(&Clave::Apodo(ana.clone())),
+            max
+        );
+    });
+}
+
+/// Solo el dueño de la dirección pone o quita su apodo.
+#[test]
+fn solo_el_dueno_cambia_su_apodo() {
+    let env = Env::default();
+    let contrato = env.register(HistorialContract, ());
+    let h = HistorialContractClient::new(&env, &contrato);
+    let ana = Address::generate(&env);
+    let intruso = Address::generate(&env);
+    let apodo = String::from_str(&env, "Ana");
+    env.mock_auths(&[MockAuth {
+        address: &intruso,
+        invoke: &MockAuthInvoke {
+            contract: &contrato,
+            fn_name: "poner_apodo",
+            args: (&ana, apodo.clone()).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(h.try_poner_apodo(&ana, &apodo).is_err());
+    assert_eq!(h.apodo(&ana), None);
+    env.mock_auths(&[MockAuth {
+        address: &ana,
+        invoke: &MockAuthInvoke {
+            contract: &contrato,
+            fn_name: "poner_apodo",
+            args: (&ana, apodo.clone()).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    h.poner_apodo(&ana, &apodo);
+    assert_eq!(h.apodo(&ana), Some(apodo));
+    env.mock_auths(&[MockAuth {
+        address: &intruso,
+        invoke: &MockAuthInvoke {
+            contract: &contrato,
+            fn_name: "quitar_apodo",
+            args: (&ana,).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(h.try_quitar_apodo(&ana).is_err());
+    assert!(h.apodo(&ana).is_some());
 }

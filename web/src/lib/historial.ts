@@ -6,6 +6,7 @@
 import { Client, type Historial } from 'historial'
 import { StrKey } from '@stellar/stellar-sdk'
 import { clienteLectura, leer } from './contrato'
+import { firmarTransaccion } from './firmante'
 import { HISTORIAL_ID, NETWORK_PASSPHRASE, RPC_URL } from '../config'
 
 export type { Historial }
@@ -124,6 +125,17 @@ export function clienteHistorial(contractId: string): Client {
   return new Client({ contractId, networkPassphrase: NETWORK_PASSPHRASE, rpcUrl: RPC_URL })
 }
 
+/** Cliente para firmar en el historial (poner o quitar el apodo). Firma Freighter o la cuenta de Google. */
+export function clienteHistorialFirma(contractId: string, direccion: string): Client {
+  return new Client({
+    contractId,
+    networkPassphrase: NETWORK_PASSPHRASE,
+    rpcUrl: RPC_URL,
+    publicKey: direccion,
+    signTransaction: (xdr, opciones) => firmarTransaccion(xdr, { ...opciones, address: direccion }),
+  })
+}
+
 /** Historial de `dir` (todo en cero si no tiene). null si no hay contrato de historial. */
 export async function leerHistorial(dir: string): Promise<Historial | null> {
   const id = await direccionHistorial()
@@ -144,4 +156,39 @@ export async function leerRequisitos(id: number): Promise<{ puntaje_minimo: numb
   } catch {
     return { puntaje_minimo: 0, descuento: false }
   }
+}
+
+// ---------------------------------------------------------------------------
+// v4: apodo público (N4) y deuda pendiente (N2)
+// ---------------------------------------------------------------------------
+
+export const APODO_MIN = 2
+export const APODO_MAX = 24
+
+/**
+ * Las mismas reglas que el contrato (`apodo_valido`): de 2 a 24 caracteres entre letras latinas (con
+ * tildes, ü y ñ), números, espacio, `.`, `-` y `_`, sin espacios al inicio, al final ni dobles.
+ * Devuelve el problema en palabras, o null si está bien.
+ */
+export function problemaApodo(apodo: string): string | null {
+  const letras = [...apodo]
+  if (letras.length < APODO_MIN) return `Escribe al menos ${APODO_MIN} caracteres.`
+  if (letras.length > APODO_MAX) return `Usa como máximo ${APODO_MAX} caracteres.`
+  if (apodo !== apodo.trim()) return 'Quita los espacios del inicio o del final.'
+  if (apodo.includes('  ')) return 'No uses dos espacios seguidos.'
+  const valida = (c: string) => {
+    const n = c.codePointAt(0)!
+    return /[A-Za-z0-9 .\-_]/.test(c) || (n >= 0xc0 && n <= 0xff && n !== 0xd7 && n !== 0xf7)
+  }
+  if (!letras.every(valida)) return 'Usa solo letras, números, espacios y los signos . - _'
+  return null
+}
+
+/** Apodo público de `dir` (null si no tiene o si no hay historial). */
+export async function leerApodo(dir: string): Promise<string | null> {
+  const id = await direccionHistorial()
+  if (!id) return null
+  const tx = await clienteHistorial(id).apodo({ quien: dir })
+  const valor: unknown = tx.result
+  return typeof valor === 'string' && valor !== '' ? valor : null
 }

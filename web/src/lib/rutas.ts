@@ -15,6 +15,8 @@ export type Ruta =
   | { tipo: 'estado' }
   /** Historial crediticio público de una dirección (misión M2). Sin dirección: el de quien está conectado. */
   | { tipo: 'historial'; dir: string | null }
+  /** Perfil de quien está conectado: apodo, historial, deudas y cerrar sesión (misión M2, N4). */
+  | { tipo: 'perfil' }
   | { tipo: 'desconocida' }
 
 function idValido(texto: string): number | null {
@@ -30,6 +32,7 @@ export function parsearRuta(hash: string): Ruta {
   if (limpio === 'estado') return { tipo: 'estado' }
   if (limpio === 'demo') return { tipo: 'demo', id: null }
   if (limpio === 'historial') return { tipo: 'historial', dir: null }
+  if (limpio === 'perfil') return { tipo: 'perfil' }
   const historial = limpio.match(/^historial\/([GC][A-Z2-7]{55})$/)
   if (historial) return { tipo: 'historial', dir: historial[1] }
   const tanda = limpio.match(/^tanda\/(\d+)$/)
@@ -53,6 +56,7 @@ export const RUTA_ESTADO = '#/estado'
 export const rutaTanda = (id: number) => `#/tanda/${id}`
 export const rutaDemo = (id: number) => `#/demo/${id}`
 export const RUTA_MI_HISTORIAL = '#/historial'
+export const RUTA_PERFIL = '#/perfil'
 export const rutaHistorial = (dir: string) => `#/historial/${dir}`
 
 /** Navega a otra página de la app (por ejemplo, `irA(rutaTanda(3))`). */

@@ -144,3 +144,23 @@ a.insignia:focus-visible {
 .nota-historial {
   margin: 0.5rem 0;
 }
+
+/* Perfil (v4, N4) */
+.perfil > section {
+  margin-top: 1.5rem;
+}
+.perfil-apodo label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+}
+.perfil-apodo input[aria-invalid='true'] {
+  border-color: var(--alerta);
+}
+.perfil-deudas .lista-deudas {
+  padding-left: 0;
+  list-style: none;
+}
+.perfil-deudas .lista-deudas li {
+  margin-bottom: 1rem;
+}

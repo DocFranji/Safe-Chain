@@ -18,7 +18,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, Map, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, Map, String,
+    Vec,
 };
 
 #[cfg(test)]
@@ -147,6 +148,8 @@ enum Clave {
     /// Puntos positivos que cada miembro ya ganó en la tanda `id` del emisor (para el tope).
     /// Una sola entrada por tanda (máx. 12 miembros): así un lote escribe una vez, no 12.
     PuntosTanda(Address, u32),
+    /// (v4, N4) Apodo público que eligió esta dirección.
+    Apodo(Address),
 }
 
 #[contracterror]
@@ -158,6 +161,8 @@ pub enum Error {
     /// Quien intenta escribir no es un contrato de tanda autorizado.
     NoAutorizado = 3,
     ParametroInvalido = 4,
+    /// (v4) El apodo no cumple las reglas (largo o caracteres).
+    ApodoInvalido = 5,
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +194,15 @@ pub struct EvEmisorAutorizado {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EvEmisorRevocado {
     pub emisor: Address,
+}
+
+/// (v4) Alguien puso (o quitó, con `None`) su apodo público.
+#[contractevent(topics = ["apodo"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvApodo {
+    #[topic]
+    pub quien: Address,
+    pub apodo: Option<String>,
 }
 
 #[contractevent(topics = ["reglas"])]
@@ -244,6 +258,39 @@ pub fn beneficio_de(h: &Historial) -> u32 {
         Nivel::Plata => DESCUENTO_PLATA_BPS,
         Nivel::Oro => DESCUENTO_ORO_BPS,
     }
+}
+
+/// Largo del apodo, en caracteres.
+pub const APODO_MIN: usize = 2;
+pub const APODO_MAX: usize = 24;
+/// En UTF-8 una letra con tilde ocupa 2 bytes: 24 caracteres caben en 48 bytes.
+const APODO_MAX_BYTES: u32 = 48;
+
+/// Un apodo válido: de 2 a 24 caracteres entre letras (con tildes, ü y ñ), números, espacio, `.`, `-` y
+/// `_`. Sin espacios al inicio, al final ni dobles (así "Ana" y "Ana " no parecen el mismo nombre).
+/// Solo letras latinas: evita letras de otros alfabetos que se ven iguales (la "а" cirílica).
+pub fn apodo_valido(bytes: &[u8]) -> bool {
+    let Ok(texto) = core::str::from_utf8(bytes) else {
+        return false;
+    };
+    let mut n = 0;
+    let mut anterior_espacio = true; // prohíbe el espacio al inicio
+    for c in texto.chars() {
+        let latina = ('\u{C0}'..='\u{FF}').contains(&c) && c != '\u{D7}' && c != '\u{F7}';
+        if !(c.is_ascii_alphanumeric() || latina || matches!(c, ' ' | '.' | '-' | '_')) {
+            return false;
+        }
+        if c == ' ' {
+            if anterior_espacio {
+                return false;
+            }
+            anterior_espacio = true;
+        } else {
+            anterior_espacio = false;
+        }
+        n += 1;
+    }
+    !anterior_espacio && (APODO_MIN..=APODO_MAX).contains(&n)
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +519,55 @@ impl HistorialContract {
     /// Descuento de garantía que le corresponde a `dir`, en puntos básicos.
     pub fn beneficio_colateral_bps(env: Env, dir: Address) -> u32 {
         beneficio_de(&cargar_hist(&env, &dir))
+    }
+
+    /// (v4, N2) ¿Tiene una mora sin saldar en alguna tanda? (`veces_moroso > deudas_saldadas`).
+    /// Las tandas lo usan para no dejar unirse a quien debe.
+    pub fn tiene_mora(env: Env, dir: Address) -> bool {
+        let h = cargar_hist(&env, &dir);
+        h.veces_moroso > h.deudas_saldadas
+    }
+
+    // -----------------------------------------------------------------------
+    // Apodo público (v4, N4). No cuenta para el puntaje: es solo cómo se muestra la dirección.
+    // -----------------------------------------------------------------------
+
+    /// Pone (o cambia) el apodo de `quien`. Solo `quien` puede hacerlo.
+    pub fn poner_apodo(env: Env, quien: Address, apodo: String) -> Result<(), Error> {
+        quien.require_auth();
+        let largo = apodo.len();
+        if largo > APODO_MAX_BYTES {
+            return Err(Error::ApodoInvalido);
+        }
+        let mut buf = [0u8; APODO_MAX_BYTES as usize];
+        let bytes = &mut buf[..largo as usize];
+        apodo.copy_into_slice(bytes);
+        if !apodo_valido(bytes) {
+            return Err(Error::ApodoInvalido);
+        }
+        let clave = Clave::Apodo(quien.clone());
+        env.storage().persistent().set(&clave, &apodo);
+        renovar(&env, &clave);
+        renovar_instancia(&env);
+        EvApodo {
+            quien,
+            apodo: Some(apodo),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Quita el apodo de `quien`. Solo `quien` puede hacerlo.
+    pub fn quitar_apodo(env: Env, quien: Address) {
+        quien.require_auth();
+        env.storage()
+            .persistent()
+            .remove(&Clave::Apodo(quien.clone()));
+        EvApodo { quien, apodo: None }.publish(&env);
+    }
+
+    pub fn apodo(env: Env, quien: Address) -> Option<String> {
+        env.storage().persistent().get(&Clave::Apodo(quien))
     }
 
     pub fn es_emisor(env: Env, dir: Address) -> bool {

@@ -12,17 +12,17 @@ use soroban_sdk::{
 };
 use std::vec::Vec as StdVec;
 
-type Hist = HistorialContractClient<'static>;
+pub(crate) type Hist = HistorialContractClient<'static>;
 
 /// Despliega el historial, autoriza a la tanda como emisor y lo conecta.
-fn con_historial(c: &Ctx) -> Hist {
+pub(crate) fn con_historial(c: &Ctx) -> Hist {
     let h = desplegar_historial(&c.env);
     h.autorizar_emisor(&c.tanda_addr);
     c.tanda.configurar_historial(&Some(h.address.clone()));
     h
 }
 
-fn desplegar_historial(env: &Env) -> Hist {
+pub(crate) fn desplegar_historial(env: &Env) -> Hist {
     let dir = env.register(HistorialContract, ());
     let h = HistorialContractClient::new(env, &dir);
     h.inicializar(&Address::generate(env));
@@ -760,4 +760,170 @@ fn los_requisitos_viven_lo_que_dure_la_tanda() {
     );
     c.tanda.finalizar(&id);
     assert_conservacion_de(&c, &gente);
+}
+
+// ===========================================================================
+// v4 · N2a: quien debe no se une a otra tanda hasta pagar
+// ===========================================================================
+
+/// Deja a Ana en mora en una tanda nueva de 3 (garantía mínima): paga la ronda 0, cobra y deja de
+/// pagar. Devuelve el id de esa tanda.
+fn ana_en_mora(c: &Ctx) -> u32 {
+    let id = c.crear_y_llenar(0);
+    for p in [&c.ana, &c.beto, &c.carla] {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    c.avanzar(PERIODO);
+    c.tanda.cerrar_ronda(&id);
+    for _ in 0..2 {
+        c.tanda.pagar_cuota(&id, &c.beto);
+        c.tanda.pagar_cuota(&id, &c.carla);
+        c.avanzar(PERIODO);
+        c.tanda.cerrar_ronda(&id);
+    }
+    assert!(c.miembro(id, &c.ana).moroso);
+    id
+}
+
+fn tanda_eleccion(c: &Ctx) -> u32 {
+    let o = OpcionesTanda {
+        modo: ModoTurnos::Eleccion,
+        permitir_intercambio: false,
+        prima_max_bps: 0,
+        descuento_max_bps: 0,
+        primeros_con_historial: 0,
+        puntaje_primeros: 0,
+        ofertas_selladas: false,
+    };
+    c.tanda.crear_tanda_avanzada(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &3,
+        &PERIODO,
+        &1_000,
+        &10_000,
+        &o,
+    )
+}
+
+#[test]
+fn quien_debe_no_se_une_a_otra_tanda_hasta_pagar() {
+    let c = setup();
+    let h = con_historial(&c);
+    let vieja = ana_en_mora(&c);
+    assert!(h.tiene_mora(&c.ana));
+
+    // Las dos formas de unirse rechazan a Ana; a Beto (al día) no.
+    let llegada = c.crear(10_000);
+    assert_eq!(
+        c.tanda.try_unirse(&llegada, &c.ana),
+        Err(Ok(Error::DeudaPendiente))
+    );
+    let eleccion = tanda_eleccion(&c);
+    assert_eq!(
+        c.tanda.try_unirse_en_turno(&eleccion, &c.ana, &0),
+        Err(Ok(Error::DeudaPendiente))
+    );
+    c.tanda.unirse(&llegada, &c.beto);
+    c.tanda.unirse_en_turno(&eleccion, &c.beto, &1);
+
+    // Un abono parcial no alcanza; saldar todo, sí.
+    let deuda = c.miembro(vieja, &c.ana).deuda;
+    c.tanda.pagar_deuda(&vieja, &c.ana, &c.ana, &(deuda / 2));
+    assert_eq!(
+        c.tanda.try_unirse(&llegada, &c.ana),
+        Err(Ok(Error::DeudaPendiente))
+    );
+    c.tanda
+        .pagar_deuda(&vieja, &c.ana, &c.ana, &(deuda - deuda / 2));
+    assert!(!h.tiene_mora(&c.ana));
+    c.tanda.unirse(&llegada, &c.ana);
+    c.tanda.unirse_en_turno(&eleccion, &c.ana, &0);
+    c.assert_conservacion();
+}
+
+/// Cae en mora, salda, vuelve a caer y vuelve a saldar: queda desbloqueado (el contador no se
+/// descuadra: un `Moroso` por caída y un `DeudaSaldada` por cada vez que llega a cero).
+#[test]
+fn dos_caidas_en_mora_y_dos_pagos_desbloquean() {
+    let c = setup();
+    let h = con_historial(&c);
+    for vuelta in 1..=2u32 {
+        let id = ana_en_mora(&c);
+        let x = h.historial(&c.ana);
+        assert_eq!((x.veces_moroso, x.deudas_saldadas), (vuelta, vuelta - 1));
+        let otra = c.crear(10_000);
+        assert_eq!(
+            c.tanda.try_unirse(&otra, &c.ana),
+            Err(Ok(Error::DeudaPendiente))
+        );
+        let deuda = c.miembro(id, &c.ana).deuda;
+        c.tanda.pagar_deuda(&id, &c.ana, &c.ana, &deuda);
+        let x = h.historial(&c.ana);
+        assert_eq!((x.veces_moroso, x.deudas_saldadas), (vuelta, vuelta));
+        c.tanda.unirse(&otra, &c.ana);
+        c.tanda.finalizar(&id);
+    }
+    c.assert_conservacion();
+}
+
+/// Seguir moroso varias rondas no suma más de una caída.
+#[test]
+fn seguir_moroso_varias_rondas_es_una_sola_caida() {
+    let c = setup();
+    let h = con_historial(&c);
+    let gente = personas(&c, 5);
+    let id = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &5,
+        &PERIODO,
+        &1_000,
+        &0,
+    );
+    for p in &gente {
+        c.tanda.unirse(&id, p);
+    }
+    for ronda in 0..5 {
+        for p in &gente {
+            // gente[0] solo paga la primera ronda: después queda en mora y sigue sin pagar.
+            if ronda == 0 || p != &gente[0] {
+                c.tanda.pagar_cuota(&id, p);
+            }
+        }
+        c.avanzar(PERIODO);
+        c.tanda.cerrar_ronda(&id);
+    }
+    assert_eq!(h.historial(&gente[0]).veces_moroso, 1);
+    assert!(c.miembro(id, &gente[0]).deuda > CUOTA); // debe varias cuotas, una sola caída
+}
+
+/// Si el historial no responde (o rechazó los hechos), nadie queda bloqueado por eso.
+#[test]
+fn sin_historial_que_responda_no_se_bloquea() {
+    // Historial que rechaza los hechos: la mora nunca quedó anotada.
+    let c = setup();
+    let h = desplegar_historial(&c.env);
+    c.tanda.configurar_historial(&Some(h.address.clone()));
+    ana_en_mora(&c);
+    let otra = c.crear(10_000);
+    c.tanda.unirse(&otra, &c.ana);
+
+    // La mora sí quedó anotada, pero después el historial deja de responder.
+    let c = setup();
+    con_historial(&c);
+    ana_en_mora(&c);
+    c.tanda.configurar_historial(&Some(c.boveda.clone()));
+    let otra = c.crear(10_000);
+    c.tanda.unirse(&otra, &c.ana);
+
+    // Sin historial configurado.
+    let c = setup();
+    con_historial(&c);
+    ana_en_mora(&c);
+    c.tanda.configurar_historial(&None);
+    let otra = c.crear(10_000);
+    c.tanda.unirse(&otra, &c.ana);
 }

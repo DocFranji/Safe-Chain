@@ -36,5 +36,6 @@ export const Error = {
     42: { message: "SelloInvalido" },
     43: { message: "SelloRepetido" },
     55: { message: "TokenSinBoveda" },
-    56: { message: "BovedaDeOtroToken" }
+    56: { message: "BovedaDeOtroToken" },
+    65: { message: "DeudaPendiente" }
 };

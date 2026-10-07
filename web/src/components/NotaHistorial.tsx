@@ -1,9 +1,9 @@
 // Nota de historial junto al botón de unirse (misión M2): qué pide esta tanda y, si da descuento,
 // cuánto baja tu garantía por tu nivel. No dice nada si la tanda no usa el historial.
 import { useHistorialCacheado } from '../hooks/useHistorial'
-import { nivelDePuntaje, puntajeDe } from '../lib/historial'
+import { nivelDePuntaje, puntajeDe, tieneMoraPendiente } from '../lib/historial'
 import { monto } from '../lib/formato'
-import { RUTA_MI_HISTORIAL } from '../lib/rutas'
+import { RUTA_PERFIL } from '../lib/rutas'
 import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
@@ -17,6 +17,17 @@ type Props = {
 export function NotaHistorial({ yo, requisitos, normal, conDescuento }: Props) {
   const SIMBOLO = useSimbolo()
   const h = useHistorialCacheado(yo ?? '')
+  // (v4, N2) Con una deuda abierta en cualquier tanda no se puede unir: se avisa antes de firmar.
+  if (yo && h && tieneMoraPendiente(h)) {
+    return (
+      <div className="nota-historial">
+        <p className="aviso error">
+          Tienes una deuda pendiente en otra tanda: no puedes unirte hasta pagarla.{' '}
+          <a href={RUTA_PERFIL}>Ver y pagar mis deudas</a>
+        </p>
+      </div>
+    )
+  }
   if (requisitos.puntaje_minimo === 0 && !requisitos.descuento) return null
   const puntaje = yo && h ? puntajeDe(h) : null
   const nivel = puntaje !== null ? nivelDePuntaje(puntaje) : null
@@ -29,7 +40,7 @@ export function NotaHistorial({ yo, requisitos, normal, conDescuento }: Props) {
           Esta tanda pide historial {nivelDePuntaje(requisitos.puntaje_minimo)} o mejor ({requisitos.puntaje_minimo}{' '}
           puntos).
           {puntaje !== null && (noAlcanza ? ` Tienes ${puntaje}: todavía no puedes unirte.` : ` Tienes ${puntaje}: puedes entrar.`)}{' '}
-          <a href={RUTA_MI_HISTORIAL}>Ver mi historial</a>
+          <a href={RUTA_PERFIL}>Ver mi historial</a>
         </p>
       )}
       {requisitos.descuento &&
