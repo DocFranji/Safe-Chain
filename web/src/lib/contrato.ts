@@ -58,7 +58,7 @@ const MENSAJES: Record<number, string> = {
   37: 'Ese intercambio no es posible: los dos turnos deben ser futuros y nadie puede estar en mora.',
   38: 'Ya tienes una propuesta de intercambio abierta. Retírala antes de hacer otra.',
   39: 'No hay una propuesta de intercambio pendiente entre ustedes.',
-  40: 'Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en «Mi historial».',
+  40: 'Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en tu Perfil.',
   41: 'No es el momento: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.',
   42: 'La oferta no coincide con la que sellaste en esta ronda (o no sellaste ninguna). Hay que revelarla desde el mismo navegador.',
   43: 'Ese sello ya lo usó otra persona en esta ronda. Vuelve a sellar tu oferta.',
@@ -71,11 +71,13 @@ const MENSAJES: Record<number, string> = {
   18: 'La bóveda no tiene suficientes participaciones para ese retiro. Avísanos: no debería pasar.',
   // M2: historial crediticio
   20: 'El historial crediticio no está disponible en este momento. Intenta de nuevo en unos minutos.',
-  21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en «Mi historial».',
+  21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en tu Perfil.',
   22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
   // M4: bóveda por token (contrato de la tanda)
   55: 'Esa moneda todavía no se puede usar en tandas.',
   56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
+  // M2 v4: bloqueo por deuda
+  65: 'Tienes una deuda pendiente en otra tanda. Págala desde tu Perfil («Mis deudas») para volver a unirte.',
   // M4: adaptador de Blend (contrato aparte; sus errores llegan tal cual al firmar)
   50: 'El monto debe ser mayor que cero.',
   51: 'La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar.',
@@ -125,6 +127,7 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   RequisitosBloqueados: 22,
   TokenSinBoveda: 55,
   BovedaDeOtroToken: 56,
+  DeudaPendiente: 65,
 }
 
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */

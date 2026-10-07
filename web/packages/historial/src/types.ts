@@ -10,7 +10,11 @@ export const Error = {
    * Quien intenta escribir no es un contrato de tanda autorizado.
    */
   3 : { message: "NoAutorizado" },
-  4 : { message: "ParametroInvalido" }
+  4 : { message: "ParametroInvalido" },
+  /**
+   * (v4) El apodo no cumple las reglas (largo o caracteres).
+   */
+  5 : { message: "ApodoInvalido" }
 }
 
 /**
@@ -84,6 +88,17 @@ export interface Reglas {
    * Máximo de puntos positivos que una persona gana en una misma tanda.
    */
   tope_por_tanda: number;
+}
+
+/**
+ * (v4) Alguien puso (o quitó, con `None`) su apodo público.
+ */
+export interface EvApodoEvent {
+  name: "EvApodo";
+  data: {
+    quien: string;
+    apodo?: string | null;
+  };
 }
 
 /**
@@ -180,5 +195,5 @@ export interface EvEmisorAutorizadoEvent {
     emisor?: string;
   };
 }
-    export type ContractEvent = EvHechoEvent | EvReglasEvent | EvEmisorRevocadoEvent | EvEmisorAutorizadoEvent;
+    export type ContractEvent = EvApodoEvent | EvHechoEvent | EvReglasEvent | EvEmisorRevocadoEvent | EvEmisorAutorizadoEvent;
     

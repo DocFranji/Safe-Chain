@@ -124,6 +124,9 @@ export declare const Error: {
     56: {
         message: string;
     };
+    65: {
+        message: string;
+    };
 };
 /**
  * Struct: Tanda

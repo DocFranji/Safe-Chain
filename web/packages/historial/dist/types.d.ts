@@ -17,6 +17,12 @@ export declare const Error: {
     4: {
         message: string;
     };
+    /**
+     * (v4) El apodo no cumple las reglas (largo o caracteres).
+     */
+    5: {
+        message: string;
+    };
 };
 /**
  * Lo que puede pasarle a alguien en una tanda.
@@ -113,6 +119,16 @@ export interface Reglas {
     tope_por_tanda: number;
 }
 /**
+ * (v4) Alguien puso (o quitó, con `None`) su apodo público.
+ */
+export interface EvApodoEvent {
+    name: "EvApodo";
+    data: {
+        quien: string;
+        apodo?: string | null;
+    };
+}
+/**
  * Un hecho nuevo en el historial de `miembro`. Este es el registro inmutable, hecho por hecho.
  */
 export interface EvHechoEvent {
@@ -201,4 +217,4 @@ export interface EvEmisorAutorizadoEvent {
         emisor?: string;
     };
 }
-export type ContractEvent = EvHechoEvent | EvReglasEvent | EvEmisorRevocadoEvent | EvEmisorAutorizadoEvent;
+export type ContractEvent = EvApodoEvent | EvHechoEvent | EvReglasEvent | EvEmisorRevocadoEvent | EvEmisorAutorizadoEvent;

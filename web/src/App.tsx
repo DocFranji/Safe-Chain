@@ -9,16 +9,24 @@ import { PaginaTanda } from './pages/PaginaTanda'
 import { Demo } from './pages/Demo'
 import { Estado } from './pages/Estado'
 import { Historial } from './pages/Historial'
+import { Perfil } from './pages/Perfil'
 import { Landing } from './landing/Landing'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { BotonesEntrar } from './components/BotonesEntrar'
-import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
-import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_MI_HISTORIAL } from './lib/rutas'
+import { direccionCorta, nombreDe, NOMBRES, suscribirApodos, usarLectorDeApodos, versionApodos } from './lib/nombres'
+import { leerApodo } from './lib/historial'
+import { useSyncExternalStore } from 'react'
+import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_PERFIL } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
+
+// Los apodos públicos (M2, N4) se leen del contrato de historial, una vez por dirección.
+usarLectorDeApodos(leerApodo)
 
 export default function App() {
   const billetera = useBilletera()
+  // Cuando llega un apodo, la app se vuelve a dibujar para mostrarlo en lugar de la dirección.
+  useSyncExternalStore(suscribirApodos, versionApodos)
   const ruta = useRuta()
   const cuenta = useCuenta(billetera.direccion, billetera.redCorrecta)
 
@@ -45,8 +53,8 @@ export default function App() {
             Demo en vivo
           </a>
           {billetera.direccion && (
-            <a href={RUTA_MI_HISTORIAL} aria-current={ruta.tipo === 'historial' ? 'page' : undefined}>
-              Mi historial
+            <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' ? 'page' : undefined}>
+              Perfil
             </a>
           )}
         </nav>
@@ -72,6 +80,8 @@ export default function App() {
           <Estado billetera={billetera} />
         ) : ruta.tipo === 'historial' ? (
           <Historial key={ruta.dir ?? 'mio'} dir={ruta.dir} billetera={billetera} />
+        ) : ruta.tipo === 'perfil' ? (
+          <Perfil billetera={billetera} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>

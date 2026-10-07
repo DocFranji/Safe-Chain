@@ -8,7 +8,11 @@ export const Error = {
      * Quien intenta escribir no es un contrato de tanda autorizado.
      */
     3: { message: "NoAutorizado" },
-    4: { message: "ParametroInvalido" }
+    4: { message: "ParametroInvalido" },
+    /**
+     * (v4) El apodo no cumple las reglas (largo o caracteres).
+     */
+    5: { message: "ApodoInvalido" }
 };
 /**
  * Enum: Nivel
