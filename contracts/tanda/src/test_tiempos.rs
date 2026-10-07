@@ -858,7 +858,7 @@ fn todos_pagaron_se_cierra_antes_y_las_fechas_no_se_mueven() {
         }
         .to_xdr(&c.env, &c.tanda_addr);
         assert!(
-            c.env.events().all().events().iter().any(|e| *e == ev),
+            c.env.events().all().events().contains(&ev),
             "ronda {ronda}: falta el evento `antes`"
         );
         assert_eq!(c.saldo(cobra), antes + 300 * U, "ronda {ronda}: cobra ya");

@@ -363,7 +363,7 @@ fn pagar_tras_finalizar(
             // Solo por la regla futura de arriba sin nadie a quien repartir: queda en el contrato.
             token::Client::new(env, &t.token).transfer(
                 pagador,
-                &env.current_contract_address(),
+                env.current_contract_address(),
                 &al_reparto,
             );
         } else {
