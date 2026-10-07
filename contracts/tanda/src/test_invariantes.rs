@@ -13,7 +13,10 @@
 //! - en las subastas selladas se sella y se revela (también sellos copiados, revelaciones fuera de
 //!   fase y con la sal o el monto equivocados), y al cerrar gana la mayor oferta revelada;
 //! - hay tandas cuyos primeros turnos piden historial: al unirse, al llenarse y al intercambiar;
-//! - se cierran rondas a tiempo o muy tarde, se cancelan tandas abiertas y se finalizan las terminadas.
+//! - se cierran rondas a tiempo o muy tarde (y antes de que venzan si todos pagaron, M1 v4), se
+//!   cancelan tandas abiertas y se finalizan las terminadas;
+//! - se pagan deudas también después de finalizar (M1 v4): directo a quien cobró de menos o, si su
+//!   bolsa se retuvo y se repartió, en partes iguales a quienes recibieron el reparto.
 //!
 //! También intenta lo que debe fallar y comprueba el código de error exacto.
 //!
@@ -143,6 +146,8 @@ struct TandaM {
     sellos_ronda: u32,
     /// Ronda y momento en que se cerró la anterior: ahí empezó de verdad (para la mitad sellada).
     inicio_real: Option<(u32, u64)>,
+    /// (M1 v4) Al finalizar: quiénes recibieron las bolsas retenidas (vacío si no hubo reparto).
+    repartidos: StdVec<Address>,
 }
 
 struct Mundo {
@@ -776,6 +781,7 @@ impl Mundo {
             sellos: StdVec::new(),
             sellos_ronda: 0,
             inicio_real: None,
+            repartidos: StdVec::new(),
         });
     }
 
@@ -1144,7 +1150,10 @@ impl Mundo {
             .map(|(_, m)| m.clone());
         let esperado = if monto <= 0 {
             Some(Error::MontoInvalido)
-        } else if t0.estado != Estado::Activa && t0.estado != Estado::PorLiquidar {
+        } else if !matches!(
+            t0.estado,
+            Estado::Activa | Estado::PorLiquidar | Estado::Finalizada
+        ) {
             Some(Error::EstadoInvalido)
         } else {
             match &m0 {
@@ -1161,7 +1170,52 @@ impl Mundo {
         let mut delta = std::vec![0i128; self.gente.len()];
         let mut garantia = 0;
         let mut recupera = false;
-        if esperado.is_none() {
+        let finalizada = t0.estado == Estado::Finalizada;
+        if esperado.is_none() && finalizada {
+            // M1 v4: directo de quien paga a quien cobró de menos; si su bolsa se retuvo y se repartió
+            // al finalizar, en partes iguales a quienes la recibieron (el resto, al último).
+            let m0 = m0.as_ref().unwrap();
+            let d0 = self.tanda.get_deuda(&id, deudor);
+            let reparto = self.tandas[k].repartidos.clone();
+            delta[self.idx(pagador)] -= monto;
+            let mut resto = monto;
+            let mut al_reparto = 0;
+            for f in d0.faltantes.iter() {
+                if resto == 0 {
+                    break;
+                }
+                let abono = resto.min(f.monto);
+                resto -= abono;
+                let cobro = if f.acreedor == *deudor {
+                    m0.cobro
+                } else {
+                    lista
+                        .iter()
+                        .find(|(d, _)| *d == f.acreedor)
+                        .map(|(_, m)| m.cobro)
+                        .unwrap_or(true)
+                };
+                if cobro || reparto.is_empty() {
+                    delta[self.idx(&f.acreedor)] += abono;
+                } else {
+                    al_reparto += abono;
+                }
+            }
+            if al_reparto > 0 {
+                let n = reparto.len() as i128;
+                let parte = al_reparto / n;
+                for (j, dir) in reparto.iter().enumerate() {
+                    let extra = if j as i128 == n - 1 {
+                        al_reparto - parte * n
+                    } else {
+                        0
+                    };
+                    delta[self.idx(dir)] += parte + extra;
+                }
+                self.contar("· pagar tras finalizar: a quienes recibieron el reparto");
+            }
+            self.contar("· pagar deuda tras finalizar");
+        } else if esperado.is_none() {
             let m0 = m0.as_ref().unwrap();
             let d0 = self.tanda.get_deuda(&id, deudor);
             delta[self.idx(pagador)] -= monto;
@@ -1201,6 +1255,7 @@ impl Mundo {
         }
 
         let s0 = self.saldos();
+        let c0 = self.saldo(&self.yo);
         let r = self.tanda.try_pagar_deuda(&id, deudor, pagador, &monto);
         let r = self.res("pagar_deuda", r);
         self.anotar(format!(
@@ -1227,6 +1282,21 @@ impl Mundo {
             queda == m0.deuda - monto && m1.deuda == queda && m1.moroso == (queda > 0),
             || format!("t{id}: deuda mal actualizada: {m0:?} -> {m1:?} (queda {queda})"),
         );
+        if finalizada {
+            let d1 = self.tanda.get_deuda(&id, deudor);
+            let suma: i128 = d1.faltantes.iter().map(|f| f.monto).sum();
+            self.exigir(
+                self.saldo(&self.yo) == c0 && suma == m1.deuda && m1.cobro == m0.cobro,
+                || {
+                    format!(
+                        "t{id}: pagar tras finalizar tocó el contrato o la deuda: {m1:?} {d1:?}"
+                    )
+                },
+            );
+            if queda == 0 {
+                self.contar("· saldó su deuda tras finalizar");
+            }
+        }
         if recupera {
             self.contar("· saldó su deuda y recuperó su bolsa retenida");
             let d1 = self.tanda.get_deuda(&id, deudor);
@@ -1754,15 +1824,25 @@ impl Mundo {
             pagaron.len(),
             lista0.len()
         ));
+        // M1 v4: antes de que venza, solo si todos pagaron y nunca en la subasta.
+        let antes = ahora < t0.inicio_ronda + t0.periodo_seg;
+        let subasta = self.tandas[k].opciones.as_ref().map(|o| o.modo) == Some(ModoTurnos::Subasta);
         let esperado = if t0.estado != Estado::Activa {
             Some(Error::EstadoInvalido)
-        } else if ahora < t0.inicio_ronda + t0.periodo_seg {
+        } else if antes && subasta {
+            Some(Error::SubastaNoCierraAntes)
+        } else if antes && (pagaron.len() as usize) < lista0.len() {
             Some(Error::RondaNoVencida)
+        } else if antes && t0.inicio_ronda + 2 * t0.periodo_seg > ahora + 120 * DIA {
+            Some(Error::CierreMuyAdelantado)
         } else {
             None
         };
         if self.segun("cerrar_ronda", r, esperado).is_none() {
             return;
+        }
+        if antes {
+            self.contar("· cerrar antes: todos pagaron");
         }
         let t1 = self.tanda.get_tanda(&id);
         let lista1 = self.miembros(id);
@@ -1918,7 +1998,8 @@ impl Mundo {
             );
         }
 
-        // Calendario anclado (M1).
+        // Calendario anclado (M1). Si se cerró antes (v4), la siguiente vence un periodo después de la
+        // fecha límite de esta: su `inicio_ronda` queda en el futuro (es esa fecha límite).
         let vence0 = t0.inicio_ronda + t0.periodo_seg;
         let vence1 = (vence0 + t0.periodo_seg).max(ahora + t0.periodo_seg.min(3 * DIA));
         let estado = if ronda + 1 == t0.n_miembros {
@@ -1929,7 +2010,11 @@ impl Mundo {
         self.exigir(
             t1.ronda_actual == ronda + 1
                 && t1.inicio_ronda == vence1 - t0.periodo_seg
-                && t1.inicio_ronda <= ahora
+                && if antes {
+                    t1.inicio_ronda == vence0
+                } else {
+                    t1.inicio_ronda <= ahora
+                }
                 && t1.estado == estado,
             || format!("t{id}: la ronda siguiente quedó mal: {t1:?}"),
         );
@@ -1966,6 +2051,23 @@ impl Mundo {
             elegibles = (0..lista.len()).filter(|i| !lista[*i].1.moroso).collect();
         }
         let pozo = t1.fondo_premios + t1.retenido;
+        // M1 v4: si se repartieron bolsas retenidas, el contrato anota a quiénes (para pagar deudas).
+        let repartidos: StdVec<Address> = if t1.retenido > 0 {
+            elegibles.iter().map(|i| lista[*i].0.clone()).collect()
+        } else {
+            StdVec::new()
+        };
+        let guardado: Option<soroban_sdk::Vec<Address>> = self.env.as_contract(&self.yo, || {
+            self.env
+                .storage()
+                .persistent()
+                .get(&ClaveM1::Repartidos(id))
+        });
+        let guardado: StdVec<Address> = guardado.map(|v| v.iter().collect()).unwrap_or_default();
+        self.exigir(guardado == repartidos, || {
+            format!("t{id}: el reparto anotado no es el esperado")
+        });
+        self.tandas[k].repartidos = repartidos;
         for (j, (dir, m)) in lista.iter().enumerate() {
             let recibio = s1[self.idx(dir)] - s0[self.idx(dir)];
             if m.moroso {
@@ -2550,6 +2652,23 @@ impl Mundo {
     // El juego
     // -----------------------------------------------------------------------
 
+    /// (M1 v4) Una tanda finalizada donde alguien todavía debe (para pagar después de finalizar).
+    fn finalizada_con_deuda(&mut self) -> Option<usize> {
+        let ks: StdVec<usize> = (0..self.tandas.len())
+            .filter(|k| {
+                let id = self.tandas[*k].id;
+                self.tandas[*k].terminada
+                    && self.tanda.get_tanda(&id).estado == Estado::Finalizada
+                    && self.miembros(id).iter().any(|(_, m)| m.deuda > 0)
+            })
+            .collect();
+        if ks.is_empty() {
+            None
+        } else {
+            Some(ks[self.azar.hasta(ks.len())])
+        }
+    }
+
     fn paso(&mut self) {
         if let Some(k) = self.vencida_hace_mucho() {
             self.cerrar(k);
@@ -2570,6 +2689,12 @@ impl Mundo {
         if r < 13 {
             self.cambiar_historial();
             return;
+        }
+        if r < 16 {
+            if let Some(k) = self.finalizada_con_deuda() {
+                self.pagar_deuda_al_azar(k);
+                return;
+            }
         }
         let k = vivas[self.azar.hasta(vivas.len())];
         let estado = self.tanda.get_tanda(&self.tandas[k].id).estado;
@@ -2631,6 +2756,17 @@ impl Mundo {
                     self.revisar();
                 }
                 self.finalizar(k);
+                // M1 v4: a veces alguien paga su deuda ya con la tanda finalizada.
+                for _ in 0..self.azar.entre(0, 3) {
+                    if self
+                        .miembros(self.tandas[k].id)
+                        .iter()
+                        .any(|(_, m)| m.deuda > 0)
+                    {
+                        self.revisar();
+                        self.pagar_deuda_al_azar(k);
+                    }
+                }
             } else if let Some((k, _)) = estados.iter().find(|(_, t)| t.estado == Estado::Abierta) {
                 let k = *k;
                 if self.azar.si(8) {
@@ -2646,13 +2782,16 @@ impl Mundo {
                     .cloned()
                     .unwrap();
                 let perfiles = self.tandas[k].perfiles.clone();
+                // M1 v4: a veces todos pagan (para que se pueda cerrar antes).
+                let todos = self.azar.si(25);
                 for (p, perfil) in perfiles {
-                    let paga = match perfil {
-                        Perfil::Cumplido => true,
-                        Perfil::Distraido => self.azar.si(60),
-                        Perfil::Irregular => self.azar.si(40),
-                        Perfil::Desaparece(r) => t.ronda_actual < r,
-                    };
+                    let paga = todos
+                        || match perfil {
+                            Perfil::Cumplido => true,
+                            Perfil::Distraido => self.azar.si(60),
+                            Perfil::Irregular => self.azar.si(40),
+                            Perfil::Desaparece(r) => t.ronda_actual < r,
+                        };
                     if paga {
                         self.pagar_cuota(k, &p);
                         self.revisar();
@@ -2672,6 +2811,15 @@ impl Mundo {
                     for _ in 0..self.azar.entre(0, 3) {
                         self.turnos_al_azar(k);
                         self.revisar();
+                    }
+                }
+                // M1 v4: si todos pagaron, a veces se cierra antes (en la subasta debe fallar).
+                let (_, _, pagaron) = self.tanda.get_ronda(&self.tandas[k].id);
+                if pagaron.len() == t.n_miembros && self.azar.si(70) {
+                    self.cerrar(k);
+                    if self.tanda.get_tanda(&self.tandas[k].id).ronda_actual != t.ronda_actual {
+                        self.revisar();
+                        continue;
                     }
                 }
                 let vence = t.inicio_ronda + t.periodo_seg;

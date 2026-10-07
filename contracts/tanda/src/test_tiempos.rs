@@ -14,10 +14,10 @@ use soroban_sdk::{
     contracttype,
     testutils::{
         storage::{Instance as _, Persistent as _},
-        Address as _, Ledger,
+        Address as _, Events as _, Ledger,
     },
     token::StellarAssetClient,
-    vec, Address, Env, IntoVal, Val,
+    vec, Address, Env, Event as _, IntoVal, Val,
 };
 use std::{format, string::String, vec::Vec as StdVec};
 
@@ -768,4 +768,348 @@ fn boveda_casi_sin_fondeo_precio_nunca_baja_con_depositos_y_retiros_alternados()
         assert!(c.saldo(p) >= SALDO_INICIAL - redondeo, "{}", c.saldo(p));
     }
     assert!(c.saldo(&pobre) >= 0);
+}
+
+// ===========================================================================
+// v4 (N3): cerrar la ronda antes si todos pagaron
+// ===========================================================================
+
+fn opciones_de(modo: ModoTurnos, sellada: bool) -> OpcionesTanda {
+    OpcionesTanda {
+        modo,
+        permitir_intercambio: false,
+        prima_max_bps: if modo == ModoTurnos::PrecioPorTurno {
+            1_000
+        } else {
+            0
+        },
+        descuento_max_bps: if modo == ModoTurnos::Subasta {
+            2_000
+        } else {
+            0
+        },
+        primeros_con_historial: 0,
+        puntaje_primeros: 0,
+        ofertas_selladas: sellada,
+    }
+}
+
+/// Crea una tanda mensual de 3 (Ana, Beto, Carla) con el modo dado (`None`: `crear_tanda`) y la llena.
+fn mensual_con_modo(c: &Ctx, modo: Option<(ModoTurnos, bool)>) -> u32 {
+    let gente = [&c.ana, &c.beto, &c.carla];
+    let id = match modo {
+        None => c.tanda.crear_tanda(
+            &c.creador,
+            &c.token.address,
+            &CUOTA,
+            &3,
+            &MES,
+            &1_000,
+            &10_000,
+        ),
+        Some((m, sellada)) => c.tanda.crear_tanda_avanzada(
+            &c.creador,
+            &c.token.address,
+            &CUOTA,
+            &3,
+            &MES,
+            &1_000,
+            &10_000,
+            &opciones_de(m, sellada),
+        ),
+    };
+    let elige = matches!(
+        modo,
+        Some((ModoTurnos::Eleccion, _)) | Some((ModoTurnos::PrecioPorTurno, _))
+    );
+    for (i, p) in gente.iter().enumerate() {
+        if elige {
+            c.tanda.unirse_en_turno(&id, p, &(i as u32));
+        } else {
+            c.tanda.unirse(&id, p);
+        }
+    }
+    id
+}
+
+/// Todos pagan a los 2 días y la ronda se cierra ya. Quien cobra recibe en ese momento, la ronda
+/// siguiente se puede pagar desde ya (sin atraso) y su fecha límite es la de siempre.
+#[test]
+fn todos_pagaron_se_cierra_antes_y_las_fechas_no_se_mueven() {
+    let c = setup();
+    let id = mensual_con_modo(&c, None);
+    let t0 = c.env.ledger().timestamp();
+    let gente = [&c.ana, &c.beto, &c.carla];
+    for ronda in 0..3u64 {
+        let vence = t0 + (ronda + 1) * MES;
+        assert_eq!(c.tanda.get_ronda(&id).1, vence, "ronda {ronda}");
+        pasar(&c, 2 * DIA);
+        for p in gente {
+            c.tanda.pagar_cuota(&id, p);
+        }
+        let cobra = gente[ronda as usize];
+        let antes = c.saldo(cobra);
+        c.tanda.cerrar_ronda(&id);
+        // El evento de la ronda cerrada antes, con su fecha límite (antes de otra llamada).
+        let ev = EvCierreAnticipado {
+            id,
+            ronda: ronda as u32,
+            vence,
+        }
+        .to_xdr(&c.env, &c.tanda_addr);
+        assert!(
+            c.env.events().all().events().iter().any(|e| *e == ev),
+            "ronda {ronda}: falta el evento `antes`"
+        );
+        assert_eq!(c.saldo(cobra), antes + 300 * U, "ronda {ronda}: cobra ya");
+    }
+    // Nadie quedó tarde aunque cada ronda se pagó "antes de empezar".
+    for p in gente {
+        let m = c.miembro(id, p);
+        assert_eq!((m.atrasos, m.multas_pendientes), (0, 0));
+    }
+    // La tanda terminó a los 6 días, no a los 3 meses.
+    assert_eq!(c.tanda.get_tanda(&id).estado, Estado::PorLiquidar);
+    assert_eq!(c.env.ledger().timestamp(), t0 + 6 * DIA);
+    c.tanda.finalizar(&id);
+    c.assert_conservacion();
+}
+
+/// Si falta alguien por pagar, sigue el error de siempre; al vencer se cierra como antes.
+#[test]
+fn no_se_cierra_antes_si_falta_alguien_por_pagar() {
+    let c = setup();
+    let id = mensual_con_modo(&c, None);
+    c.tanda.pagar_cuota(&id, &c.ana);
+    c.tanda.pagar_cuota(&id, &c.beto);
+    let t = c.tanda.get_tanda(&id);
+    assert_eq!(
+        c.tanda.try_cerrar_ronda(&id),
+        Err(Ok(Error::RondaNoVencida))
+    );
+    assert_eq!(c.tanda.get_tanda(&id), t, "el error no cambia nada");
+    pasar(&c, MES);
+    c.tanda.cerrar_ronda(&id); // la garantía de Carla cubre su cuota
+    assert_eq!(c.miembro(id, &c.carla).atrasos, 1);
+    c.assert_conservacion();
+}
+
+/// Ronda que se pagó antes de su inicio y luego no se paga completa: vence en su fecha y se cierra
+/// normal. Quien paga después de la fecha límite queda tarde, como siempre.
+#[test]
+fn tras_un_cierre_anticipado_la_ronda_siguiente_vence_en_su_fecha() {
+    let c = setup();
+    let id = mensual_con_modo(&c, None);
+    let t0 = c.env.ledger().timestamp();
+    for p in [&c.ana, &c.beto, &c.carla] {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    c.tanda.cerrar_ronda(&id);
+    let t = c.tanda.get_tanda(&id);
+    assert_eq!(t.inicio_ronda, t0 + MES, "inicio_ronda queda en el futuro");
+    assert_eq!(c.tanda.get_ronda(&id).1, t0 + 2 * MES);
+    c.tanda.pagar_cuota(&id, &c.ana);
+    pasar(&c, 2 * MES - DIA);
+    c.tanda.pagar_cuota(&id, &c.beto); // a tiempo: un día antes de la fecha
+    assert_eq!(
+        c.tanda.try_cerrar_ronda(&id),
+        Err(Ok(Error::RondaNoVencida))
+    );
+    pasar(&c, 2 * DIA);
+    c.tanda.pagar_cuota(&id, &c.carla); // tarde
+    assert_eq!(c.miembro(id, &c.beto).atrasos, 0);
+    assert_eq!(c.miembro(id, &c.carla).atrasos, 1);
+    c.tanda.cerrar_ronda(&id);
+    // La tercera ronda vence un mes después de la segunda, aunque la primera se cerró antes.
+    assert_eq!(c.tanda.get_ronda(&id).1, t0 + 3 * MES);
+    c.assert_conservacion();
+}
+
+/// En todos los modos de turnos menos la subasta, si todos pagaron se cierra antes. En la subasta
+/// (abierta o sellada), no: las ofertas siguen abiertas hasta que vence la ronda.
+#[test]
+fn cierre_anticipado_en_cada_modo_menos_subasta() {
+    let modos = [
+        None,
+        Some((ModoTurnos::Llegada, false)),
+        Some((ModoTurnos::Eleccion, false)),
+        Some((ModoTurnos::PrecioPorTurno, false)),
+        Some((ModoTurnos::Sorteo, false)),
+        Some((ModoTurnos::Subasta, false)),
+        Some((ModoTurnos::Subasta, true)),
+    ];
+    for modo in modos {
+        let c = setup();
+        let id = mensual_con_modo(&c, modo);
+        let subasta = matches!(modo, Some((ModoTurnos::Subasta, _)));
+        let t0 = c.env.ledger().timestamp();
+        for ronda in 0..3u32 {
+            for p in [&c.ana, &c.beto, &c.carla] {
+                c.tanda.pagar_cuota(&id, p);
+            }
+            if subasta {
+                assert_eq!(
+                    c.tanda.try_cerrar_ronda(&id),
+                    Err(Ok(Error::SubastaNoCierraAntes)),
+                    "{modo:?}"
+                );
+                pasar(&c, c.tanda.get_ronda(&id).1 - c.env.ledger().timestamp());
+            }
+            c.tanda.cerrar_ronda(&id);
+            let cobro = [&c.ana, &c.beto, &c.carla]
+                .iter()
+                .any(|p| c.miembro(id, p).posicion == ronda && c.miembro(id, p).cobro);
+            assert!(cobro, "{modo:?}: nadie cobró la ronda {ronda}");
+            if !subasta {
+                assert_eq!(c.env.ledger().timestamp(), t0, "{modo:?}");
+                assert_eq!(
+                    c.tanda.get_ronda(&id).1,
+                    t0 + (ronda as u64 + 2) * MES,
+                    "{modo:?}: la fecha siguiente no se mueve"
+                );
+            }
+        }
+        c.tanda.finalizar(&id);
+        c.assert_conservacion();
+    }
+}
+
+/// Cierres anticipados seguidos: se pueden encadenar mientras la fecha límite siguiente quede a lo
+/// sumo a 120 días (para que los datos de la tanda no se archiven antes de que alguien los use).
+/// Con rondas mensuales, unas 3 rondas adelantadas; con la ronda más larga (90 días), cerrar antes
+/// solo en sus últimos 30 días.
+#[test]
+fn los_cierres_anticipados_tienen_un_tope_de_120_dias() {
+    let c = setup();
+    let g = personas(&c, 5);
+    let id = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &5,
+        &MES,
+        &1_000,
+        &10_000,
+    );
+    for p in &g {
+        c.tanda.unirse(&id, p);
+    }
+    let t0 = c.env.ledger().timestamp();
+    for ronda in 0..3u64 {
+        for p in &g {
+            c.tanda.pagar_cuota(&id, p);
+        }
+        c.tanda.cerrar_ronda(&id);
+        assert_eq!(c.tanda.get_ronda(&id).1, t0 + (ronda + 2) * MES);
+    }
+    // La cuarta seguida dejaría la fecha siguiente a 150 días: no.
+    for p in &g {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    assert_eq!(
+        c.tanda.try_cerrar_ronda(&id),
+        Err(Ok(Error::CierreMuyAdelantado))
+    );
+    // Un mes después ya queda a 120 días: sí.
+    pasar(&c, MES);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.tanda.get_ronda(&id).1, t0 + 5 * MES);
+    for p in &g {
+        assert_eq!(c.miembro(id, p).atrasos, 0);
+    }
+
+    // Ronda de 90 días: cerrar antes solo en sus últimos 30 días.
+    let trimestral = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &3,
+        &(90 * DIA),
+        &1_000,
+        &10_000,
+    );
+    for p in &g[..3] {
+        c.tanda.unirse(&trimestral, p);
+    }
+    for p in &g[..3] {
+        c.tanda.pagar_cuota(&trimestral, p);
+    }
+    pasar(&c, 59 * DIA);
+    assert_eq!(
+        c.tanda.try_cerrar_ronda(&trimestral),
+        Err(Ok(Error::CierreMuyAdelantado))
+    );
+    pasar(&c, DIA);
+    c.tanda.cerrar_ronda(&trimestral);
+    assert_conservacion_de(&c, &g);
+}
+
+/// Peor caso del cierre anticipado: 12 personas, todas pagan y cada ronda se cierra al instante
+/// (rondas de 2 minutos: el tope de 120 días no limita).
+/// Revisa además, antes de cada cierre, todos los pagos de la ronda (12 lecturas extra a lo sumo).
+fn recorrer_peor_caso_cierre_anticipado(c: &Ctx) -> crate::test_deudas::Medidas {
+    let medidas = core::cell::RefCell::new(crate::test_deudas::Medidas::new());
+    let medir = |que: &'static str, f: &dyn Fn()| crate::test_deudas::medir_en(c, &medidas, que, f);
+    let g = personas(c, 12);
+    let id = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &12,
+        &PERIODO,
+        &1_000,
+        &10_000,
+    );
+    for p in &g {
+        c.tanda.unirse(&id, p);
+    }
+    for _ in 0..12u32 {
+        for p in &g {
+            c.tanda.pagar_cuota(&id, p);
+        }
+        medir("cerrar antes", &|| c.tanda.cerrar_ronda(&id));
+    }
+    // Y el error con 11 de 12 (el más caro: revisa a todos antes de fallar).
+    let id2 = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &12,
+        &PERIODO,
+        &1_000,
+        &10_000,
+    );
+    for p in &g {
+        c.tanda.unirse(&id2, p);
+    }
+    for p in &g[..11] {
+        c.tanda.pagar_cuota(&id2, p);
+    }
+    medir("cerrar (falla)", &|| {
+        assert_eq!(
+            c.tanda.try_cerrar_ronda(&id2),
+            Err(Ok(Error::RondaNoVencida))
+        );
+    });
+    c.tanda.finalizar(&id);
+    medidas.into_inner()
+}
+
+#[test]
+fn peor_caso_12_miembros_cierre_anticipado() {
+    let c = setup();
+    let m = recorrer_peor_caso_cierre_anticipado(&c);
+    crate::test_deudas::imprimir("Cierre anticipado, 12 miembros (nativo):", &m);
+}
+
+/// Con WASM: `stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso -- --nocapture`
+#[test]
+fn peor_caso_12_miembros_cierre_anticipado_en_wasm() {
+    if std::env::var("PEOR_CASO_WASM").is_err() {
+        std::println!("(omitida: corre `stellar contract build` y luego con PEOR_CASO_WASM=1)");
+        return;
+    }
+    let c = setup_wasm(0, 1);
+    let m = recorrer_peor_caso_cierre_anticipado(&c);
+    crate::test_deudas::imprimir("Cierre anticipado, 12 miembros (WASM):", &m);
 }
