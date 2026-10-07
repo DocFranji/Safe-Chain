@@ -1,0 +1,482 @@
+/*
+ * Lo que cambia de pieza en pieza entre los dos mundos en prueba (los colores están en index.css).
+ * App.css y movimiento.css son comunes; aquí va solo lo propio de cada tema. Al elegir uno, se funde en App.css.
+ */
+
+/* =====================================================================================================
+   CARRETA DE SARCHÍ
+   La tanda es la rueda pintada de la carreta. Piezas blancas con contorno de tinta, la barra roja con su
+   fleco de triángulos amarillos, y el color que llena las cosas cuando pasan (pagó, cobró, es su turno).
+   ===================================================================================================== */
+:root[data-tema='carreta'] {
+  --barra-fondo: var(--c-rojo);
+  --barra-linea: 0;
+  --barra-tinta: #ffffff;
+  --menu-tinta: rgba(255, 255, 255, 0.86);
+  --menu-hover: rgba(255, 255, 255, 0.16);
+  --menu-activo: var(--c-amarillo);
+  --menu-activo-tinta: var(--c-tinta);
+  --logo-punto: var(--c-amarillo);
+  --tarjeta-borde-hover: var(--c-tinta);
+  --fila-hover: #fffaeb;
+  --brillo-turno: rgba(246, 184, 0, 0.55);
+}
+
+/* El fleco de la carreta: triángulos amarillos que cuelgan de la barra roja, de lado a lado. */
+:root[data-tema='carreta'] .barra::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
+  height: 9px;
+  z-index: -1;
+  background: conic-gradient(from -45deg at 50% 100%, var(--c-amarillo) 90deg, transparent 0) 0 0 / 18px 9px repeat-x,
+    var(--c-rojo);
+  -webkit-mask: conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) 0 0 / 18px 9px repeat-x;
+  mask: conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) 0 0 / 18px 9px repeat-x;
+}
+
+/* Dentro de la barra roja, lo que es de la cuenta va en blanco. */
+:root[data-tema='carreta'] .barra .billetera .dir,
+:root[data-tema='carreta'] .barra .explica {
+  color: rgba(255, 255, 255, 0.82);
+}
+:root[data-tema='carreta'] .barra .boton {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--c-tinta);
+}
+:root[data-tema='carreta'] .barra .punto.ok {
+  background: var(--c-amarillo);
+}
+
+/* Títulos de página grandes, con letra de rótulo. */
+:root[data-tema='carreta'] .selector h1 {
+  font-size: 44px;
+  line-height: 1.05;
+}
+:root[data-tema='carreta'] .panel h2 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+:root[data-tema='carreta'] :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+  font-size: 20px;
+}
+
+/* Piezas: blancas con contorno de tinta. */
+:root[data-tema='carreta'] :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo) {
+  border: var(--grosor) solid var(--c-tinta);
+}
+:root[data-tema='carreta'] .panel {
+  box-shadow: none;
+}
+
+/* Botones: cobalto con contorno, como letras pintadas. */
+:root[data-tema='carreta'] .boton {
+  border-color: var(--c-tinta);
+}
+:root[data-tema='carreta'] .boton.principal {
+  --boton-principal-borde: var(--c-tinta);
+}
+@media (hover: hover) and (pointer: fine) {
+  :root[data-tema='carreta'] .boton.secundario:hover:not(:disabled),
+  :root[data-tema='carreta'] .boton.chico:hover:not(:disabled) {
+    background: var(--superficie-2);
+    border-color: var(--c-tinta);
+  }
+}
+
+/* Etiquetas de estado: pastillas pintadas con contorno. */
+:root[data-tema='carreta'] .etiqueta {
+  border: var(--grosor) solid var(--c-tinta);
+  background: #ffffff;
+  color: var(--c-tinta);
+}
+:root[data-tema='carreta'] :is(.etiqueta.abierta, .etiqueta.por-repartir) {
+  background: var(--c-amarillo);
+}
+:root[data-tema='carreta'] .etiqueta.en-curso {
+  background: var(--c-verde);
+  color: #ffffff;
+}
+:root[data-tema='carreta'] .etiqueta.en-curso::before {
+  background: var(--c-amarillo);
+}
+:root[data-tema='carreta'] .etiqueta.cancelada {
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+}
+
+/* Los asientos de cada tarjeta: los ocupados se pintan con los colores de la rueda. */
+:root[data-tema='carreta'] .lugar {
+  border: var(--grosor) dashed var(--tinta-2);
+}
+:root[data-tema='carreta'] .lugar.lleno {
+  border: var(--grosor) solid var(--c-tinta);
+  background: var(--c-rojo);
+}
+:root[data-tema='carreta'] .lugar.lleno:nth-child(4n + 2) {
+  background: var(--c-amarillo);
+}
+:root[data-tema='carreta'] .lugar.lleno:nth-child(4n + 3) {
+  background: var(--c-azul);
+}
+:root[data-tema='carreta'] .lugar.lleno:nth-child(4n + 4) {
+  background: var(--c-verde);
+}
+
+/* Filtros y opciones elegidas: el amarillo de "es su turno". */
+:root[data-tema='carreta'] .filtro {
+  border: var(--grosor) solid var(--c-tinta);
+  background: #ffffff;
+}
+:root[data-tema='carreta'] .filtro.activo {
+  background: var(--c-tinta);
+  color: #ffffff;
+}
+:root[data-tema='carreta'] :is(.modo, .moneda) {
+  border: var(--grosor) solid var(--c-tinta);
+  background: #ffffff;
+}
+:root[data-tema='carreta'] :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
+  background: var(--c-amarillo);
+  box-shadow: none;
+}
+
+/* Tabla: encabezado con línea de tinta. */
+:root[data-tema='carreta'] th {
+  border-bottom: var(--grosor) solid var(--c-tinta);
+  color: var(--c-tinta);
+}
+
+/* La tarjeta "Tu bolsa está lista: cóbrala" en verde pintado. */
+:root[data-tema='carreta'] .tarjeta-cobro {
+  border: var(--grosor) solid var(--c-tinta);
+  background: var(--c-verde);
+  color: #ffffff;
+}
+
+/* =====================================================================================================
+   FINTECH
+   Una app de finanzas moderna, hecha con el nivel de las mejores del rubro: gris muy claro, tarjetas
+   blancas con sombra fina, un verde de marca para actuar y nada que distraiga.
+   ===================================================================================================== */
+:root[data-tema='fintech'] {
+  --barra-fondo: rgba(255, 255, 255, 0.92);
+  --barra-linea: 1px solid var(--linea);
+  --barra-tinta: var(--tinta);
+  --menu-tinta: var(--tinta-2);
+  --menu-hover: var(--superficie-2);
+  --menu-activo: var(--superficie-2);
+  --menu-activo-tinta: var(--tinta);
+  --logo-punto: var(--acento);
+  --tarjeta-borde-hover: var(--borde);
+  --fila-hover: #fafbfc;
+  --brillo-turno: rgba(245, 158, 11, 0.4);
+  --boton-principal-sombra: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+:root[data-tema='fintech'] .barra::before {
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+
+:root[data-tema='fintech'] .selector h1 {
+  font-size: 34px;
+  line-height: 1.15;
+}
+:root[data-tema='fintech'] .panel h2 {
+  font-size: 20px;
+}
+:root[data-tema='fintech'] :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+  font-size: 18px;
+}
+
+/* Tarjetas blancas con una sombra fina; las piezas secundarias, solo con línea. */
+:root[data-tema='fintech'] :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar) {
+  border: 1px solid var(--linea);
+  box-shadow: var(--sombra);
+}
+
+:root[data-tema='fintech'] .boton {
+  border-width: 1px;
+}
+:root[data-tema='fintech'] .boton.secundario,
+:root[data-tema='fintech'] .boton.chico {
+  background: var(--superficie);
+  border-color: var(--borde);
+}
+
+/* Etiquetas suaves, sin borde. */
+:root[data-tema='fintech'] .etiqueta {
+  border: 0;
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+  font-weight: 600;
+}
+:root[data-tema='fintech'] :is(.etiqueta.abierta, .etiqueta.por-repartir) {
+  background: var(--turno-suave);
+  color: var(--sobre-turno);
+}
+:root[data-tema='fintech'] .etiqueta.en-curso {
+  background: var(--pago-suave);
+  color: var(--pago-texto);
+}
+
+:root[data-tema='fintech'] .lugar {
+  border: 1.5px dashed var(--borde);
+}
+:root[data-tema='fintech'] .lugar.lleno {
+  border: 0;
+  background: var(--acento);
+}
+
+:root[data-tema='fintech'] .filtro {
+  border: 1px solid var(--linea);
+  background: var(--superficie);
+  color: var(--tinta-2);
+}
+:root[data-tema='fintech'] .filtro.activo {
+  background: var(--tinta);
+  border-color: var(--tinta);
+  color: #ffffff;
+}
+:root[data-tema='fintech'] :is(.modo, .moneda) {
+  border: 1px solid var(--linea);
+  background: var(--superficie);
+}
+:root[data-tema='fintech'] .modo.elegido {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+  box-shadow: 0 0 0 1px var(--acento) inset;
+}
+
+:root[data-tema='fintech'] th {
+  border-bottom: 1px solid var(--linea);
+  font-weight: 500;
+  text-transform: none;
+}
+:root[data-tema='fintech'] td {
+  border-bottom-color: var(--linea);
+}
+
+:root[data-tema='fintech'] .tarjeta-cobro {
+  background: var(--pago-suave);
+  color: var(--pago-texto);
+}
+
+/* =====================================================================================================
+   Números grandes: en la carreta, con la letra de rótulo (el cero de Atkinson lleva raya y se ve técnico).
+   ===================================================================================================== */
+:root[data-tema='carreta'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande) {
+  font-family: var(--titulos);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+:root[data-tema='fintech'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande) {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+/* =====================================================================================================
+   LA RUEDA
+   ===================================================================================================== */
+
+/* ---------- Carreta: segmentos pintados que giran una ronda a la vez ---------- */
+.rueda-carreta .rc-giro,
+.rueda-carreta .rc-orbita {
+  /* Girar es moverse en pantalla: ease-in-out, despacio para que se vea quién pasa a cobrar. */
+  transition: transform 900ms var(--ease-in-out);
+}
+.rc-segmento {
+  fill: var(--color);
+  fill-opacity: 0.16;
+  stroke: var(--c-tinta);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  transition:
+    fill-opacity 500ms ease,
+    transform 400ms var(--ease-out);
+}
+/* Pagó esta ronda: el segmento se pinta entero. Fuera de una ronda (abierta, terminada), todos van pintados. */
+.nodo.pago .rc-segmento,
+.rueda-carreta:not(.activa) .nodo:not(.libre) .rc-segmento {
+  fill-opacity: 1;
+}
+/* Quien cobra queda bajo la flecha y su segmento sale un poco de la rueda. */
+.nodo.turno .rc-segmento {
+  transform: translateY(-10px);
+}
+.nodo.libre .rc-segmento {
+  fill: #ffffff;
+  fill-opacity: 1;
+  stroke: var(--tinta-2);
+  stroke-dasharray: 7 6;
+}
+.nodo.moroso .rc-segmento {
+  fill: var(--alerta-suave);
+  fill-opacity: 1;
+  stroke: var(--alerta);
+  stroke-dasharray: 7 5;
+}
+.rc-cubo {
+  fill: #ffffff;
+  stroke: var(--c-tinta);
+  stroke-width: 3;
+}
+.rueda-carreta .rueda-tiempo {
+  stroke: var(--c-azul);
+  stroke-width: 6;
+}
+.rueda-carreta .rueda-tiempo.vencida {
+  stroke: var(--alerta);
+}
+.rc-numero-fondo {
+  fill: #ffffff;
+  stroke: var(--c-tinta);
+  stroke-width: 2;
+}
+.rueda-carreta .nodo-turno {
+  font-family: var(--titulos);
+  font-size: 15px;
+  font-weight: 400;
+  fill: var(--c-tinta);
+}
+.rueda-carreta .nodo-cobro circle {
+  fill: var(--c-tinta);
+}
+.rueda-carreta .nodo-nombre {
+  font-size: 17px;
+  font-weight: 700;
+}
+.nodo-nombre.yo {
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+.nodo-nombre.libre {
+  font-weight: 400;
+  fill: var(--tinta-2);
+}
+.rc-flecha {
+  fill: var(--c-tinta);
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.rueda-carreta .centro-grande {
+  font-family: var(--titulos);
+  font-size: 36px;
+  font-weight: 400;
+}
+.rueda-carreta .centro-medio {
+  font-family: var(--titulos);
+  font-size: 20px;
+  font-weight: 400;
+}
+.rueda-carreta .centro-sub {
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--tinta);
+}
+.rueda-carreta .centro-nota {
+  font-size: 13px;
+}
+
+/* ---------- Fintech: un anillo de tiempo y un círculo por persona ---------- */
+.rueda-anillo .rueda-pista {
+  stroke: var(--linea);
+  stroke-width: 10;
+}
+.rueda-anillo .rueda-tiempo {
+  stroke: var(--acento);
+  stroke-width: 10;
+}
+.rueda-anillo .rueda-tiempo.vencida {
+  stroke: var(--alerta);
+}
+.rueda-anillo .nodo-punto {
+  fill: #ffffff;
+  stroke: var(--borde);
+  stroke-width: 2;
+}
+.rueda-anillo .nodo.pago .nodo-punto {
+  fill: var(--pago-suave);
+  stroke: var(--pago);
+  stroke-width: 2.5;
+}
+.rueda-anillo .nodo.turno .nodo-punto {
+  fill: var(--turno);
+  stroke: var(--turno);
+}
+.rueda-anillo .nodo-turno {
+  font-size: 16px;
+  font-weight: 650;
+}
+.rueda-anillo .nodo-nombre {
+  font-size: 16px;
+  font-weight: 550;
+}
+.rueda-anillo .centro-grande {
+  font-size: 46px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.rueda-anillo .centro-medio {
+  font-size: 24px;
+  font-weight: 650;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rueda-carreta .rc-giro,
+  .rueda-carreta .rc-orbita,
+  .rc-segmento {
+    transition: none;
+  }
+}
+
+/* =====================================================================================================
+   CREAR, HISTORIAL Y DATOS
+   ===================================================================================================== */
+:root[data-tema='carreta'] :is(.historial-cabeza, .opciones-historial) {
+  border: var(--grosor) solid var(--c-tinta);
+  border-radius: var(--radio);
+}
+:root[data-tema='carreta'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+/* Sobre el amarillo de lo elegido, el texto secundario va en tinta (el gris no se lee). */
+:root[data-tema='carreta'] :is(.modo.elegido .modo-lema, .moneda.elegida .moneda-lema) {
+  color: var(--c-tinta);
+}
+/* Los datos de los paneles (bolsa, plazo, quién cobra), con la letra de rótulo. */
+:root[data-tema='carreta'] .dato dd {
+  font-family: var(--titulos);
+  font-weight: 400;
+  font-size: 19px;
+}
+:root[data-tema='carreta'] .dato dd.alerta {
+  color: var(--alerta);
+}
+
+:root[data-tema='fintech'] :is(.historial-cabeza, .opciones-historial) {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+:root[data-tema='fintech'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+:root[data-tema='fintech'] .dato dd {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* La llanta de la rueda de la carreta: el aro blanco con contorno de tinta detrás de los segmentos. */
+.rc-llanta {
+  fill: #ffffff;
+  stroke: var(--c-tinta);
+  stroke-width: 3;
+}

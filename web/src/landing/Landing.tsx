@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import './landing.css'
 import { useRevelar } from './useRevelar'
+import { RuedaMuestra } from './RuedaMuestra'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { RUTA_DEMO, RUTA_INICIO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
-
-type Props = {
-  verde?: 'esmeralda' | 'bosque' | 'lima'
-}
 
 const PASOS = [
   { t: 'Crea o únete', d: 'Define la cuota, cuántas personas y cada cuánto se paga. Comparte el enlace con tu grupo.' },
@@ -37,17 +34,12 @@ function irASeccion(id: string) {
   }
 }
 
-export function Landing({ verde = 'esmeralda' }: Props) {
+export function Landing() {
   const raiz = useRef<HTMLDivElement>(null)
   useRevelar(raiz)
 
   return (
-    <div ref={raiz} className={`ln verde-${verde}`}>
-      <div className="ln-fondo" aria-hidden="true">
-        <div className="ln-brillo-1" />
-        <div className="ln-brillo-2" />
-        <div className="ln-cuadricula" />
-      </div>
+    <div ref={raiz} className="ln">
 
       <div className="ln-contenedor">
         <header className="ln-barra">
@@ -62,36 +54,30 @@ export function Landing({ verde = 'esmeralda' }: Props) {
           </nav>
         </header>
 
+        {/* La portada es una grilla: a la izquierda la promesa y cómo entrar; a la derecha, la rueda funcionando. */}
         <section className="ln-hero">
-          <div className="ln-hero-titulo">
-            <p className="ln-chip ln-entrada"><span className="ln-chip-punto" />Tandas con contrato inteligente en Stellar</p>
-            <h1 className="ln-h1 ln-entrada d1">
-              La tanda de siempre, <span className="ln-degradado-texto">sin que nadie se vaya con el dinero.</span>
-            </h1>
+          <h1 className="ln-h1 ln-entrada d1">
+            La tanda de siempre, <span className="ln-enfasis">sin que nadie se vaya con el dinero.</span>
+          </h1>
+          <p className="ln-intro ln-entrada d2">
+            Un grupo aporta la misma cuota cada ronda y, por turnos, uno recibe todo. Aquí las reglas las cumple un contrato
+            inteligente: cobra a tiempo, aplica multas por atraso y protege a quienes cobran al final.
+          </p>
+          <div className="ln-hero-rueda ln-entrada d2">
+            <RuedaMuestra />
           </div>
-          <div className="ln-dos-columnas">
-            <div className="ln-intro ln-entrada d2">
-              <p>
-                Un grupo aporta la misma cuota cada ronda y, por turnos, uno recibe todo. Aquí las reglas las cumple un
-                contrato inteligente: cobra a tiempo, aplica multas por atraso y protege a quienes cobran al final.
-              </p>
-              <RuedaAnimada />
-            </div>
-            <EntradaApp />
-          </div>
+          <EntradaApp />
         </section>
 
         <section id="como" className="ln-seccion">
           <div className="ln-encabezado" data-revelar="subir">
-            <span className="ln-etiqueta">CÓMO FUNCIONA</span>
             <h2 className="ln-titulo-seccion">Cuatro pasos.</h2>
             <p className="ln-texto-grande">Lo mismo que una tanda entre amigos, con las cuentas siempre claras.</p>
           </div>
           <ol className="ln-pasos">
             {PASOS.map((p, i) => (
               <li key={p.t} className="ln-paso" data-revelar="subir" data-retraso={i * 120}>
-                <Escena paso={i} />
-                <span className="ln-paso-num">{String(i + 1).padStart(2, '0')}</span>
+                <span className="ln-paso-num" aria-hidden="true">{i + 1}</span>
                 <h3>{p.t}</h3>
                 <p>{p.d}</p>
               </li>
@@ -101,7 +87,6 @@ export function Landing({ verde = 'esmeralda' }: Props) {
 
         <section id="seguridad" className="ln-seccion">
           <div className="ln-encabezado" data-revelar="subir">
-            <span className="ln-etiqueta">SEGURIDAD</span>
             <h2 className="ln-titulo-seccion" style={{ maxWidth: '16ch' }}>El riesgo de siempre: el primero cobra y desaparece.</h2>
           </div>
           <div className="ln-dos-columnas">
@@ -126,7 +111,6 @@ export function Landing({ verde = 'esmeralda' }: Props) {
             <dl className="ln-reglas">
               {REGLAS.map((r, i) => (
                 <div key={r.t} className="ln-regla" data-revelar="subir" data-retraso={i * 100}>
-                  <span className="ln-regla-num">{String(i + 1).padStart(2, '0')}</span>
                   <dt>{r.t}</dt>
                   <dd>{r.d}</dd>
                 </div>
@@ -151,78 +135,6 @@ export function Landing({ verde = 'esmeralda' }: Props) {
           )}
         </footer>
       </div>
-    </div>
-  )
-}
-
-/* ---------- Rueda que pasa el turno cada 2.4 s ---------- */
-const NOMBRES = ['Ana', 'Beto', 'Carla', 'Tú', 'Diego']
-
-function RuedaAnimada() {
-  const [paso, setPaso] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setPaso((p) => p + 1), 2400)
-    return () => clearInterval(t)
-  }, [])
-  const actual = paso % NOMBRES.length
-
-  return (
-    <div className="ln-rueda" aria-label={`Ejemplo: en esta ronda cobra ${NOMBRES[actual]}`}>
-      <div className="ln-rueda-pista" />
-      <div className="ln-rueda-arco" style={{ transform: `rotate(${paso * 72 - 36}deg)` }} />
-      <div className="ln-rueda-centro">
-        <div>
-          <small>Cobra ahora</small>
-          <strong>{NOMBRES[actual]}</strong>
-          <span>+500 TUSD</span>
-        </div>
-      </div>
-      {NOMBRES.map((nombre, i) => {
-        const a = ((-90 + i * 72) * Math.PI) / 180
-        const clase = i === actual ? 'turno' : i < actual ? 'pagado' : ''
-        return (
-          <div key={nombre} className={`ln-nodo ${clase}`} style={{ left: `${50 + 37 * Math.cos(a)}%`, top: `${50 + 37 * Math.sin(a)}%` }}>
-            <div className="ln-nodo-punto">{i + 1}</div>
-            <span className="ln-nodo-nombre">{nombre}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-/* ---------- Mini animaciones de cada paso ---------- */
-function Escena({ paso }: { paso: number }) {
-  if (paso === 0)
-    return (
-      <div className="ln-escena" aria-hidden="true">
-        {[1, 0.75, 0.55, 0.35].map((o, i) => (
-          <div key={o} className="ln-persona" style={{ opacity: o, animationDelay: `${i * 0.25}s` }} />
-        ))}
-        <div className="ln-persona libre" style={{ animationDelay: '1s' }}>+</div>
-      </div>
-    )
-  if (paso === 1)
-    return (
-      <div className="ln-escena abajo" aria-hidden="true">
-        {[70, 56, 42, 28, 14].map((h, i) => (
-          <div key={h} className="ln-barrita" style={{ height: h, opacity: 1 - i * 0.17, animationDelay: `${i * 0.15}s` }} />
-        ))}
-      </div>
-    )
-  if (paso === 2)
-    return (
-      <div className="ln-escena columna" aria-hidden="true">
-        <div className="ln-monedas">
-          {[0, 0.4, 0.8].map((d) => <div key={d} className="ln-moneda" style={{ animationDelay: `${d}s` }} />)}
-        </div>
-        <div className="ln-alcancia" />
-      </div>
-    )
-  return (
-    <div className="ln-escena columna" aria-hidden="true">
-      <span className="ln-cobro-monto">+500 TUSD</span>
-      <div className="ln-cobro-punto" />
     </div>
   )
 }
