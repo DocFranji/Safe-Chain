@@ -246,6 +246,31 @@ describe('narrar: pagar deudas (M1)', () => {
   })
 })
 
+describe('narrar: cerrar antes y pagar después de terminar (M1 v4)', () => {
+  it('cuenta que todos pagaron y la ronda se cerró antes', () => {
+    const [h] = narrar([ev({ name: 'EvCierreAnticipado', data: { id: 1, ronda: 1, vence: 1_000n } })], f)
+    expect(h).toMatchObject({ tipo: 'clave', titulo: 'Todos pagaron: la ronda 2 se cerró antes' })
+    expect(h.detalle).toContain('Las fechas no cambian')
+  })
+
+  it('pago después de terminar: directo a quien cobró de menos o su parte del reparto', () => {
+    const [directo, reparto] = narrar(
+      [
+        ev({ name: 'EvAbonoFinal', data: { id: 1, deudor: 'GANA', hacia: 'GCARLA', monto: 100n * U, reparto: false } }),
+        ev({ name: 'EvAbonoFinal', data: { id: 1, deudor: 'GCARLA', hacia: 'GBETO', monto: 50n * U, reparto: true } }),
+      ],
+      f,
+    )
+    expect(directo).toMatchObject({
+      tipo: 'clave',
+      titulo: 'Carla recibió los 100 TUSD que le faltaban',
+      detalle: 'Lo pagó Ana, con la tanda ya terminada',
+    })
+    expect(reparto).toMatchObject({ tipo: 'ok', titulo: 'Beto recibió 50 TUSD' })
+    expect(reparto.detalle).toContain('Su parte de lo que debía Carla')
+  })
+})
+
 describe('narrar: historial crediticio (M2)', () => {
   it('cuenta los requisitos de historial de la tanda', () => {
     const [con, sin, conectado] = narrar(

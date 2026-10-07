@@ -37,5 +37,7 @@ export const Error = {
     43: { message: "SelloRepetido" },
     55: { message: "TokenSinBoveda" },
     56: { message: "BovedaDeOtroToken" },
+    60: { message: "SubastaNoCierraAntes" },
+    61: { message: "CierreMuyAdelantado" },
     65: { message: "DeudaPendiente" }
 };

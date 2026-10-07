@@ -9,7 +9,14 @@ extern crate std;
 use crate::test::*;
 use crate::test_tiempos::{assert_conservacion_de, personas};
 use crate::*;
-use soroban_sdk::{testutils::Address as _, token::StellarAssetClient, Address};
+use soroban_sdk::{
+    testutils::{
+        storage::{Instance as _, Persistent as _},
+        Address as _,
+    },
+    token::StellarAssetClient,
+    Address,
+};
 use std::vec::Vec as StdVec;
 
 fn pagan(c: &Ctx, id: u32, quienes: &[&Address]) {
@@ -192,9 +199,10 @@ fn pagar_deuda_exige_la_firma_de_quien_paga() {
     assert!(c.tanda.try_pagar_deuda(&id, ana, ana, &(100 * U)).is_err());
 }
 
-/// Solo en `Activa` y `PorLiquidar`. Después de finalizar, la deuda queda registrada para siempre.
+/// `Activa`, `PorLiquidar` y (v4) `Finalizada`. Ni `Abierta` (todavía no puede haber deudas) ni
+/// `Cancelada` (nunca arrancó).
 #[test]
-fn pagar_deuda_solo_mientras_la_tanda_corre_o_por_liquidar() {
+fn pagar_deuda_en_cada_estado() {
     let c = setup();
     // Abierta: todavía no puede haber deudas.
     let abierta = c.crear(0);
@@ -203,25 +211,272 @@ fn pagar_deuda_solo_mientras_la_tanda_corre_o_por_liquidar() {
         c.tanda.try_pagar_deuda(&abierta, &c.ana, &c.ana, &U),
         Err(Ok(Error::EstadoInvalido))
     );
-
-    // Carla queda morosa en la ronda 2 y termina en PorLiquidar: ahí sí puede pagar.
-    let id = c.crear_y_llenar(0);
-    pagan(&c, id, &[&c.ana, &c.beto, &c.carla]);
-    cerrar(&c, id);
-    pagan(&c, id, &[&c.ana, &c.beto]);
-    cerrar(&c, id); // garantía de Carla cubre
-    pagan(&c, id, &[&c.ana, &c.beto]);
-    cerrar(&c, id); // Carla morosa
-    assert_eq!(c.tanda.get_tanda(&id).estado, Estado::PorLiquidar);
-    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(50 * U));
-
-    // Finalizada: ya no.
-    c.tanda.finalizar(&id);
+    // Cancelada: tampoco.
+    c.tanda.cancelar(&abierta);
     assert_eq!(
-        c.tanda.try_pagar_deuda(&id, &c.carla, &c.carla, &(50 * U)),
+        c.tanda.try_pagar_deuda(&abierta, &c.ana, &c.ana, &U),
         Err(Ok(Error::EstadoInvalido))
     );
+
+    // Carla queda morosa en su propia ronda (la 3) y termina en PorLiquidar: ahí puede pagar.
+    let id = carla_morosa_en_su_ronda(&c);
+    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(50 * U));
+
+    // Finalizada (v4): también.
+    c.tanda.finalizar(&id);
     assert_eq!(c.miembro(id, &c.carla).deuda, 50 * U);
+    assert_eq!(c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(50 * U)), 0);
+    c.assert_conservacion();
+}
+
+/// Tanda de 3 con garantía mínima: Carla no paga desde la ronda 2. Su garantía cubre la ronda 2 y en
+/// la 3 (la suya) queda morosa: su bolsa (200, sin su cuota) se retiene y debe 100 a su propia ronda.
+/// Deja la tanda en `PorLiquidar`.
+fn carla_morosa_en_su_ronda(c: &Ctx) -> u32 {
+    let id = c.crear_y_llenar(0);
+    pagan(c, id, &[&c.ana, &c.beto, &c.carla]);
+    cerrar(c, id);
+    pagan(c, id, &[&c.ana, &c.beto]);
+    cerrar(c, id); // la garantía de Carla cubre
+    pagan(c, id, &[&c.ana, &c.beto]);
+    cerrar(c, id); // Carla morosa: su bolsa se retiene
+    let t = c.tanda.get_tanda(&id);
+    assert_eq!(t.estado, Estado::PorLiquidar);
+    assert_eq!(t.retenido, 200 * U);
+    let m = c.miembro(id, &c.carla);
+    assert!(m.moroso && !m.cobro);
+    assert_eq!(m.deuda, 100 * U);
+    id
+}
+
+// ===========================================================================
+// v4 (N2b): pagar la deuda después de que la tanda termina
+// ===========================================================================
+
+/// Ana debe 100 a Carla (ronda 3) y 100 a Dani (ronda 4); los dos cobraron su bolsa. Después de
+/// finalizar, el pago va directo de quien paga a cada uno, sin pasar por el contrato, del faltante
+/// más viejo al más nuevo, en partes y también pagado por otra persona.
+#[test]
+fn despues_de_finalizar_el_pago_va_directo_a_quien_cobro_de_menos() {
+    let c = setup();
+    let (id, g) = ana_morosa(&c);
+    let (ana, beto, carla, dani) = (&g[0], &g[1], &g[2], &g[3]);
+    pagan(&c, id, &[beto, carla, dani]);
+    cerrar(&c, id); // ronda 4: Ana tampoco paga, Dani cobra 300
+    c.tanda.finalizar(&id);
+    assert_eq!(c.tanda.get_tanda(&id).estado, Estado::Finalizada);
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    assert_eq!(c.miembro(id, ana).deuda, 200 * U);
+
+    // Pagar de más o por quien no debe sigue fallando.
+    assert_eq!(
+        c.tanda.try_pagar_deuda(&id, ana, ana, &(201 * U)),
+        Err(Ok(Error::PagoExcesivo))
+    );
+    assert_eq!(
+        c.tanda.try_pagar_deuda(&id, beto, beto, &U),
+        Err(Ok(Error::SinDeuda))
+    );
+    assert_eq!(
+        c.tanda.try_pagar_deuda(&id, ana, ana, &0),
+        Err(Ok(Error::MontoInvalido))
+    );
+
+    // Ana paga 150: 100 a Carla (lo más viejo) y 50 a Dani.
+    let antes: StdVec<i128> = g.iter().map(|p| c.saldo(p)).collect();
+    assert_eq!(c.tanda.pagar_deuda(&id, ana, ana, &(150 * U)), 50 * U);
+    assert_eq!(c.saldo(ana), antes[0] - 150 * U);
+    assert_eq!(c.saldo(carla), antes[2] + 100 * U);
+    assert_eq!(c.saldo(dani), antes[3] + 50 * U);
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    assert!(c.miembro(id, ana).moroso);
+
+    // Una persona de fuera (un familiar) paga el resto: los 50 que le faltan a Dani.
+    let familiar = Address::generate(&c.env);
+    StellarAssetClient::new(&c.env, &c.token.address)
+        .mint(&familiar, &crate::test_tiempos::SALDO_GRANDE);
+    let dani_antes = c.saldo(dani);
+    assert_eq!(c.tanda.pagar_deuda(&id, ana, &familiar, &(50 * U)), 0);
+    assert_eq!(c.saldo(dani), dani_antes + 50 * U);
+    let m = c.miembro(id, ana);
+    assert!(!m.moroso && m.deuda == 0);
+    let d = c.tanda.get_deuda(&id, ana);
+    assert!(d.faltantes.is_empty());
+    assert_eq!(d.pagado, 200 * U);
+    // Ya no debe nada.
+    assert_eq!(
+        c.tanda.try_pagar_deuda(&id, ana, ana, &U),
+        Err(Ok(Error::SinDeuda))
+    );
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    let mut todos = g.clone();
+    todos.push(familiar);
+    assert_conservacion_de(&c, &todos);
+}
+
+/// El faltante de su propia ronda: la bolsa de Carla se retuvo y al finalizar se repartió entre Ana y
+/// Beto. Lo que Carla pague después por esa ronda les llega a ellos, en partes iguales. No recupera
+/// la bolsa (ya se repartió), pero queda al día.
+#[test]
+fn despues_de_finalizar_su_propia_ronda_va_a_quienes_recibieron_el_reparto() {
+    let c = setup();
+    let id = carla_morosa_en_su_ronda(&c);
+    c.tanda.finalizar(&id);
+    let reparto: soroban_sdk::Vec<Address> = c.env.as_contract(&c.tanda_addr, || {
+        c.env
+            .storage()
+            .persistent()
+            .get(&ClaveM1::Repartidos(id))
+            .unwrap()
+    });
+    assert_eq!(
+        reparto,
+        soroban_sdk::vec![&c.env, c.ana.clone(), c.beto.clone()]
+    );
+
+    let (ana0, beto0, carla0) = (c.saldo(&c.ana), c.saldo(&c.beto), c.saldo(&c.carla));
+    // Parcial: 30 (15 para cada uno).
+    assert_eq!(
+        c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(30 * U)),
+        70 * U
+    );
+    assert_eq!(c.saldo(&c.ana), ana0 + 15 * U);
+    assert_eq!(c.saldo(&c.beto), beto0 + 15 * U);
+    // Un monto impar: el resto del redondeo va al último.
+    let impar = 7 * U + 1;
+    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &impar);
+    assert_eq!(c.saldo(&c.ana), ana0 + 15 * U + impar / 2);
+    assert_eq!(c.saldo(&c.beto), beto0 + 15 * U + impar - impar / 2);
+    // El resto lo paga Ana, que también recibe su parte: a ella no se le transfiere nada.
+    let falta = c.miembro(id, &c.carla).deuda;
+    let (ana1, beto1) = (c.saldo(&c.ana), c.saldo(&c.beto));
+    assert_eq!(c.tanda.pagar_deuda(&id, &c.carla, &c.ana, &falta), 0);
+    assert_eq!(c.saldo(&c.ana), ana1 - falta + falta / 2);
+    assert_eq!(c.saldo(&c.beto), beto1 + falta - falta / 2);
+
+    let m = c.miembro(id, &c.carla);
+    assert!(!m.moroso && !m.cobro && m.deuda == 0);
+    assert_eq!(c.saldo(&c.carla), carla0 - 30 * U - impar);
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    c.assert_conservacion();
+}
+
+/// Todos terminan en mora: al finalizar nadie recibe reparto. Lo que se pague después va a quien
+/// cobró de menos, aunque su bolsa se haya retenido (nadie más la recibió).
+#[test]
+fn despues_de_finalizar_sin_reparto_va_a_quien_cobro_de_menos() {
+    let c = setup();
+    let id = c.crear_y_llenar(0);
+    pagan(&c, id, &[&c.ana, &c.beto, &c.carla]);
+    cerrar(&c, id); // Ana cobra
+    cerrar(&c, id); // nadie paga: las garantías cubren y Beto cobra
+    cerrar(&c, id); // nadie paga ni tiene garantía: todos morosos, la bolsa de Carla sale vacía
+    for p in [&c.ana, &c.beto, &c.carla] {
+        assert!(c.miembro(id, p).moroso);
+    }
+    c.tanda.finalizar(&id);
+    let hay_reparto = c.env.as_contract(&c.tanda_addr, || {
+        c.env.storage().persistent().has(&ClaveM1::Repartidos(id))
+    });
+    assert!(!hay_reparto);
+
+    let carla0 = c.saldo(&c.carla);
+    c.tanda.pagar_deuda(&id, &c.ana, &c.ana, &(100 * U));
+    assert_eq!(c.saldo(&c.carla), carla0 + 100 * U);
+    // Carla paga su propia ronda: el dinero sería para ella misma, así que no se mueve nada.
+    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(100 * U));
+    assert_eq!(c.saldo(&c.carla), carla0 + 100 * U);
+    assert!(!c.miembro(id, &c.carla).moroso);
+    c.assert_conservacion();
+}
+
+/// El bloqueo de morosos (N2a, M2) se lee del historial: `veces_moroso > deudas_saldadas`. Saldar
+/// después de finalizar debe anotar `DeudaSaldada` una vez, para que la persona se desbloquee.
+#[test]
+fn saldar_despues_de_finalizar_anota_deuda_saldada_en_el_historial() {
+    let c = setup();
+    let dir = c.env.register(historial::HistorialContract, ());
+    let h = historial::HistorialContractClient::new(&c.env, &dir);
+    h.inicializar(&Address::generate(&c.env));
+    h.autorizar_emisor(&c.tanda_addr);
+    c.tanda.configurar_historial(&Some(dir));
+
+    let id = carla_morosa_en_su_ronda(&c);
+    c.tanda.finalizar(&id);
+    let antes = h.historial(&c.carla);
+    assert_eq!((antes.veces_moroso, antes.deudas_saldadas), (1, 0));
+
+    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(40 * U));
+    assert_eq!(h.historial(&c.carla).deudas_saldadas, 0);
+    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(60 * U));
+    let despues = h.historial(&c.carla);
+    assert_eq!((despues.veces_moroso, despues.deudas_saldadas), (1, 1));
+    c.assert_conservacion();
+}
+
+/// Pasa `segundos` (reloj y ledgers) comprobando antes que nada de lo que `pagar_deuda` lee en una tanda
+/// finalizada se archive en el camino: la instancia, la tanda, la lista, cada miembro, cada deuda y el
+/// reparto. (Las participaciones en la bóveda ya no importan: la tanda no tiene.)
+fn pasar_sin_archivar_finalizada(c: &Ctx, id: u32, segundos: u64) {
+    let salto = (segundos / 5) as u32;
+    let (env, yo) = (&c.env, &c.tanda_addr);
+    env.as_contract(yo, || {
+        let p = env.storage().persistent();
+        assert!(env.storage().instance().get_ttl() >= salto, "instancia");
+        assert!(p.get_ttl(&DataKey::Tanda(id)) >= salto, "Tanda");
+        assert!(p.get_ttl(&DataKey::Miembros(id)) >= salto, "Miembros");
+        let lista: soroban_sdk::Vec<Address> = p.get(&DataKey::Miembros(id)).unwrap();
+        for dir in lista.iter() {
+            assert!(
+                p.get_ttl(&DataKey::Miembro(id, dir.clone())) >= salto,
+                "Miembro"
+            );
+            let d = ClaveM1::DeudaDe(id, dir);
+            if p.has(&d) {
+                assert!(p.get_ttl(&d) >= salto, "DeudaDe");
+            }
+        }
+        let r = ClaveM1::Repartidos(id);
+        if p.has(&r) {
+            assert!(p.get_ttl(&r) >= salto, "Repartidos");
+        }
+    });
+    crate::test_tiempos::pasar(c, segundos);
+}
+
+/// Una tanda mensual termina con una deuda: sus datos viven lo máximo de la red (~180 días en
+/// testnet) y la persona puede pagar meses después sin que nada se haya archivado. Cada pago vuelve
+/// a renovar todo.
+#[test]
+fn la_deuda_se_puede_pagar_meses_despues_de_finalizar() {
+    let c = setup();
+    crate::test_tiempos::como_testnet(&c);
+    let mes = 30 * 86_400;
+    let id = c
+        .tanda
+        .crear_tanda(&c.creador, &c.token.address, &CUOTA, &3, &mes, &1_000, &0);
+    for p in [&c.ana, &c.beto, &c.carla] {
+        c.tanda.unirse(&id, p);
+    }
+    let pasar = |s: u64| crate::test_tiempos::pasar_sin_archivar(&c, id, s, "tanda mensual");
+    pagan(&c, id, &[&c.ana, &c.beto, &c.carla]);
+    pasar(mes);
+    c.tanda.cerrar_ronda(&id);
+    pagan(&c, id, &[&c.ana, &c.beto]);
+    pasar(mes);
+    c.tanda.cerrar_ronda(&id);
+    pagan(&c, id, &[&c.ana, &c.beto]);
+    pasar(mes);
+    c.tanda.cerrar_ronda(&id); // Carla morosa
+    c.tanda.finalizar(&id);
+
+    // ~5 meses después (150 días) todo sigue vivo y Carla paga una parte.
+    let dias = 86_400;
+    pasar_sin_archivar_finalizada(&c, id, 150 * dias);
+    c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(40 * U));
+    // Y otros ~5 meses después, el resto: el pago anterior lo renovó todo.
+    pasar_sin_archivar_finalizada(&c, id, 150 * dias);
+    assert_eq!(c.tanda.pagar_deuda(&id, &c.carla, &c.carla, &(60 * U)), 0);
     c.assert_conservacion();
 }
 
@@ -397,7 +652,51 @@ const MAX_LECTURAS: u32 = 100;
 const MAX_EVENTOS_BYTES: u32 = 16_384;
 
 /// Lo más caro que se midió de cada operación: (nombre, instrucciones, lecturas, escrituras).
-type Medidas = StdVec<(&'static str, i64, u32, u32)>;
+pub(crate) type Medidas = StdVec<(&'static str, i64, u32, u32)>;
+
+/// Mide una operación sola (presupuesto ilimitado, ver `recorrer_peor_caso`), revisa los límites de
+/// mainnet por transacción y anota lo más caro en `medidas`.
+pub(crate) fn medir_en(
+    c: &Ctx,
+    medidas: &core::cell::RefCell<Medidas>,
+    que: &'static str,
+    f: &dyn Fn(),
+) {
+    c.env.cost_estimate().budget().reset_unlimited();
+    f();
+    let r = c.env.cost_estimate().resources();
+    let lecturas = r.disk_read_entries + r.memory_read_entries;
+    assert!(
+        r.instructions < MAX_INSTRUCCIONES,
+        "{que}: {} instrucciones",
+        r.instructions
+    );
+    assert!(
+        r.mem_bytes < MAX_MEMORIA,
+        "{que}: {} bytes de memoria",
+        r.mem_bytes
+    );
+    assert!(
+        r.write_entries <= MAX_ESCRITURAS,
+        "{que}: {} escrituras",
+        r.write_entries
+    );
+    assert!(lecturas <= MAX_LECTURAS, "{que}: {lecturas} lecturas");
+    assert!(
+        r.contract_events_size_bytes <= MAX_EVENTOS_BYTES,
+        "{que}: {} bytes de eventos",
+        r.contract_events_size_bytes
+    );
+    let mut m = medidas.borrow_mut();
+    match m.iter_mut().find(|x| x.0 == que) {
+        Some(x) => {
+            x.1 = x.1.max(r.instructions);
+            x.2 = x.2.max(lecturas);
+            x.3 = x.3.max(r.write_entries);
+        }
+        None => m.push((que, r.instructions, lecturas, r.write_entries)),
+    }
+}
 
 /// Peor caso: 12 personas con garantía mínima y casi nadie paga. Cada cierre anota hasta 12
 /// faltantes y Ana termina debiendo en 10 rondas distintas. Cada operación se mide sola y se compara
@@ -407,42 +706,7 @@ type Medidas = StdVec<(&'static str, i64, u32, u32)>;
 /// prueba, incluido el registro de diagnósticos y firmas, y no representa una sola transacción.)
 fn recorrer_peor_caso(c: &Ctx) -> Medidas {
     let medidas = core::cell::RefCell::new(Medidas::new());
-    let medir = |que: &'static str, f: &dyn Fn()| {
-        c.env.cost_estimate().budget().reset_unlimited();
-        f();
-        let r = c.env.cost_estimate().resources();
-        let lecturas = r.disk_read_entries + r.memory_read_entries;
-        assert!(
-            r.instructions < MAX_INSTRUCCIONES,
-            "{que}: {} instrucciones",
-            r.instructions
-        );
-        assert!(
-            r.mem_bytes < MAX_MEMORIA,
-            "{que}: {} bytes de memoria",
-            r.mem_bytes
-        );
-        assert!(
-            r.write_entries <= MAX_ESCRITURAS,
-            "{que}: {} escrituras",
-            r.write_entries
-        );
-        assert!(lecturas <= MAX_LECTURAS, "{que}: {lecturas} lecturas");
-        assert!(
-            r.contract_events_size_bytes <= MAX_EVENTOS_BYTES,
-            "{que}: {} bytes de eventos",
-            r.contract_events_size_bytes
-        );
-        let mut m = medidas.borrow_mut();
-        match m.iter_mut().find(|x| x.0 == que) {
-            Some(x) => {
-                x.1 = x.1.max(r.instructions);
-                x.2 = x.2.max(lecturas);
-                x.3 = x.3.max(r.write_entries);
-            }
-            None => m.push((que, r.instructions, lecturas, r.write_entries)),
-        }
-    };
+    let medir = |que: &'static str, f: &dyn Fn()| medir_en(c, &medidas, que, f);
     let g = personas(c, 12);
     let id = c.tanda.crear_tanda(
         &c.creador,
@@ -478,7 +742,7 @@ fn recorrer_peor_caso(c: &Ctx) -> Medidas {
     medidas.into_inner()
 }
 
-fn imprimir(titulo: &str, m: &Medidas) {
+pub(crate) fn imprimir(titulo: &str, m: &Medidas) {
     std::println!("{titulo}");
     for (que, instr, lecturas, escrituras) in m {
         std::println!(
@@ -513,4 +777,69 @@ fn peor_caso_12_miembros_con_morosos_en_wasm() {
         "Peor caso, 12 miembros (WASM, con el costo real de la VM):",
         &m,
     );
+}
+
+/// Peor caso de N2b: 12 personas, la deudora es la última en cobrar y deja de pagar en la ronda 2.
+/// Debe a 9 personas que cobraron de menos (rondas 3 a 11) y a su propia ronda, cuya bolsa se reparte
+/// al finalizar entre las otras 11. Pagarlo todo después de finalizar: 20 transferencias directas.
+fn recorrer_peor_caso_tras_finalizar(c: &Ctx) -> Medidas {
+    let medidas = core::cell::RefCell::new(Medidas::new());
+    let medir = |que: &'static str, f: &dyn Fn()| medir_en(c, &medidas, que, f);
+    let g = personas(c, 12);
+    let id = c.tanda.crear_tanda(
+        &c.creador,
+        &c.token.address,
+        &CUOTA,
+        &12,
+        &PERIODO,
+        &1_000,
+        &0,
+    );
+    // La deudora (g[0]) entra al final: cobra la última ronda.
+    for p in g[1..].iter().chain(g[..1].iter()) {
+        c.tanda.unirse(&id, p);
+    }
+    let deudora = &g[0];
+    for ronda in 0..12u32 {
+        for p in &g {
+            if ronda == 0 || p != deudora {
+                c.tanda.pagar_cuota(&id, p);
+            }
+        }
+        cerrar(c, id);
+    }
+    assert!(c.miembro(id, deudora).moroso);
+    medir("finalizar", &|| c.tanda.finalizar(&id));
+    let deuda = c.miembro(id, deudora).deuda;
+    assert_eq!(c.tanda.get_deuda(&id, deudora).faltantes.len(), 10);
+    // Primero una parte (cubre los faltantes viejos) y luego el resto (incluye el reparto entre 11).
+    medir("pagar tras finalizar", &|| {
+        c.tanda.pagar_deuda(&id, deudora, deudora, &(deuda / 3));
+    });
+    let falta = c.miembro(id, deudora).deuda;
+    medir("pagar tras finalizar", &|| {
+        assert_eq!(c.tanda.pagar_deuda(&id, deudora, deudora, &falta), 0);
+    });
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    assert_conservacion_de(c, &g);
+    medidas.into_inner()
+}
+
+#[test]
+fn peor_caso_12_miembros_pagar_despues_de_finalizar() {
+    let c = setup();
+    let m = recorrer_peor_caso_tras_finalizar(&c);
+    imprimir("Pagar después de finalizar, 12 miembros (nativo):", &m);
+}
+
+/// Con WASM: `stellar contract build && PEOR_CASO_WASM=1 cargo test -p tanda peor_caso -- --nocapture`
+#[test]
+fn peor_caso_12_miembros_pagar_despues_de_finalizar_en_wasm() {
+    if std::env::var("PEOR_CASO_WASM").is_err() {
+        std::println!("(omitida: corre `stellar contract build` y luego con PEOR_CASO_WASM=1)");
+        return;
+    }
+    let c = crate::test_tiempos::setup_wasm(0, 1);
+    let m = recorrer_peor_caso_tras_finalizar(&c);
+    imprimir("Pagar después de finalizar, 12 miembros (WASM):", &m);
 }

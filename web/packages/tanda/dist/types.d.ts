@@ -124,6 +124,12 @@ export declare const Error: {
     56: {
         message: string;
     };
+    60: {
+        message: string;
+    };
+    61: {
+        message: string;
+    };
     65: {
         message: string;
     };
@@ -568,6 +574,21 @@ export interface EvPropuestaEvent {
     };
 }
 /**
+ * Un pago de deuda hecho después de finalizar la tanda llegó directo a `hacia` (sin pasar por el
+ * contrato). `reparto`: `false` si `hacia` cobró de menos por esa deuda; `true` si es su parte, en
+ * partes iguales, de lo que se debía a bolsas retenidas que se repartieron al finalizar.
+ */
+export interface EvAbonoFinalEvent {
+    name: "EvAbonoFinal";
+    data: {
+        id: number;
+        deudor?: string;
+        hacia?: string;
+        monto?: bigint;
+        reparto?: boolean;
+    };
+}
+/**
  * Event: EvFinalizada
  */
 export interface EvFinalizadaEvent {
@@ -655,6 +676,18 @@ export interface EvBolsaRecuperadaEvent {
     };
 }
 /**
+ * Todos pagaron y la ronda `ronda` se cerró antes de su fecha límite (`vence`). Las fechas no se
+ * mueven: la ronda siguiente se puede pagar desde ya y vence un periodo después de `vence`.
+ */
+export interface EvCierreAnticipadoEvent {
+    name: "EvCierreAnticipado";
+    data: {
+        id: number;
+        ronda?: number;
+        vence?: bigint;
+    };
+}
+/**
  * Se retiró una propuesta de intercambio (lo guardado volvió a `de`).
  */
 export interface EvPropuestaRetiradaEvent {
@@ -674,4 +707,4 @@ export interface EvHistorialConfiguradoEvent {
         historial?: string | null;
     };
 }
-export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
+export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvAbonoFinalEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvCierreAnticipadoEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
