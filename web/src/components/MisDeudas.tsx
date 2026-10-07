@@ -70,6 +70,8 @@ export function MisDeudas({ yo }: { yo: string }) {
                     <strong>
                       {monto(d.deuda)} {simbolo}
                     </strong>
+                    {' · '}
+                    <a href={rutaTanda(d.id)}>Ver detalle</a> (a quién le llega)
                   </p>
                   <button
                     type="button"

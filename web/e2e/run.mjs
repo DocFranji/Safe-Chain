@@ -1227,6 +1227,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   check('Perfil: desde el menú, con tu dirección y cómo entraste', /Tu perfil/.test(t) && t.includes(ME) && /Entraste con Freighter/.test(t), t.slice(0, 400))
   check('Perfil: "Mis deudas" lista la tanda 6 con lo que debo y un botón para pagar', /Tanda 6 \(en curso\): debes 100 TUSD/.test(t) && (await page.getByRole('button', { name: 'Pagar 100 TUSD' }).count()) === 1, t.slice(0, 900))
   check('Perfil: explica que con deuda no se puede unir a otra tanda', /no puedes unirte a otra tanda/.test(t))
+  check('Perfil: "Ver detalle" lleva a la tanda (el desglose de M1)', (await page.getByRole('link', { name: 'Ver detalle' }).getAttribute('href')) === '#/tanda/6')
   check('Perfil: muestra el historial y el aviso de mora sin saldar', /Tu historial/.test(t) && /deuda sin saldar/.test(t))
   check('Perfil: ya no está "Mi historial" en el menú', (await page.getByRole('link', { name: 'Mi historial' }).count()) === 0)
   await shot(page, 'm2v4-01-perfil')
