@@ -120,6 +120,8 @@ pub enum Error {
     // --- M4: bóveda por token (50–59; el adaptador de Blend usa 50–53 con sus propios nombres) ---
     TokenSinBoveda = 55,    // no hay bóveda para el token de esta tanda
     BovedaDeOtroToken = 56, // la bóveda que se quiere registrar guarda otro token
+    // --- M2 v4: bloqueo por deuda (65–69) ---
+    DeudaPendiente = 65, // tiene una mora sin saldar en alguna tanda: no puede unirse a otra
 }
 
 // ---------------------------------------------------------------------------

@@ -362,6 +362,11 @@ impl Mundo {
         self.historial().map(|h| h.puntaje(p)).unwrap_or(0)
     }
 
+    /// (M2 v4, N2a) Con el historial conectado, quien tiene una mora sin saldar no puede unirse.
+    fn bloqueado_por_deuda(&self, p: &Address) -> bool {
+        self.hist_conectado && self.historial().map(|h| h.tiene_mora(p)).unwrap_or(false)
+    }
+
     fn boveda(&self, id: u32) -> BovedaSimuladaClient<'static> {
         BovedaSimuladaClient::new(&self.env, &self.tanda.get_boveda(&id))
     }
@@ -846,6 +851,8 @@ impl Mundo {
             Some(Error::TandaLlena)
         } else if lista.iter().any(|(d, _)| d == p) {
             Some(Error::YaEsMiembro)
+        } else if self.bloqueado_por_deuda(p) {
+            Some(Error::DeudaPendiente)
         } else if req.puntaje_minimo > 0 && !self.hist_conectado {
             Some(Error::HistorialNoConfigurado)
         } else if req.puntaje_minimo > 0 && puntaje < req.puntaje_minimo {
@@ -972,6 +979,7 @@ impl Mundo {
                 .gente
                 .iter()
                 .filter(|p| !dentro.contains(p))
+                .filter(|p| !self.bloqueado_por_deuda(p))
                 .filter(|p| {
                     req.puntaje_minimo == 0
                         || (self.hist_conectado && self.puntaje(p) >= req.puntaje_minimo)
