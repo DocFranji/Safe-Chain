@@ -12,17 +12,17 @@ use soroban_sdk::{
 };
 use std::vec::Vec as StdVec;
 
-type Hist = HistorialContractClient<'static>;
+pub(crate) type Hist = HistorialContractClient<'static>;
 
 /// Despliega el historial, autoriza a la tanda como emisor y lo conecta.
-fn con_historial(c: &Ctx) -> Hist {
+pub(crate) fn con_historial(c: &Ctx) -> Hist {
     let h = desplegar_historial(&c.env);
     h.autorizar_emisor(&c.tanda_addr);
     c.tanda.configurar_historial(&Some(h.address.clone()));
     h
 }
 
-fn desplegar_historial(env: &Env) -> Hist {
+pub(crate) fn desplegar_historial(env: &Env) -> Hist {
     let dir = env.register(HistorialContract, ());
     let h = HistorialContractClient::new(env, &dir);
     h.inicializar(&Address::generate(env));
