@@ -42,7 +42,7 @@ const MENSAJES: Record<number, string> = {
   6: 'La tanda ya está completa.',
   7: 'Esta billetera no es miembro de la tanda.',
   8: 'Ya pagaste la cuota de esta ronda.',
-  9: 'La ronda todavía no vence. Espera a que termine el plazo.',
+  9: 'La ronda todavía no vence y falta alguien por pagar. Se puede cerrar antes solo si todos pagaron.',
   10: 'Tienes una deuda pendiente en esta tanda. Págala con «Pagar mi deuda» para volver a pagar tus cuotas.',
   11: 'Tu dirección todavía no está verificada.',
   12: 'Esta billetera no tiene permiso para hacer esto.',
@@ -73,6 +73,9 @@ const MENSAJES: Record<number, string> = {
   20: 'El historial crediticio no está disponible en este momento. Intenta de nuevo en unos minutos.',
   21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en «Mi historial».',
   22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
+  // M1 (v4): cerrar la ronda antes
+  60: 'En la subasta la ronda no se puede cerrar antes: las ofertas siguen abiertas hasta que vence.',
+  61: 'Ya se adelantaron varias rondas: la próxima fecha límite quedaría a más de 4 meses. Espera unos días para cerrar esta.',
   // M4: bóveda por token (contrato de la tanda)
   55: 'Esa moneda todavía no se puede usar en tandas.',
   56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
@@ -123,6 +126,8 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   HistorialNoConfigurado: 20,
   PuntajeInsuficiente: 21,
   RequisitosBloqueados: 22,
+  SubastaNoCierraAntes: 60,
+  CierreMuyAdelantado: 61,
   TokenSinBoveda: 55,
   BovedaDeOtroToken: 56,
 }

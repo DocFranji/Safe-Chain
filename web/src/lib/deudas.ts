@@ -76,3 +76,12 @@ export function faltantesAlCerrar(
     .filter((m) => !pagaron.includes(m.direccion) && m.colateral < cuota)
     .map((m) => ({ direccion: m.direccion, falta: cuota - (m.colateral > 0n ? m.colateral : 0n) }))
 }
+
+/**
+ * (M1 v4) Con la tanda ya terminada, ¿a quién le llega el pago de un faltante? Como `pagar_tras_finalizar` en
+ * deudas.rs: si quien cobró de menos sí recibió su bolsa, a esa persona (`'directo'`); si su bolsa se retuvo
+ * (era morosa, o es la propia), esa bolsa se repartió al final y el pago va a quienes la recibieron (`'reparto'`).
+ */
+export function destinoTrasTerminar(acreedor: string, yo: string, cobro: (direccion: string) => boolean): 'directo' | 'reparto' {
+  return acreedor !== yo && cobro(acreedor) ? 'directo' : 'reparto'
+}

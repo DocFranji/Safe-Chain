@@ -1,10 +1,12 @@
 // Pagar una deuda (misión M1). Si quien está conectado quedó en mora, ve cuánto debe, a quién le llega
 // el dinero y qué recupera al saldar. Cualquier persona puede pagar también la deuda de otra (un familiar).
+// (v4) También con la tanda ya terminada: el pago va directo a quien cobró de menos, o a quienes recibieron
+// el reparto final si esa bolsa se retuvo. Saldar deja a la persona al día para unirse a otras tandas.
 // Funciona con Freighter y con la cuenta de Google: firma con `clienteFirma`.
 import { useState } from 'react'
 import type { DatosTanda } from '../hooks/useTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
-import { bolsaQueRecupera, errorMontoDeuda, garantiaPendiente } from '../lib/deudas'
+import { bolsaQueRecupera, destinoTrasTerminar, errorMontoDeuda, garantiaPendiente } from '../lib/deudas'
 import { parseMonto } from '../lib/entradas'
 import { monto } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
@@ -28,7 +30,8 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
   const [parcial, setParcial] = useState('')
   const { tanda, miembros, deudas } = datos
   const estado = tanda.estado.tag
-  if (estado !== 'Activa' && estado !== 'PorLiquidar') return null
+  if (estado !== 'Activa' && estado !== 'PorLiquidar' && estado !== 'Finalizada') return null
+  const terminada = estado === 'Finalizada'
 
   const mio = miembros.find((m) => m.direccion === yo) ?? null
   const otros = miembros.filter((m) => m.direccion !== yo && m.deuda > 0n)
@@ -61,6 +64,8 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
           multas={mio.multas_pendientes}
           garantia={garantiaPendiente({ ...tanda, estado }, mio.colateral)}
           cobraEnRonda={estado === 'Activa' && !mio.cobro && mio.posicion > tanda.ronda_actual ? mio.posicion + 1 : null}
+          terminada={terminada}
+          cobro={(dir) => miembros.find((m) => m.direccion === dir)?.cobro ?? true}
           ocupado={ocupado}
           faltaSaldo={faltaSaldo}
           parcial={parcial}
@@ -70,7 +75,9 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
               yo,
               cuanto,
               cuanto === mio.deuda
-                ? 'Listo: saldaste tu deuda. Vuelves a estar al día.'
+                ? terminada
+                  ? 'Listo: saldaste tu deuda. Vuelves a estar al día y puedes unirte a otras tandas.'
+                  : 'Listo: saldaste tu deuda. Vuelves a estar al día.'
                 : `Listo: pagaste ${monto(cuanto)} ${SIMBOLO} de tu deuda.`,
             )
           }
@@ -82,7 +89,7 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
           <summary>Pagar la deuda de otra persona</summary>
           <p className="explica">
             Cualquiera puede pagar la deuda de otra persona, por ejemplo un familiar. El dinero sale de tu cuenta y le
-            llega a quien cobró de menos.
+            llega a quien cobró de menos{terminada ? ' (o, si esa bolsa se repartió al final, a quienes la recibieron)' : ''}.
           </p>
           <ul className="lista-deudas">
             {otros.map((m) => (
@@ -126,6 +133,10 @@ type MiDeudaProps = {
   garantia: bigint
   /** Ronda (1, 2, ...) en la que cobra si su turno aún no llegó. */
   cobraEnRonda: number | null
+  /** (v4) La tanda ya terminó: el pago va directo y no se recupera la bolsa retenida (ya se repartió). */
+  terminada: boolean
+  /** ¿Esa persona recibió su bolsa? */
+  cobro: (direccion: string) => boolean
   ocupado: boolean
   faltaSaldo: (cuanto: bigint) => bigint
   parcial: string
@@ -133,9 +144,34 @@ type MiDeudaProps = {
   pagar: (cuanto: bigint) => void
 }
 
-function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaSaldo, parcial, setParcial, pagar }: MiDeudaProps) {
+function MiDeuda({
+  deuda,
+  d,
+  yo,
+  multas,
+  garantia,
+  cobraEnRonda,
+  terminada,
+  cobro,
+  ocupado,
+  faltaSaldo,
+  parcial,
+  setParcial,
+  pagar,
+}: MiDeudaProps) {
   const SIMBOLO = useSimbolo()
-  const recupera = bolsaQueRecupera(d, yo, multas, garantia)
+  // Con la tanda terminada, la bolsa retenida ya se repartió: no se recupera.
+  const recupera = terminada ? null : bolsaQueRecupera(d, yo, multas, garantia)
+  const aQuien = (acreedor: string) =>
+    terminada
+      ? destinoTrasTerminar(acreedor, yo, cobro) === 'directo'
+        ? nombreDe(acreedor)
+        : acreedor === yo
+          ? 'Tu propia bolsa: se repartió al final, así que va a quienes la recibieron'
+          : `La bolsa de ${nombreDe(acreedor)} se repartió al final: va a quienes la recibieron`
+      : acreedor === yo
+        ? 'Tu propia bolsa, que está retenida'
+        : nombreDe(acreedor)
   const montoParcial = parseMonto(parcial)
   const errorParcial = parcial.trim() === '' ? null : errorMontoDeuda(montoParcial, deuda)
   const falta = faltaSaldo(deuda)
@@ -146,15 +182,16 @@ function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaS
         Tienes una deuda de {monto(deuda)} {SIMBOLO}
       </h3>
       <p className="explica">
-        Tu garantía ya no alcanzó a cubrir tus cuotas. Si pagas, el dinero le llega a quien cobró de menos por tu
-        atraso:
+        {terminada
+          ? 'La tanda ya terminó, pero tu deuda sigue pendiente y no puedes unirte a otras tandas hasta pagarla. Si pagas, el dinero va directo a quien cobró de menos por tu atraso:'
+          : 'Tu garantía ya no alcanzó a cubrir tus cuotas. Si pagas, el dinero le llega a quien cobró de menos por tu atraso:'}
       </p>
       {d && d.faltantes.length > 0 && (
         <ul className="lista-deudas">
           {d.faltantes.map((f) => (
             <li key={`${f.ronda}-${f.acreedor}`}>
               <span>
-                {f.acreedor === yo ? 'Tu propia bolsa, que está retenida' : nombreDe(f.acreedor)}
+                {aQuien(f.acreedor)}
                 <span className="sub"> · ronda {f.ronda + 1}</span>
               </span>
               <strong>
@@ -165,7 +202,9 @@ function MiDeuda({ deuda, d, yo, multas, garantia, cobraEnRonda, ocupado, faltaS
         </ul>
       )}
       <p className="explica">
-        Al saldarla vuelves a estar al día y puedes pagar tus cuotas otra vez.
+        {terminada
+          ? 'Al saldarla vuelves a estar al día y puedes unirte a otras tandas.'
+          : 'Al saldarla vuelves a estar al día y puedes pagar tus cuotas otra vez.'}
         {cobraEnRonda !== null && ` Cobras tu bolsa en la ronda ${cobraEnRonda}, como estaba previsto.`}
         {recupera && ` Recuperas tu bolsa retenida: ${monto(recupera.neto)} ${SIMBOLO}${descuentos(recupera, SIMBOLO)}.`}
       </p>

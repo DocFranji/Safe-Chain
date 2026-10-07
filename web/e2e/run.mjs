@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, conMiBolsaLista, conTandaUsdc, historial, ADAPTADOR_USDC, USDC_ID } from './mock.mjs'
+import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTodosPagaron, conDeudaTerminada, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, conMiBolsaLista, conTandaUsdc, historial, ADAPTADOR_USDC, USDC_ID } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -216,6 +216,73 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Móvil (390px): la tanda con deuda y calendario no se desborda', !overflow)
   await shot(page, '06c-tanda-deuda-390')
   check('Tercero: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 5e. M1 v4: todos pagaron, se cierra antes (y en la subasta no)
+{
+  const est = conTodosPagaron(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('.panel .acciones button', { timeout: 15000 }).catch(() => {})
+  const panel = (await page.locator('.panel').first().innerText()).replace(/\u00a0/g, ' ')
+  const boton = page.getByRole('button', { name: 'Todos pagaron: cobra tu bolsa ya' })
+  check('Cerrar antes: a quien cobra le ofrece "Todos pagaron: cobra tu bolsa ya"', (await boton.count()) === 1 && !(await boton.isDisabled()), panel.slice(0, 500))
+  check('Cerrar antes: explica que las fechas no cambian y cuándo vence la próxima', /Las fechas no cambian: la próxima ronda ya se puede pagar y vence el \S+ \d+ de \S+/.test(panel), panel)
+  check('Cerrar antes: no dice "Venció hace" (la ronda no ha vencido)', !/Venció hace/.test(panel))
+  await page.waitForSelector('.historia-item', { timeout: 15000 }).catch(() => {})
+  const hist = (await page.locator('.historia-seccion').innerText()).replace(/\u00a0/g, ' ')
+  check('Historia: "Todos pagaron: la ronda 1 se cerró antes"', /Todos pagaron: la ronda 1 se cerró antes/.test(hist), hist.slice(0, 400))
+  await shot(page, '06e-cerrar-antes')
+  check('Cerrar antes: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = conTodosPagaron(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est, direccion: CARLA, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('.panel .acciones button', { timeout: 15000 }).catch(() => {})
+  const panel = (await page.locator('.panel').first().innerText()).replace(/\u00a0/g, ' ')
+  check('Cerrar antes: cualquiera puede ("Todos pagaron: cerrar ya y pagarle a …")', /Todos pagaron: cerrar ya y pagarle a/.test(panel) && /cualquier persona puede cerrarla/.test(panel), panel.slice(0, 500))
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
+  check('Móvil (390px): cerrar antes no se desborda', !overflow)
+  await shot(page, '06e-cerrar-antes-390')
+  check('Cerrar antes (otra persona): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  const est = conTodosPagaron(nuevoEstado(), { subasta: true })
+  const { page, errores } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('.panel .acciones', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(500)
+  const panel = (await page.locator('.panel').first().innerText()).replace(/\u00a0/g, ' ')
+  check('Subasta: aunque todos pagaron, no ofrece cerrar antes', !/Todos pagaron: c/.test(panel) && !/Cerrar la ronda/.test(panel), panel.slice(0, 500))
+  check('Subasta: explica que se entrega al terminar el plazo', /En la subasta la bolsa se entrega al cerrar la ronda/.test(panel), panel.slice(0, 600))
+  check('Subasta (todos pagaron): sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 5f. M1 v4: pagar la deuda con la tanda ya terminada
+{
+  const est = conDeudaTerminada(nuevoEstado())
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tanda/6')
+  await page.waitForSelector('.pagar-deuda', { timeout: 15000 }).catch(() => {})
+  const panel = (await page.locator('.pagar-deuda').innerText().catch(() => '')).replace(/\u00a0/g, ' ')
+  check('Deuda tras terminar: "Tienes una deuda de 150 TUSD"', /Tienes una deuda de 150 TUSD/.test(panel), panel.slice(0, 300))
+  check('Deuda tras terminar: explica que la tanda terminó y que bloquea unirse a otras', /La tanda ya terminó/.test(panel) && /no puedes unirte a otras tandas/.test(panel), panel)
+  check('Deuda tras terminar: a Beto directo y su propia bolsa al reparto', /Beto/.test(panel) && /Tu propia bolsa: se repartió al final/.test(panel), panel)
+  check('Deuda tras terminar: no promete recuperar la bolsa', !/Recuperas tu bolsa/.test(panel), panel)
+  const boton = page.getByRole('button', { name: 'Pagar mi deuda (150 TUSD)' })
+  check('Deuda tras terminar: botón "Pagar mi deuda (150 TUSD)" habilitado', (await boton.count()) === 1 && !(await boton.isDisabled()))
+  await page.waitForSelector('.historia-item', { timeout: 15000 }).catch(() => {})
+  const hist = (await page.locator('.historia-seccion').innerText()).replace(/\u00a0/g, ' ')
+  check('Historia: "Beto recibió los 20 TUSD que le faltaban" (con la tanda ya terminada)', /Beto recibió los 20 TUSD que le faltaban/.test(hist) && /con la tanda ya terminada/.test(hist), hist.slice(0, 500))
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
+  check('Móvil (390px): deuda tras terminar no se desborda', !overflow)
+  await shot(page, '06f-deuda-terminada-390')
+  check('Deuda tras terminar: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 
