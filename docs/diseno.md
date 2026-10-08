@@ -97,3 +97,6 @@ Sin etiquetas sobre los títulos, sin texto con degradado, sin bordes de color a
 caracteres como íconos (la marca de "ya cobró" es un trazo SVG), fuentes servidas desde el propio sitio (pedidas antes
 de dibujar, con un tope de 400 ms), contraste AA en textos en claro y oscuro, y detalles del navegador (cursor de
 texto, barras de desplazamiento, color de los controles) con los colores de la marca.
+
+Mediciones de la portada con el protocolo de Chrome DevTools (vía Playwright), a 1440 px y a 390 px: CLS 0.000 en
+las dos opciones; LCP de 432 a 496 ms en Sarchí y de 468 a 496 ms en Montaña.

@@ -84,6 +84,10 @@
 }
 @media (max-width: 780px) {
   /* En el celular se viene a pagar: el panel va primero y la rueda, más chica, debajo. */
+  .app[data-pagina='tanda'] .escenario {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
   .app[data-pagina='tanda'] .escenario > .columna {
     order: -1;
   }
@@ -141,9 +145,14 @@
 .app[data-pagina='demo'] {
   max-width: 1240px;
 }
+/* "Tanda 2" no se parte: si no cabe, las etiquetas bajan. */
+.app[data-pagina='demo'] .demo-cabeza {
+  flex-wrap: wrap;
+}
 .app[data-pagina='demo'] .demo-cabeza h1 {
   font-size: clamp(40px, 6vw, 72px);
   font-stretch: var(--titulos-ancho, 100%);
+  white-space: nowrap;
 }
 .app[data-pagina='demo'] .demo .rueda svg {
   max-width: 620px;
