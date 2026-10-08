@@ -6,15 +6,12 @@ import { EXPLORADOR, TANDA_ID } from '../config'
 import { RUTA_DEMO, RUTA_INICIO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
 import { useTema, type Tema } from '../lib/tema'
-import { Cusuco } from '../components/Cusuco'
 
-// La promesa de la portada. Cada diseño en prueba tiene su frase; la parte resaltada va en "enfasis".
+// La promesa de la portada, con la voz de cada opción; la parte resaltada va en "enfasis".
+// Montaña juega con el refrán "cuentas claras, amistades largas".
 const PROMESA: Record<Tema, { antes: string; enfasis: string }> = {
-  carreta: { antes: 'La tanda de siempre, ', enfasis: 'sin que nadie se vaya con la plata.' },
-  fintech: { antes: 'La tanda de siempre, ', enfasis: 'sin que nadie se vaya con la plata.' },
-  lima: { antes: 'La tanda donde ', enfasis: 'nadie se va con la plata.' },
-  cusuco: { antes: 'Tu tanda, ', enfasis: 'protegida como un cusuco.' },
-  ronda: { antes: 'En esta ronda, ', enfasis: 'todos cobran.' },
+  sarchi: { antes: 'La tanda de siempre. ', enfasis: 'Nadie se va con la plata.' },
+  montana: { antes: 'Cuentas claras, ', enfasis: 'tandas largas.' },
 }
 
 const PASOS = [
@@ -28,7 +25,6 @@ const REGLAS = [
   { t: 'Garantía escalonada', d: 'Cobrar primero cuesta más garantía, así que irse con la bolsa no sale a cuenta.' },
   { t: 'Multas por atraso', d: 'Si pagas tarde, pagas una multa, y esa multa se reparte entre quienes cumplieron.' },
   { t: 'Tu garantía gana rendimiento', d: 'Mientras esperas tu turno, la garantía queda en una bóveda que genera rendimiento.' },
-  { t: 'Reglas públicas', d: 'El contrato corre en Stellar y cualquiera puede revisar cada pago.' },
 ]
 
 /**
@@ -85,11 +81,33 @@ export function Landing() {
             Todos ponen la misma cuota y, por turnos, uno cobra la bolsa. Un contrato en Stellar hace cumplir las reglas.
           </p>
           <div className="ln-hero-rueda ln-entrada d2">
-            {tema === 'cusuco' && <CusucoQueLlega />}
             <RuedaMuestra />
           </div>
           <EntradaApp />
         </section>
+
+        {/* La prueba: tres hechos que se pueden comprobar, justo debajo de la promesa. */}
+        <ul className="ln-prueba" aria-label="Lo que puedes comprobar">
+          <li>
+            <strong>Reglas públicas</strong>
+            <span>
+              El contrato corre en Stellar y cualquiera puede revisar cada pago.{' '}
+              {TANDA_ID && (
+                <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
+                  Ver el contrato
+                </a>
+              )}
+            </span>
+          </li>
+          <li>
+            <strong>Sin contraseñas</strong>
+            <span>{google ? 'Entras con Google o con Freighter, la billetera de Stellar.' : 'Entras con Freighter, la billetera de Stellar.'}</span>
+          </li>
+          <li>
+            <strong>Dinero de prueba</strong>
+            <span>Todo corre en la red de pruebas de Stellar: nada de esto usa dinero real.</span>
+          </li>
+        </ul>
 
         <section id="como" className="ln-seccion">
           <div className="ln-encabezado" data-revelar="subir">
@@ -118,12 +136,6 @@ export function Landing() {
           </div>
           <div className="ln-dos-columnas ln-bento">
             <div className="ln-grafica" data-revelar="subir" data-retraso="150">
-              {tema === 'cusuco' && (
-                <div className="ln-grafica-cusuco">
-                  <Cusuco pose="bola" />
-                  <p>El cusuco se enrolla para protegerse. Con la garantía, el grupo protege su plata.</p>
-                </div>
-              )}
               <p className="ln-grafica-titulo">Garantía según tu turno</p>
               <div className="ln-grafica-barras">
                 {/* Para 5 personas con garantía del 100 %: 400, 300, 200, 100 y 100 sobre 400 (el último nunca baja de 1 cuota). */}
@@ -161,7 +173,7 @@ export function Landing() {
         </section>
 
         <footer className="ln-pie">
-          <span>Funciona en la red de pruebas de Stellar (testnet): nada de esto usa dinero real.</span>
+          <span>Rounda: tandas con contrato inteligente en Stellar (testnet).</span>
           {TANDA_ID && (
             <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
               Ver el contrato en el explorador
@@ -169,16 +181,6 @@ export function Landing() {
           )}
         </footer>
       </div>
-    </div>
-  )
-}
-
-/** El cusuco llega rodando hecho bola, se desenrolla y saluda (con "reducir movimiento", solo saluda). */
-function CusucoQueLlega() {
-  return (
-    <div className="ln-cusuco" aria-hidden="true">
-      <Cusuco pose="bola" className="ln-cusuco-bola" />
-      <Cusuco pose="saluda" className="ln-cusuco-pie" />
     </div>
   )
 }

@@ -1,11 +1,7 @@
 /*
- * Portada de Rounda (#/). Todo vive bajo .ln. Usa los colores y letras del tema (index.css) y tiene una
- * composición por diseño en prueba (src/lib/tema.ts):
- *   Carreta: la portada roja con su fleco, la rueda pintada, la sección amarilla de la seguridad y el cierre en tinta.
- *   Fintech: blanca y limpia, la rueda dentro de una tarjeta como si fuera la app, el cierre en verde.
- *   Lima: salvia, el resaltador lima en la promesa, pasos en un riel y la seguridad en una cuadrícula de piezas.
- *   Cusuco: cielo pálido, la mascota llega rodando y saluda junto a la rueda, piezas de juguete con contorno.
- *   Ronda: blanco orquídea, la ronda de personas como portada y los colores de su ropa en los pasos.
+ * Portada de Rounda (#/). Todo vive bajo .ln. Usa los colores y letras de la opción en prueba (index.css):
+ *   A · Sarchí: portada roja con el fleco dorado de la carreta y la rueda pintada sobre su llanta blanca.
+ *   B · Montaña: portada verde con la rueda en un medallón blanco dentro de una órbita amarilla (el logo en grande).
  * Un solo momento animado: la rueda de ejemplo (RuedaMuestra.tsx). Lo demás solo aparece al entrar en pantalla.
  */
 .ln {
@@ -418,242 +414,121 @@
 }
 
 /* =====================================================================================================
-   CARRETA
+   LO COMÚN A LAS DOS OPCIONES
+   La barra y la portada comparten el campo de la marca (rojo o verde) con el texto en blanco; la rueda de
+   ejemplo va sobre su propia pieza clara. Debajo: la prueba, los pasos en un riel, la seguridad (la gráfica
+   grande y tres reglas) y un cierre en el color de la marca con una sola acción.
    ===================================================================================================== */
-[data-tema='carreta'] .ln-barra,
-[data-tema='carreta'] .ln-hero {
-  --ln-fondo: var(--c-rojo);
-  color: #ffffff;
+.ln-barra,
+.ln-hero {
+  --ln-fondo: var(--marca);
+  color: var(--sobre-marca);
 }
-[data-tema='carreta'] .ln-barra {
+.ln-barra {
   padding-bottom: 6px;
 }
-[data-tema='carreta'] .ln-enfasis {
-  color: var(--c-amarillo);
+.ln-marca {
+  font-size: 23px;
+  font-stretch: var(--titulos-ancho, 100%);
 }
-/* El fleco amarillo cuelga del borde de abajo de la portada roja. */
-[data-tema='carreta'] .ln-hero::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: calc(50% - 50vw);
-  right: calc(50% - 50vw);
-  height: 12px;
-  background: var(--c-amarillo);
-  -webkit-mask: conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) 0 0 / 24px 12px repeat-x;
-  mask: conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) 0 0 / 24px 12px repeat-x;
+.ln-nav a {
+  color: rgba(255, 255, 255, 0.84);
 }
-[data-tema='carreta'] .ln-intro {
-  color: rgba(255, 255, 255, 0.92);
+.ln .ln-barra .ln-boton.contorno {
+  border-color: var(--sobre-marca);
+  background: var(--sobre-marca);
+  color: var(--marca);
 }
-[data-tema='carreta'] .ln-rueda-nota {
-  color: #ffffff;
+.ln :is(.ln-barra, .ln-hero) :focus-visible {
+  outline-color: var(--sobre-marca);
 }
-[data-tema='carreta'] .ln .rueda-carreta .nodo-nombre {
-  fill: #ffffff;
+.ln-h1 {
+  max-width: 15ch;
+  font-size: clamp(40px, 4.8vw, 62px);
+  line-height: 1.02;
+  font-stretch: var(--titulos-ancho, 100%);
 }
-[data-tema='carreta'] .ln .rc-flecha {
-  stroke: var(--c-rojo);
+.ln-intro {
+  max-width: 30em;
+  color: rgba(255, 255, 255, 0.9);
 }
-[data-tema='carreta'] .ln .ln-boton {
-  border-color: var(--c-tinta);
+.ln-rueda-nota {
+  color: var(--tinta-2);
 }
-[data-tema='carreta'] .ln-barra .ln-boton.contorno {
-  border-color: #ffffff;
-  background: #ffffff;
-  color: var(--c-tinta);
+/* En la portada, el botón principal es claro sobre el campo de la marca; el secundario, solo con contorno. */
+.ln .ln-hero .ln-boton.principal {
+  border-color: var(--sobre-marca);
+  background: var(--sobre-marca);
+  color: var(--marca);
 }
-/* Pasos: cada número en un disco de un color de la carreta, unidos por una línea de tinta. */
-[data-tema='carreta'] .ln-paso-num {
-  border: 3px solid var(--c-tinta);
-  color: var(--c-tinta);
+.ln .ln-hero .ln-boton.secundario {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  color: var(--sobre-marca);
 }
-[data-tema='carreta'] .ln-paso:nth-child(1) .ln-paso-num {
-  background: var(--c-rojo);
-  color: #ffffff;
-}
-[data-tema='carreta'] .ln-paso:nth-child(2) .ln-paso-num {
-  background: var(--c-amarillo);
-}
-[data-tema='carreta'] .ln-paso:nth-child(3) .ln-paso-num {
-  background: var(--c-azul);
-  color: #ffffff;
-}
-[data-tema='carreta'] .ln-paso:nth-child(4) .ln-paso-num {
-  background: var(--c-verde);
-  color: #ffffff;
-}
-@media (min-width: 900px) {
-  [data-tema='carreta'] .ln-paso:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    top: 31px;
-    left: 76px;
-    right: -20px;
-    height: 3px;
-    background: var(--c-tinta);
+@media (hover: hover) and (pointer: fine) {
+  .ln .ln-hero .ln-boton.secundario:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
   }
 }
-/* La seguridad va sobre amarillo: es la promesa central. */
-[data-tema='carreta'] #seguridad {
-  --ln-fondo: var(--c-amarillo);
-  --ln-regla-linea: var(--c-tinta);
-}
-[data-tema='carreta'] #seguridad .ln-texto-grande {
-  color: var(--c-tinta);
-}
-[data-tema='carreta'] .ln-grafica {
-  border: 3px solid var(--c-tinta);
-}
-[data-tema='carreta'] .ln-grafica-barras > div {
-  border: 2px solid var(--c-tinta);
-  background: var(--c-rojo);
-}
-[data-tema='carreta'] .ln-grafica-barras > div:nth-child(2) {
-  background: var(--c-naranja);
-}
-[data-tema='carreta'] .ln-grafica-barras > div:nth-child(3) {
-  background: var(--c-azul);
-}
-[data-tema='carreta'] .ln-grafica-barras > div:nth-child(n + 4) {
-  background: var(--c-verde);
-}
-[data-tema='carreta'] .ln-regla::before {
-  background: var(--c-rojo);
-  border: 2px solid var(--c-tinta);
-  transform: rotate(45deg);
-}
-[data-tema='carreta'] .ln-cierre {
-  --ln-fondo: var(--c-tinta);
-  color: #ffffff;
-}
-[data-tema='carreta'] .ln-hero .ln-boton.secundario {
-  border-color: #ffffff;
-}
-[data-tema='carreta'] .ln-cierre .ln-boton.principal {
-  border-color: var(--c-amarillo);
-  background: var(--c-amarillo);
-  color: var(--c-tinta);
-}
-[data-tema='carreta'] .ln-cierre + .ln-pie {
-  padding-top: 28px;
-}
-
-/* =====================================================================================================
-   FINTECH
-   ===================================================================================================== */
-[data-tema='fintech'] .ln {
-  background: #ffffff;
-}
-[data-tema='fintech'] .ln-barra {
-  border-bottom: 1px solid var(--linea);
-}
-[data-tema='fintech'] .ln-hero {
-  --ln-fondo: linear-gradient(180deg, #ffffff, var(--papel));
-}
-[data-tema='fintech'] .ln-h1 {
-  font-size: clamp(44px, 6.6vw, 92px);
-  letter-spacing: -0.04em;
-}
-[data-tema='fintech'] .ln-enfasis {
-  color: var(--acento);
-}
-[data-tema='fintech'] .ln-intro,
-[data-tema='fintech'] .ln-texto-grande,
-[data-tema='fintech'] .ln-rueda-nota {
-  color: var(--tinta-2);
-}
-/* La rueda dentro de una tarjeta, como se ve en la app. */
-[data-tema='fintech'] .ln-rueda {
-  padding: 20px 20px 16px;
-  border: 1px solid var(--linea);
-  border-radius: 24px;
+/* La pieza clara de la rueda: un disco con la tanda de ejemplo y su nota debajo. */
+.ln-rueda {
+  position: relative;
+  padding: 18px 18px 14px;
+  border-radius: 32px;
   background: var(--superficie);
-  box-shadow: var(--sombra-alta);
-}
-[data-tema='fintech'] .ln-paso-num {
-  width: 48px;
-  height: 48px;
-  background: var(--pago-suave);
-  color: var(--pago-texto);
-  font-size: 20px;
-}
-[data-tema='fintech'] #como {
-  --ln-fondo: var(--papel);
-}
-[data-tema='fintech'] .ln-grafica {
-  border: 1px solid var(--linea);
-  box-shadow: var(--sombra);
-}
-[data-tema='fintech'] .ln-grafica-barras > div {
-  background: var(--acento);
-}
-[data-tema='fintech'] .ln-grafica-barras > div:nth-child(n + 2) {
-  background: #2e9a7b;
-}
-[data-tema='fintech'] .ln-grafica-barras > div:nth-child(n + 3) {
-  background: #63b89d;
-}
-[data-tema='fintech'] .ln-grafica-barras > div:nth-child(n + 4) {
-  background: #9fd3c1;
-}
-[data-tema='fintech'] .ln-regla::before {
-  border-radius: 50%;
-  background: var(--acento);
-  -webkit-mask: radial-gradient(circle, #000 38%, transparent 40%);
-  mask: radial-gradient(circle, #000 38%, transparent 40%);
-  width: 18px;
-  height: 18px;
-  margin-top: 4px;
-}
-[data-tema='fintech'] .ln-regla dd {
-  color: var(--tinta-2);
-}
-[data-tema='fintech'] .ln-cierre {
-  --ln-fondo: var(--acento);
-  color: #ffffff;
-}
-[data-tema='fintech'] .ln-cierre .ln-boton.principal {
-  border-color: #ffffff;
-  background: #ffffff;
-  color: var(--acento);
+  color: var(--tinta);
+  box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 0.55);
 }
 
-/* =====================================================================================================
-   MUNDOS NUEVOS: base común de Lima, Cusuco y Ronda
-   Promesa de dos renglones a la izquierda y la rueda a la derecha; pasos en un riel; la seguridad en una
-   cuadrícula de piezas (la gráfica grande y las cuatro reglas); un cierre centrado con una sola acción.
-   ===================================================================================================== */
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-h1 {
-  max-width: 14ch;
-  font-size: clamp(42px, 5vw, 64px);
-  line-height: 1.02;
+/* La prueba: tres hechos en columnas, sobre el fondo, justo debajo de la portada. */
+.ln-prueba {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px 40px;
+  margin: 0;
+  padding: 36px 0 8px;
+  list-style: none;
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-intro {
-  max-width: 30em;
+.ln-prueba li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ln-prueba strong {
+  font-family: var(--titulos);
+  font-weight: var(--titulos-peso);
+  font-stretch: var(--titulos-ancho, 100%);
+  font-size: 18px;
+}
+.ln-prueba span {
+  font-size: 15px;
   color: var(--tinta-2);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-rueda-nota {
-  color: var(--tinta-2);
+.ln-prueba a {
+  color: var(--acento-texto);
+  font-weight: 700;
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-titulo-seccion {
+
+.ln-titulo-seccion {
   max-width: 18ch;
-  font-size: clamp(34px, 4.4vw, 56px);
+  font-size: clamp(32px, 4.2vw, 54px);
   line-height: 1.04;
+  font-stretch: var(--titulos-ancho, 100%);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-texto-grande {
+.ln-texto-grande {
   max-width: 34em;
   color: var(--tinta-2);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-seccion {
+.ln-seccion {
   padding: 88px 0;
 }
 /* Pasos: un riel horizontal que une los números (es una secuencia). */
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-pasos {
+.ln-pasos {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
 }
 @media (min-width: 900px) {
-  :is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-paso:not(:last-child)::after {
+  .ln-paso:not(:last-child)::after {
     content: '';
     position: absolute;
     top: 27px;
@@ -663,388 +538,271 @@
     background: var(--linea);
   }
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-paso-num {
+.ln-paso-num {
   width: 56px;
   height: 56px;
-  font-size: 24px;
+  font-size: 22px;
+  font-stretch: var(--titulos-ancho, 100%);
 }
-/* Seguridad: la gráfica grande a la izquierda y las cuatro reglas en una cuadrícula de 2 × 2. */
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-bento {
+.ln-paso h3 {
+  font-stretch: var(--titulos-ancho, 100%);
+}
+/* Seguridad: la gráfica grande a la izquierda y las tres reglas una debajo de otra. */
+.ln-bento {
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
 }
 @media (min-width: 900px) {
-  :is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-bento {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  .ln-bento {
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
   }
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-grafica {
+.ln-grafica {
   display: flex;
   flex-direction: column;
   padding: 28px;
+  border: 1px solid var(--linea);
 }
-/* La gráfica llena la pieza: el título arriba y las barras crecen hasta abajo. */
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-grafica-barras {
+.ln-grafica-barras {
   flex: 1;
-  min-height: 180px;
+  min-height: 200px;
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-reglas {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 16px;
-}
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla {
+.ln-reglas {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 24px;
-  border: 0;
+  gap: 16px;
+}
+.ln-regla {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px 24px;
+  border: 1px solid var(--linea);
   border-radius: var(--radio);
   background: var(--superficie);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla::before {
+.ln-regla::before {
   content: none;
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla dt {
+.ln-regla dt {
   font-family: var(--titulos);
   font-weight: var(--titulos-peso);
-  letter-spacing: var(--titulos-espacio);
-  font-size: 22px;
+  font-stretch: var(--titulos-ancho, 100%);
+  font-size: 20px;
   line-height: 1.15;
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla dd {
+.ln-regla dd {
   color: var(--tinta-2);
 }
-/* El cierre: una pieza centrada con una sola acción. */
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-cierre {
+/* El cierre: una pieza en el color de la marca, centrada, con una sola acción. */
+.ln-cierre {
+  --ln-fondo: transparent;
   align-items: center;
   margin: 24px 0 56px;
   padding: 72px 28px;
-  border-radius: 32px;
+  border-radius: 28px;
+  background: var(--marca);
+  color: var(--sobre-marca);
   text-align: center;
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-cierre h2 {
+.ln-cierre h2 {
   max-width: 16ch;
-  font-size: clamp(36px, 5vw, 64px);
+  font-size: clamp(34px, 4.6vw, 58px);
   line-height: 1.02;
+  font-stretch: var(--titulos-ancho, 100%);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-cierre-texto {
+.ln-cierre-texto {
   max-width: 34em;
+  color: rgba(255, 255, 255, 0.9);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-pie {
+.ln .ln-cierre .ln-boton.principal {
+  border-color: var(--sobre-marca);
+  background: var(--sobre-marca);
+  color: var(--marca);
+}
+.ln-pie {
   border-top: 1px solid var(--linea);
 }
-:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-boton {
-  border-radius: 999px;
-}
 
 /* =====================================================================================================
-   LIMA
+   A · SARCHÍ
    ===================================================================================================== */
-[data-tema='lima'] .ln-barra {
-  border-bottom: 1px solid var(--linea);
+/* El fleco de la carreta cuelga del borde de la portada roja: un solo dorado, fino. */
+[data-tema='sarchi'] .ln-hero::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
+  height: 10px;
+  background: var(--marca-detalle);
+  -webkit-mask: conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) 0 0 / 20px 10px repeat-x;
+  mask: conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) 0 0 / 20px 10px repeat-x;
 }
-[data-tema='lima'] .ln-logo-orbita::after {
-  box-shadow: 0 0 0 2px var(--tinta);
+[data-tema='sarchi'] .ln-prueba {
+  padding-top: 48px;
 }
-[data-tema='lima'] .ln-h1 {
-  max-width: 20ch;
-  font-size: clamp(40px, 4.6vw, 58px);
-  font-weight: 800;
-  letter-spacing: -0.035em;
+/* La promesa en dos renglones: Archivo un poco menos ancho que en los títulos de sección. */
+[data-tema='sarchi'] .ln-h1 {
+  max-width: none;
+  font-size: clamp(34px, 3.7vw, 50px);
+  font-stretch: 106%;
+  letter-spacing: -0.015em;
+  line-height: 1.04;
 }
-/* El resaltador lima: pasa por debajo de la parte que importa una sola vez, al entrar. */
-[data-tema='lima'] .ln-enfasis {
-  padding: 0 0.06em;
-  background: linear-gradient(var(--acento), var(--acento)) no-repeat 0 82% / 100% 0.36em;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-  animation: ln-resaltar 900ms var(--ease-out) 450ms backwards;
+[data-tema='sarchi'] .ln-h1 .ln-enfasis {
+  display: block;
 }
-:root[data-tema='lima'][data-modo='oscuro'] .ln-enfasis {
-  background: none;
-  color: var(--acento);
+[data-tema='sarchi'] .ln-enfasis {
+  color: var(--marca-detalle);
 }
-@keyframes ln-resaltar {
-  from {
-    background-size: 0% 0.36em;
-  }
+[data-tema='sarchi'] .ln .ln-boton {
+  border-radius: var(--radio-chico);
 }
-[data-tema='lima'] .ln .ln-boton.principal {
-  border: 1px solid var(--acento-borde);
+/* La rueda de la carreta va directo sobre el rojo, como un emblema pintado: la llanta blanca ya la enmarca. */
+[data-tema='sarchi'] .ln-rueda {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--sobre-marca);
 }
-[data-tema='lima'] .ln-paso-num {
+[data-tema='sarchi'] .ln-rueda .nodo-nombre {
+  fill: var(--sobre-marca);
+}
+[data-tema='sarchi'] .ln-rueda .rc-flecha {
+  fill: var(--sobre-marca);
+  stroke: var(--marca);
+}
+[data-tema='sarchi'] .ln-rueda .ln-rueda-nota {
+  color: rgba(255, 255, 255, 0.86);
+}
+/* Pasos: discos de tinta con el número en blanco y un filete dorado. */
+[data-tema='sarchi'] .ln-paso-num {
   background: var(--tinta);
-  color: var(--acento);
+  color: var(--papel);
+  box-shadow:
+    0 0 0 3px var(--papel),
+    0 0 0 4.5px var(--marca-detalle);
 }
-[data-tema='lima'] .ln-grafica,
-[data-tema='lima'] .ln-regla {
-  border: 1px solid var(--linea);
+[data-tema='sarchi'] .ln-paso:not(:last-child)::after {
+  background: var(--tinta);
+  opacity: 0.18;
 }
-[data-tema='lima'] .ln-grafica-barras > div {
-  border: 1px solid var(--acento-borde);
-  background: var(--acento);
-}
-[data-tema='lima'] .ln-regla:nth-child(1) {
-  border-color: transparent;
-  background: var(--pago-suave);
-}
-[data-tema='lima'] .ln-regla:nth-child(3) {
-  border-color: transparent;
-  background: var(--superficie-2);
-}
-/* Una pieza oscura, como el cubo de la rueda: las reglas públicas. */
-[data-tema='lima'] .ln-regla:nth-child(4) {
-  border-color: transparent;
-  background: var(--cubo);
-  color: var(--sobre-cubo);
-}
-[data-tema='lima'] .ln-regla:nth-child(4) dt {
-  color: var(--acento);
-}
-[data-tema='lima'] .ln-regla:nth-child(4) dd {
-  color: var(--sobre-cubo-2);
-}
-[data-tema='lima'] .ln-cierre {
-  --ln-fondo: transparent;
-  background: var(--acento);
-  color: var(--sobre-acento);
-}
-[data-tema='lima'] .ln-cierre .ln-boton.principal {
-  border-color: var(--sobre-acento);
-  background: var(--sobre-acento);
-  color: var(--acento);
-}
-
-/* =====================================================================================================
-   CUSUCO
-   ===================================================================================================== */
-[data-tema='cusuco'] .ln-logo-orbita::after {
-  box-shadow: 0 0 0 2px var(--tinta);
-}
-[data-tema='cusuco'] .ln-nav {
-  font-weight: 800;
-}
-[data-tema='cusuco'] .ln-h1 {
-  max-width: 19ch;
-  font-size: clamp(40px, 4.4vw, 56px);
-  font-weight: 900;
-}
-[data-tema='cusuco'] .ln-enfasis {
-  color: var(--cusuco-caparazon);
-}
-/* Botones de juguete: contorno de tinta y un borde de abajo que se hunde al apretar. */
-[data-tema='cusuco'] .ln .ln-boton {
-  border: 2px solid var(--tinta);
-  border-radius: 18px;
-  box-shadow: 0 4px 0 var(--tinta);
-  font-weight: 900;
-}
-[data-tema='cusuco'] .ln .ln-boton:active:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--tinta);
-}
-[data-tema='cusuco'] .ln-barra .ln-boton.contorno {
-  box-shadow: 0 3px 0 var(--tinta);
-}
-/* La mascota junto a la rueda: llega rodando hecha bola, se desenrolla y saluda. */
-@media (max-width: 979px) {
-  [data-tema='cusuco'] .ln-hero-rueda {
-    position: relative;
-  }
-}
-/* La mascota se para en el renglón de la nota, abajo a la izquierda de la rueda; la nota se corre a su lado. */
-.ln-cusuco {
-  position: absolute;
-  z-index: 1;
-  left: 0;
-  bottom: 0;
-  width: 200px;
-  aspect-ratio: 220 / 150;
-  pointer-events: none;
-}
-[data-tema='cusuco'] .ln-hero-rueda .ln-rueda-nota {
-  display: flex;
-  align-items: center;
-  min-height: 116px;
-  margin-top: -36px;
-  padding-left: 216px;
-  text-align: left;
-}
-.ln-cusuco svg {
-  position: absolute;
-  inset: auto 0 0 0;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-.ln-cusuco .ln-cusuco-bola {
-  width: 62%;
-  opacity: 0;
-  animation: cusuco-rueda 900ms var(--ease-out) 300ms backwards;
-}
-.ln-cusuco-pie {
-  animation: cusuco-aparece 360ms var(--ease-out) 1100ms backwards;
-}
-.ln-cusuco-pie .cusuco-pata-saludo {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: cusuco-saluda 520ms var(--ease-in-out) 1500ms 2 alternate;
-}
-@keyframes cusuco-rueda {
-  0% {
-    opacity: 1;
-    transform: translateX(-160%) rotate(-540deg);
-  }
-  80% {
-    opacity: 1;
-    transform: translateX(0) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(0) rotate(0deg) scale(0.96);
-  }
-}
-@keyframes cusuco-aparece {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.92);
-  }
-}
-@keyframes cusuco-saluda {
-  to {
-    transform: rotate(-22deg);
-  }
-}
-[data-tema='cusuco'] .ln-paso-num {
-  border: 2px solid var(--tinta);
-  background: var(--turno);
-  color: var(--sobre-turno);
-  font-weight: 900;
-}
-[data-tema='cusuco'] .ln-paso:not(:last-child)::after {
-  height: 0;
-  border-top: 3px dashed var(--cusuco-caparazon);
-  background: none;
-}
-[data-tema='cusuco'] .ln-grafica,
-[data-tema='cusuco'] .ln-regla {
-  border: 2px solid var(--tinta);
+[data-tema='sarchi'] .ln-grafica,
+[data-tema='sarchi'] .ln-regla {
   border-radius: var(--radio);
-  background: var(--superficie);
 }
-.ln-grafica-cusuco {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  font-weight: 700;
+[data-tema='sarchi'] .ln-grafica-barras > div {
+  border-radius: 6px 6px 2px 2px;
+  background: var(--marca);
 }
-.ln-grafica-cusuco svg {
-  flex: none;
-  width: 72px;
-  height: 72px;
+[data-tema='sarchi'] .ln-grafica-barras > div:nth-child(n + 4) {
+  background: var(--c-azul);
 }
-[data-tema='cusuco'] .ln-grafica-barras > div {
-  border: 2px solid var(--cusuco-tinta);
-  background: var(--cusuco-caparazon);
-}
-[data-tema='cusuco'] .ln-regla:nth-child(2) {
-  background: var(--turno-suave);
-}
-[data-tema='cusuco'] .ln-regla:nth-child(3) {
-  background: var(--pago-suave);
-}
-[data-tema='cusuco'] .ln-cierre {
-  --ln-fondo: transparent;
-  border: 2px solid var(--tinta);
-  background: var(--turno);
-  color: var(--sobre-turno);
-}
-[data-tema='cusuco'] .ln-cierre .ln-boton.principal {
-  background: var(--acento);
-  color: var(--sobre-acento);
+[data-tema='sarchi'] .ln-cierre {
+  border-radius: var(--radio);
 }
 
 /* =====================================================================================================
-   RONDA
+   B · MONTAÑA
    ===================================================================================================== */
-[data-tema='ronda'] .ln-h1 {
-  max-width: 12ch;
-  font-size: clamp(46px, 6vw, 80px);
-  font-weight: 800;
+[data-tema='montana'] .ln-h1 {
+  font-size: clamp(42px, 5.4vw, 70px);
   line-height: 0.98;
 }
-[data-tema='ronda'] .ln-enfasis {
-  color: var(--acento);
+[data-tema='montana'] .ln-enfasis {
+  color: var(--marca-detalle);
 }
-[data-tema='ronda'] .ln-titulo-seccion,
-[data-tema='ronda'] .ln-cierre h2 {
-  font-weight: 800;
+/* En la portada verde, la acción principal va en amarillo (con texto en tinta). */
+[data-tema='montana'] .ln .ln-hero .ln-boton.principal {
+  border-color: var(--marca-detalle);
+  background: var(--marca-detalle);
+  color: var(--sobre-turno);
 }
-/* Los números de los pasos llevan los colores de la ropa de la ronda. */
-[data-tema='ronda'] .ln-paso-num {
-  background: var(--gente-1);
-  color: var(--sobre-acento);
-  font-weight: 800;
+[data-tema='montana'] .ln .ln-boton {
+  border-radius: 999px;
 }
-[data-tema='ronda'] .ln-paso:nth-child(2) .ln-paso-num {
-  background: var(--gente-2);
-  color: #221a26;
+/* El medallón: la rueda en un disco blanco dentro de una órbita amarilla, el logo de Rounda en grande (el
+   punto es el de la rueda, que señala a quien cobra). En pantallas anchas cruza el borde de la portada. */
+[data-tema='montana'] .ln-rueda {
+  border-radius: 50%;
+  padding: 6px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
 }
-[data-tema='ronda'] .ln-paso:nth-child(3) .ln-paso-num {
-  background: var(--gente-3);
-  color: #221a26;
+[data-tema='montana'] .ln-rueda > svg {
+  max-width: 100%;
 }
-[data-tema='ronda'] .ln-paso:nth-child(4) .ln-paso-num {
-  background: var(--gente-4);
-  color: #221a26;
+[data-tema='montana'] .ln-rueda .ln-rueda-nota {
+  position: absolute;
+  bottom: -40px;
+  left: 0;
+  right: 0;
 }
-[data-tema='ronda'] .ln-paso:not(:last-child)::after {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--tinta);
+[data-tema='montana'] .ln-hero-rueda::before {
+  content: '';
+  position: absolute;
+  inset: -22px;
+  border: 1.5px solid var(--marca-detalle);
+  border-radius: 50%;
   opacity: 0.85;
+  pointer-events: none;
 }
-[data-tema='ronda'] .ln-grafica-barras > div {
-  background: var(--gente-1);
+[data-tema='montana'] .ln-hero-rueda {
+  position: relative;
+  max-width: 520px;
+  margin: 24px auto 0;
 }
-[data-tema='ronda'] .ln-grafica-barras > div:nth-child(2) {
-  background: var(--gente-3);
+@media (min-width: 980px) {
+  [data-tema='montana'] .ln-hero {
+    padding-bottom: 48px;
+  }
+  [data-tema='montana'] .ln-hero-rueda {
+    position: relative;
+    top: auto;
+    margin: 18px 0 -150px auto;
+    width: 100%;
+    z-index: 1;
+  }
+  [data-tema='montana'] .ln-prueba {
+    padding-top: 56px;
+    max-width: calc(100% - 560px);
+  }
 }
-[data-tema='ronda'] .ln-grafica-barras > div:nth-child(3) {
-  background: var(--gente-4);
-}
-[data-tema='ronda'] .ln-grafica-barras > div:nth-child(n + 4) {
-  background: var(--gente-2);
-}
-[data-tema='ronda'] .ln-regla:nth-child(2) {
+[data-tema='montana'] .ln-paso-num {
   background: var(--acento);
   color: var(--sobre-acento);
 }
-[data-tema='ronda'] .ln-regla:nth-child(2) dd {
-  color: var(--sobre-acento);
-  opacity: 0.88;
+[data-tema='montana'] .ln-paso:first-child .ln-paso-num {
+  background: var(--marca-detalle);
+  color: var(--sobre-turno);
 }
-[data-tema='ronda'] .ln-regla:nth-child(3) {
-  background: var(--turno-suave);
+[data-tema='montana'] .ln-grafica-barras > div {
+  border-radius: 10px 10px 4px 4px;
+  background: var(--acento);
 }
-[data-tema='ronda'] .ln-regla:nth-child(3) dd {
-  color: var(--tinta);
+[data-tema='montana'] .ln-grafica-barras > div:first-child {
+  background: var(--marca);
 }
-[data-tema='ronda'] .ln-cierre {
-  --ln-fondo: transparent;
-  background: var(--pago-suave);
+/* Una regla en el verde de la marca con el título en amarillo: la que más importa. */
+[data-tema='montana'] .ln-regla:first-child {
+  border-color: transparent;
+  background: var(--marca);
+  color: var(--sobre-marca);
 }
-[data-tema='ronda'] .ln-cierre h2 {
-  color: var(--pago-texto);
+[data-tema='montana'] .ln-regla:first-child dt {
+  color: var(--marca-detalle);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .ln-cusuco-bola {
-    display: none;
-  }
+[data-tema='montana'] .ln-regla:first-child dd {
+  color: rgba(255, 255, 255, 0.86);
+}
+[data-tema='montana'] .ln .ln-cierre .ln-boton.principal {
+  border-color: var(--marca-detalle);
+  background: var(--marca-detalle);
+  color: var(--sobre-turno);
 }
 
 /* ---------- Móvil ---------- */

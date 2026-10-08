@@ -1,36 +1,28 @@
-// Diseño en prueba: varios mundos visuales para elegir con la web de verdad (docs/diseno.md).
-// - "carreta": la rueda pintada de la carreta de Sarchí.
-// - "fintech": una app de finanzas moderna, hecha con el nivel de las mejores del rubro.
-// - "lima": fintech amable; el punto del logo da la vuelta a la rueda y se detiene en quien cobra.
-// - "cusuco": la mascota es un cusuco (armadillo), que se enrolla como una bola para protegerse.
-// - "ronda": la tanda como una ronda de personas tomadas de la mano, en el morado de la guaria.
-// Se elige con ?tema=… en la URL (antes del #), con el selector de arriba o con VITE_TEMA.
-// Los tres mundos nuevos tienen modo oscuro: sigue al teléfono, o se fija con ?modo=claro|oscuro o el selector.
-// Cuando el equipo elija uno, se borran este archivo, el selector y los temas que no quedaron.
+// Diseño en prueba: dos opciones de marca para elegir con la web de verdad (docs/diseno.md). Las dos combinan
+// la identidad de la carreta de Sarchí con la seriedad de una app de finanzas:
+// - "sarchi" (A): el rojo de la carreta en la barra y la portada; los colores pintados viven solo en la rueda.
+// - "montana" (B): verde montaña y amarillo; el punto del logo da la vuelta a la rueda y señala a quien cobra.
+// Se elige con ?tema=sarchi|montana en la URL (antes del #), con el selector de arriba o con VITE_TEMA.
+// Las dos tienen modo oscuro: sigue al teléfono, o se fija con ?modo=claro|oscuro o el botón de la franja.
+// Cuando el equipo elija una, se borran este archivo, el selector y la opción que no quedó.
 import { useSyncExternalStore } from 'react'
 
-export type Tema = 'carreta' | 'fintech' | 'lima' | 'cusuco' | 'ronda'
+export type Tema = 'sarchi' | 'montana'
 export type Modo = 'claro' | 'oscuro'
 
 export const TEMAS: { id: Tema; nombre: string; oscuro: boolean }[] = [
-  { id: 'lima', nombre: 'Lima', oscuro: true },
-  { id: 'cusuco', nombre: 'Cusuco', oscuro: true },
-  { id: 'ronda', nombre: 'Ronda', oscuro: true },
-  { id: 'carreta', nombre: 'Carreta de Sarchí', oscuro: false },
-  { id: 'fintech', nombre: 'Fintech', oscuro: false },
+  { id: 'sarchi', nombre: 'A · Sarchí', oscuro: true },
+  { id: 'montana', nombre: 'B · Montaña', oscuro: true },
 ]
 
-export const TEMA_POR_DEFECTO: Tema = 'carreta'
+export const TEMA_POR_DEFECTO: Tema = 'sarchi'
 const CLAVE = 'rounda:tema'
 const CLAVE_MODO = 'rounda:modo'
 
-/** Color de la barra del navegador en el celular, a juego con el fondo de cada tema. */
+/** Color de la barra del navegador en el celular: el de la barra de la marca. */
 const COLOR_BARRA: Record<Tema, Record<Modo, string>> = {
-  carreta: { claro: '#c8261b', oscuro: '#c8261b' },
-  fintech: { claro: '#ffffff', oscuro: '#ffffff' },
-  lima: { claro: '#f0f2ec', oscuro: '#0f120e' },
-  cusuco: { claro: '#e8f0f7', oscuro: '#0e1622' },
-  ronda: { claro: '#f7f4f8', oscuro: '#151018' },
+  sarchi: { claro: '#a31f1a', oscuro: '#7f1914' },
+  montana: { claro: '#0e3b2c', oscuro: '#0b2a20' },
 }
 
 export function esTema(x: unknown): x is Tema {
@@ -121,18 +113,9 @@ export function iniciarTema() {
 
 /** Las letras de cada tema, como las pide document.fonts.load (una por familia: son fuentes variables). */
 export function letrasDe(tema: Tema): string[] {
-  switch (tema) {
-    case 'lima':
-      return ['800 1em "Outfit Variable"']
-    case 'cusuco':
-      return ['900 1em "Nunito Variable"']
-    case 'ronda':
-      return ['800 1em "Bricolage Grotesque Variable"']
-    case 'fintech':
-      return ['650 1em "Geist Variable"']
-    default:
-      return ['1em Bungee', '400 1em "Atkinson Hyperlegible Next Variable"']
-  }
+  return tema === 'montana'
+    ? ['750 1em "Bricolage Grotesque Variable"', '400 1em "Geist Variable"']
+    : ['800 1em "Archivo Variable"']
 }
 
 /**

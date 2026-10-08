@@ -1,6 +1,7 @@
 import './App.css'
 import './movimiento.css'
 import './temas.css'
+import './paginas.css'
 import { useBilletera, type Billetera } from './hooks/useBilletera'
 import { useRuta } from './hooks/useRuta'
 import { useCuenta } from './hooks/useCuenta'
@@ -34,8 +35,9 @@ export default function App() {
   // La landing trae su propio encabezado y pie: no se le pone el de la app.
   if (ruta.tipo === 'inicio') return <Landing />
 
+  // Cada página se viste según su función (paginas.css): elegir, pagar y cobrar, crear, proyectar, leer, revisar.
   return (
-    <div className="app">
+    <div className="app" data-pagina={ruta.tipo}>
       <header className="barra">
         <a className="marca" href={RUTA_INICIO}>
           <span className="logo" aria-hidden="true">

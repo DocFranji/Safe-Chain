@@ -2,12 +2,9 @@ import './polyfills' // debe ir primero: prepara Buffer para el SDK de Stellar
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 // Fuentes servidas desde el propio sitio (no dependen de Google Fonts).
-import '@fontsource/bungee/latin-400.css'
-import '@fontsource-variable/geist/wght.css'
-import '@fontsource-variable/atkinson-hyperlegible-next/wght.css'
-import '@fontsource-variable/outfit/wght.css'
-import '@fontsource-variable/nunito/wght.css'
-import '@fontsource-variable/bricolage-grotesque/wght.css'
+import '@fontsource-variable/archivo/wdth.css' // Sarchí: ancho y peso variables
+import '@fontsource-variable/bricolage-grotesque/wght.css' // Montaña: títulos
+import '@fontsource-variable/geist/wght.css' // Montaña: texto y números
 import './index.css'
 import App from './App.tsx'
 import { SelectorTema } from './components/SelectorTema'

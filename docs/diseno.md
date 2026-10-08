@@ -1,161 +1,99 @@
-# Diseño de la web: cinco mundos en prueba
+# Diseño de la web: dos opciones de marca en prueba
 
-La persona pidió un mundo visual nuevo para toda la web (portada y app), que sirva igual al jurado (video y
-computadora) y a la gente en el celular, sin tocar el nombre ni el logo de Rounda. Primero se construyeron dos
-direcciones (Carreta de Sarchí y Fintech). Después pidió rediseñar otra vez con las herramientas nuevas del repo, dar
-más opciones que esas dos, que la web conecte con la gente, que tenga una identidad marcada y que use una mascota o una
-cosa ligada al nombre Rounda. Por eso hay tres mundos más:
+## Cómo llegamos aquí
 
-- **Lima** (`?tema=lima`): el punto del logo da la vuelta a la rueda y se detiene en quien cobra.
-- **Cusuco** (`?tema=cusuco`): la mascota es un cusuco, que se enrolla como una bola para protegerse.
-- **Ronda** (`?tema=ronda`): la tanda es una ronda de personas tomadas de la mano.
-- **Carreta de Sarchí** (`?tema=carreta`, el tema por defecto) y **Fintech** (`?tema=fintech`), de la ronda anterior.
+1. **Carreta de Sarchí y Fintech.** Primera prueba: dos mundos opuestos. La persona eligió no quedarse con ninguno.
+   La Carreta le gustaba, pero por tan colorida perdía seriedad. La Fintech estaba bien, pero sin personalidad de
+   marca, y su barra era del mismo color del fondo, así que el logo no destacaba.
+2. **Lima, Cusuco y Ronda.** Tres mundos más, con las herramientas nuevas del repo. Siguen en el historial del
+   PR DocFranji/Safe-Chain#28 (commit `9718868`) por si se quiere recuperar algo.
+3. **Ahora, dos opciones que combinan las dos primeras**, como pidió la persona, sin límites para cambiar todo. Las
+   dos tienen personalidad y buen branding, sirven para el hackathon y para un producto real después. Cada página
+   está vestida según su función.
 
-Se cambian con la franja negra de arriba ("Diseño en prueba") o con `?tema=` antes del `#` en la URL. Los tres nuevos
-tienen modo oscuro: sigue al teléfono, o se fija con `?modo=claro|oscuro` o con el botón "Modo oscuro" de la franja.
-La elección queda guardada en el navegador. Los textos, los flujos y los datos son los mismos en todos; cada mundo
-tiene su frase en la portada.
+Se cambian con la franja "Diseño en prueba" o con `?tema=sarchi|montana` antes del `#`. Las dos tienen modo oscuro:
+sigue al teléfono, o se fija con `?modo=claro|oscuro` o el botón "Modo oscuro" de la franja.
 
-Cada mundo nuevo tiene su DESIGN.md completo en formato de Google (`docs/disenos/lima.md`, `cusuco.md`, `ronda.md`,
-validados con `npx @google/design.md lint`); el `DESIGN.md` de la raíz es el índice.
+**Cuando el equipo elija una:** se copia su archivo de `docs/disenos/` a `DESIGN.md`; se borran `web/src/lib/tema.ts`,
+`web/src/components/SelectorTema.tsx`, el bloque de la otra opción en `web/src/index.css`, `web/src/temas.css` y
+`web/src/landing/landing.css`, y su rueda (`RuedaSarchi.tsx` o `RuedaMontana.tsx`).
 
-**Cuando el equipo elija uno:** se copia su archivo de `docs/disenos/` a `DESIGN.md`; se borran
-`web/src/lib/tema.ts`, `web/src/components/SelectorTema.tsx`, los bloques de los temas que no quedaron en
-`web/src/index.css`, `web/src/temas.css` y `web/src/landing/landing.css`, y los dibujos de rueda que no se usen
-(`RuedaCarreta.tsx`, `RuedaLima.tsx`, `RuedaCusuco.tsx`, `RuedaRonda.tsx` o `RuedaAnillo` en `Rueda.tsx`). Si queda
-Cusuco, también se queda `Cusuco.tsx`. Lo común queda en `App.css`.
+## Las dos opciones
 
-## Herramientas usadas en esta ronda
+### A · Sarchí: la carreta, en serio
 
-- **Taste** (`design-taste-frontend`): lectura del pedido, diales, protocolo de rediseño y la revisión final. De ahí
-  salen la promesa en dos renglones, el subtítulo de 20 palabras, una sola etiqueta por intención ("Abrir la app" en
-  la barra, la portada y el cierre), cuatro composiciones distintas en la portada, una pieza oscura como máximo, cero
-  rayas largas en textos visibles, sin etiquetas sobre los títulos y modo oscuro en los mundos nuevos.
-- **UI/UX Pro Max** (`search.py --design-system`, dominios de producto, color y tipografía): el patrón "Minimal &
-  Direct + Demo" del tipo "Expense Splitter" (dinero entre amigos), con un color por estado y un color por persona.
-  Sus paletas sugeridas (dorado con morado, Inter) chocaban con Taste y se descartaron con razones.
-- **DESIGN.md de Google + awesome-design-md:** formato y lint de los cuatro DESIGN.md; la referencia de Wise para Lima
-  (un solo acento verde para actuar, tarjetas muy redondeadas, títulos pesados).
-- **Stop Slop:** textos de la portada sin relleno, sin contrastes de manual ("no es X, es Y") y sin rayas largas. Las
-  rayas que quedaban en la app (celdas vacías) pasaron a guion.
-- **redesign-existing-projects:** auditoría del estado anterior antes de tocar nada; se mantienen rutas, textos que
-  revisan las pruebas y flujos.
-- **Impeccable** (piso de calidad y revisión), **Emil Kowalski** (curvas y tiempos de movimiento) y **Addy Osmani**
-  (tramos verificados, revisión del código), como en la ronda anterior.
-- **Figma MCP:** archivo "Rounda · Tres mundos nuevos (Lima, Cusuco, Ronda)"
-  (https://www.figma.com/design/FHxW6exHlK46ntowFypZqd), con una colección de variables por mundo (el plan Starter
-  permite un solo modo por colección) y una lámina por mundo: promesa, botones, colores enlazados a las variables y
-  la rueda y la mascota importadas como vectores desde la web. La generación de imágenes también funciona, pero la
-  red de este entorno bloquea `www.figma.com` y no se pudieron bajar; por eso la mascota y las figuras se dibujaron
-  en SVG propio. Con ese dominio permitido se pueden sumar ilustraciones o fotos generadas.
-- **Context7:** rutas de importación de las fuentes variables de Fontsource. **Playwright** (capturas en claro y oscuro,
-  escritorio y 390 px, y las 351 pruebas de navegador por tema) y el protocolo de Chrome DevTools a través de
-  Playwright para medir rendimiento (ver abajo).
-- **Understand-Anything (Egonex-AI):** quedó registrado en `.claude/settings.json`, pero solo carga en sesiones que
-  arrancan desde `main`; esta sesión no lo tiene.
+- **THESIS.** La tanda es la carreta: hecha con orgullo y construida para durar. La seriedad sale de una regla de la
+  referencia de Mastercard (awesome-design-md): los colores de la marca viven en la marca, no en la interfaz.
+- **OWN-WORLD.** El rojo carreta #a31f1a es el campo de la marca (barra, portada, cierre). Del borde cuelga el fleco
+  de la carreta, en un solo dorado. Los cuatro colores pintados (rojo, dorado, cobalto y verde, en tonos hondos)
+  viven solo en la rueda, los asientos y el logo. El resto es tinta sobre blanco. Archivo ancha en todo.
+- **FIRST VIEWPORT.** "La tanda de siempre. Nadie se va con la plata." en blanco y dorado sobre el rojo; a la
+  derecha, la rueda pintada directo sobre el rojo, como un emblema.
+- **Gesto propio:** la rueda gira una ronda a la vez (900 ms) y cada segmento se pinta, con su filete dorado, cuando
+  esa persona paga.
 
-## Rendimiento de la portada (protocolo de Chrome DevTools)
+### B · Montaña: finanzas con carácter
 
-Medido en la vista previa local, con 6 s de la rueda de ejemplo girando:
+- **THESIS.** La calma y la precisión de una app de banco, con una marca que se reconoce: el logo es el sistema.
+- **OWN-WORLD.** El verde montaña #0e3b2c es el campo de la marca, con una línea amarilla bajo la barra. El amarillo
+  #f2c230 queda solo para lo que importa: el punto del logo, el turno, la bolsa y la acción sobre el verde. Bricolage
+  Grotesque en títulos y Geist en texto y números.
+- **FIRST VIEWPORT.** "Cuentas claras, tandas largas." (del refrán "cuentas claras, amistades largas"). A la derecha,
+  la rueda en un medallón blanco dentro de una órbita amarilla, el logo en grande, que cruza el borde hacia la sección
+  de abajo.
+- **Gesto propio:** el punto del logo da la vuelta a la rueda (900 ms) y se detiene junto a quien cobra.
 
-| Mundo | CLS escritorio / 390 px | LCP escritorio / 390 px |
+**Lo que corrigen las dos:** la barra superior lleva el color de la marca con el logo en blanco, y destaca desde
+lejos. El color tiene un trabajo (marca, turno, pagado, alerta) y no se reparte por toda la página.
+
+## Cada página según su función (`web/src/paginas.css`)
+
+`App.tsx` pone `data-pagina` en `.app` con el tipo de ruta; cada página se ajusta a lo que la gente viene a hacer.
+
+| Página | Función | Cómo se nota |
 | --- | --- | --- |
-| Lima | 0.000 / 0.000 | 496 / 372 ms |
-| Cusuco | 0.000 / 0.000 | 464 / 416 ms |
-| Ronda | 0.000 / 0.000 | 444 / 496 ms |
-| Carreta | 0.000 / 0.000 | 436 / 392 ms |
-| Fintech | 0.000 / 0.000 | 476 / 420 ms |
+| Portada (`#/`) | Convencer y entrar | Campo de marca, promesa en dos renglones, una sola acción, la prueba (contrato público, sin contraseñas, dinero de prueba) |
+| Tandas (`#/tandas`) | Comparar y elegir | La bolsa en grande, los lugares libres como la rueda en chiquito, la línea de entrada resaltada en las abiertas |
+| Tanda (`#/tanda/N`) | Pagar y cobrar | La acción del momento a todo el ancho y más alta; en el celular, el panel va antes de la rueda |
+| Crear (`#/crear`) | Llenar un formulario | Título más bajo, campos de 52 px, la vista previa fija al lado mientras se llena |
+| Demo (`#/demo`) | Proyectar ante el jurado | Escenario oscuro en las dos opciones, con un brillo del color de la marca, letra grande y la rueda al centro |
+| Historial y perfil | Leer | Una columna de 44 rem, más interlineado, el nivel como un sello |
+| Estado (`#/estado`) | Diagnosticar | Filas compactas y los datos técnicos en letra de ancho fijo |
 
-Dos arreglos salieron de esta medición, y valen para los cinco mundos:
+## Herramientas usadas
 
-- La entrada de la portada partía de opacidad 0. Chrome no contaba la promesa como contenido principal, y en Cusuco
-  el LCP terminaba en 3 s, medido sobre un texto chico de la rueda. Ahora la entrada parte visible y solo sube 18 px
-  (regla de Impeccable).
-- Con el texto visible desde el inicio se notaba el cambio de fuente: en Ronda, en el celular, el CLS llegaba a
-  0.138. Ahora la app pide las letras del tema antes de dibujar, con un tope de 400 ms (`letrasListas` en
-  `web/src/lib/tema.ts`).
+- **Taste:** diales (variedad 6, movimiento 5, densidad 4), promesa de dos renglones, subtítulo de 20 palabras, una
+  etiqueta por intención ("Abrir la app"), botón visible sin bajar en el celular, cero rayas largas, modo oscuro.
+- **Impeccable** (nueva identidad, piso de calidad y revisión): con la dirección fijada por la persona no hace falta
+  sortear alternativas. De Impeccable salen el color comprometido como campo de marca, letras fuera de su lista de
+  defectos (por eso se dejó Outfit) y entradas que parten visibles.
+- **UI/UX Pro Max:** de su patrón de confianza salió la franja de "prueba" debajo de la portada, con hechos que se
+  pueden comprobar. Sus paletas sugeridas (azul con naranja, ámbar con morado) eran genéricas y se descartaron.
+- **DESIGN.md de Google + awesome-design-md:** `docs/disenos/sarchi.md` y `montana.md`, lint sin avisos. La
+  referencia de Mastercard dio la regla de color de Sarchí: los colores de la marca solo en la marca.
+- **Stop Slop:** frases de la portada directas y con la voz de cada opción.
+- **Emil Kowalski:** curvas y tiempos (abajo). **Addy Osmani:** tramos verificados y revisión del propio diff.
+- **Figma MCP:** láminas de las dos opciones con sus variables, y la rueda como vector desde la web. La generación de
+  imágenes funciona, pero la red de esta sesión bloquea `www.figma.com` y no se pueden bajar.
+- **Context7** (fuentes de Fontsource), **Playwright** (capturas y pruebas de navegador) y el protocolo de **Chrome
+  DevTools** (CLS y LCP de la portada).
+- **Understand-Anything (Egonex-AI):** registrado en `.claude/settings.json`; solo carga en sesiones que arrancan
+  desde `main`.
 
-## Contrato de dirección: Lima
-
-- **THESIS.** La tanda como una app de finanzas amable y segura, con una marca que se reconoce de lejos: la lima.
-- **OWN-WORLD.** Salvia #f0f2ec, tinta #141712, lima #b0e65c (siempre con texto en tinta y borde verde oscuro sobre
-  claro), ámbar para el turno. Outfit en todo. Una sola pieza oscura: el cubo de la rueda (y la regla de las reglas
-  públicas en la portada).
-- **STORY.** La bolsa en el cubo oscuro; los segmentos se llenan de lima al pagar; el punto del logo señala a quien
-  cobra.
-- **FIRST VIEWPORT.** "La tanda donde nadie se va con la plata." con un resaltador lima que pasa una vez; la rueda a
-  la derecha.
-- **Gesto propio:** el punto da la vuelta (900 ms, ease-in-out) y se detiene junto a quien cobra.
-
-## Contrato de dirección: Cusuco
-
-- **THESIS.** Una mascota local que explica la promesa sin palabras: el cusuco se enrolla para protegerse, como la
-  garantía protege al grupo. Redondo como Rounda.
-- **OWN-WORLD.** Cielo #e8f0f7, tinta #1b2433 en contornos de 2 px, turquesa #22b3a6 para actuar, amarillo sol para
-  la moneda y el turno, terracota #b4582f solo para la mascota y lo pagado. Nunito en todo.
-- **STORY.** La rueda es el caparazón: cada placa se pinta al pagar y la cabeza del cusuco señala a quien cobra.
-- **FIRST VIEWPORT.** "Tu tanda, protegida como un cusuco."; el cusuco llega rodando, se desenrolla y saluda junto a
-  la rueda.
-- **Gesto propio:** la llegada rodando (una vez); en la app, el cusuco enrollado rueda mientras algo carga.
-
-## Contrato de dirección: Ronda
-
-- **THESIS.** La tanda es gente antes que números: una ronda de personas tomadas de la mano.
-- **OWN-WORLD.** Blanco orquídea #f7f4f8, tinta #221a26, guaria #7b2d8e (la flor nacional) para actuar y para la
-  bolsa, mango para el turno, la ropa de cada persona en cuatro colores. Bricolage Grotesque en todo.
-- **STORY.** Cada persona lleva su número en la camiseta; la camiseta se pinta al pagar; quien cobra tiene una luz
-  mango detrás.
-- **FIRST VIEWPORT.** "En esta ronda, todos cobran." y la ronda de ejemplo dando vueltas.
-- **Gesto propio:** la ronda gira una ronda a la vez y las personas siguen derechas.
-
-## Contrato de dirección: Carreta de Sarchí
-
-- **THESIS.** La tanda es la rueda pintada de la carreta: cada persona es un segmento y la rueda gira una ronda a la
-  vez. Rechaza el tablero oscuro con un acento neón que usa toda la categoría (y que usaba la versión anterior).
-- **OWN-WORLD.** Fondo blanco; contornos de tinta `#1a1410` de 2–3 px; rojo carreta `#c8261b` en la barra y la
-  portada, con un fleco de triángulos amarillos; amarillo `#f6b800` para el turno y lo elegido; cobalto `#1e46a8`
-  para actuar; verde `#1e8449` para lo pagado. Bungee (letra de rótulo) en títulos y cifras; Atkinson Hyperlegible
-  Next en el texto.
-- **STORY.** En un vistazo se entiende que el dinero gira por turnos y que el contrato lleva la cuenta: quién cobra
-  (bajo la flecha), quién ya pagó (su segmento pintado), quién ya cobró (la marca). Después se entra con Google o
-  Freighter.
-- **FIRST VIEWPORT.** Barra roja. A la izquierda, la promesa en Bungee blanco y amarillo (≈78 px), la explicación y
-  la tarjeta para entrar con el botón cobalto. A la derecha, la rueda de ejemplo (5 personas) girando, con la bolsa
-  en el cubo.
-- **FORM.** La rueda de la carreta pintada. Dirección fijada por la persona (no hubo tirada de `concept-seed`: el
-  lanzador no corre aquí).
-- **Gesto propio:** la rueda gira (900 ms, ease-in-out) cuando avanza la ronda, y el segmento se pinta cuando la
-  persona paga.
-
-## Contrato de dirección: Fintech
-
-- **THESIS.** La tanda como una app de finanzas moderna de primer nivel: clara, tranquila, confiable. Es la salida
-  estándar de la categoría, hecha en serio y sin rarezas.
-- **OWN-WORLD.** Gris `#f5f6f8`, tarjetas blancas con línea `#e3e6eb` y sombra fina, verde de marca `#0b7a5c`,
-  ámbar `#f59e0b` para el turno. Geist en todo.
-- **STORY.** La misma que la carreta, contada con la sobriedad de una app bancaria.
-- **FIRST VIEWPORT.** Barra blanca. A la izquierda, la promesa en Geist (negro y verde), la explicación y la tarjeta
-  para entrar. A la derecha, la rueda-anillo dentro de una tarjeta, como se ve en la app.
-- **FORM.** El estándar de la categoría ("canon"), pedido por la persona para comparar.
-- **Gesto propio:** el anillo del tiempo se vacía con la ronda; el turno late tres veces y se queda quieto.
-
-**FINISH:** sin revisión y sin documentar no está terminado; este trabajo termina con la revisión final, el veredicto
-y este documento al día.
-
-## Reglas de movimiento (Emil Kowalski), comunes a todos
+## Reglas de movimiento (Emil Kowalski)
 
 1. Cada animación tiene un porqué: entrar sin saltos, confirmar una acción o mostrar un cambio de estado.
 2. `--ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`) para entrar o responder; `--ease-in-out` para moverse en
-   pantalla (el giro de la rueda). Nunca `ease-in`.
+   pantalla (el giro de la rueda, el punto que da la vuelta). Nunca `ease-in`.
 3. Apretar 140 ms, hover y avisos 200 ms, páginas 280 ms. Solo celebrar (pagar, cobrar) o girar la rueda dura más.
 4. Solo `transform` y `opacity` en HTML. En SVG, `transform` recalcula el diseño en cada cuadro: nada infinito ahí.
-5. Nada aparece desde `scale(0)`. Hover solo con mouse. Con "reducir movimiento" quedan los fundidos.
-6. Un solo momento animado por pantalla: en la portada, la rueda de ejemplo (en Cusuco, además, la llegada de la
-   mascota, una sola vez).
+5. Nada aparece desde `scale(0)` ni desde opacidad 0 en la portada (la promesa entra ya visible y solo sube 18 px).
+   Hover solo con mouse. Con "reducir movimiento" quedan los fundidos.
+6. Un solo momento animado por pantalla: en la portada, la rueda de ejemplo.
 
-## Piso de calidad (Impeccable) que se cumplió
+## Piso de calidad (Impeccable)
 
-Sin etiquetas sobre los títulos, sin texto con degradado, sin bordes de color a un lado (la historia es una línea de
-tiempo con puntos), sin números en listas que no son secuencia, sin caracteres como íconos (la marca de "ya cobró"
-es un trazo SVG), fuentes servidas desde el propio sitio, contraste AA en textos (también sobre amarillo y en los
-niveles del historial).
+Sin etiquetas sobre los títulos, sin texto con degradado, sin bordes de color a un lado, sin sombras duras, sin
+caracteres como íconos (la marca de "ya cobró" es un trazo SVG), fuentes servidas desde el propio sitio (pedidas antes
+de dibujar, con un tope de 400 ms), contraste AA en textos en claro y oscuro, y detalles del navegador (cursor de
+texto, barras de desplazamiento, color de los controles) con los colores de la marca.

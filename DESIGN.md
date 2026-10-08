@@ -1,42 +1,42 @@
 ---
 version: alpha
-name: Rounda (diseños en prueba)
-description: Índice de los cinco mundos visuales en prueba de Rounda. Cada mundo nuevo tiene su propio DESIGN.md completo en docs/disenos; cuando el equipo elija uno, ese archivo pasa a ser este.
+name: Rounda (dos opciones en prueba)
+description: Índice de las dos opciones de marca en prueba de Rounda. Cada una tiene su DESIGN.md completo en docs/disenos; cuando el equipo elija, ese archivo pasa a ser este.
 omitted:
   - section: colors
-    reason: "Cada mundo define los suyos: docs/disenos/lima.md, docs/disenos/cusuco.md y docs/disenos/ronda.md (Carreta y Fintech en docs/diseno.md)."
+    reason: "Cada opción define los suyos: docs/disenos/sarchi.md y docs/disenos/montana.md."
   - section: typography
-    reason: "Por mundo, en los mismos archivos."
+    reason: "Por opción, en los mismos archivos."
   - section: rounded
-    reason: "Por mundo, en los mismos archivos."
+    reason: "Por opción, en los mismos archivos."
   - section: spacing
-    reason: "Por mundo, en los mismos archivos."
+    reason: "Por opción, en los mismos archivos."
   - section: components
-    reason: "Por mundo, en los mismos archivos."
+    reason: "Por opción, en los mismos archivos."
 ---
 
-# Rounda: diseños en prueba
+# Rounda: dos opciones de marca en prueba
 
 ## Overview
 
-Rounda tiene cinco mundos visuales para elegir con la web de verdad. Se cambian con la franja "Diseño en prueba" de
-arriba o con `?tema=` antes del `#` en la URL; los tres nuevos tienen modo oscuro (`?modo=oscuro` o el botón de la
-franja). Los textos, los flujos y los datos son los mismos en todos: cambia la identidad.
+Las dos opciones combinan la identidad de la carreta de Sarchí con la seriedad de una app de finanzas. Corrigen lo
+que la persona vio en las versiones Carreta (demasiado colorida, poco seria) y Fintech (sin personalidad de marca y
+con la barra del mismo color del fondo, que apagaba el logo). Se cambian con la franja "Diseño en prueba" de arriba o
+con `?tema=sarchi|montana` antes del `#` en la URL. Las dos tienen modo oscuro (`?modo=oscuro` o el botón de la
+franja).
 
-| Mundo | La "cosa" de Rounda | DESIGN.md |
-| --- | --- | --- |
-| **Lima** (`?tema=lima`) | El punto del logo da la vuelta a la rueda y se detiene en quien cobra. | `docs/disenos/lima.md` |
-| **Cusuco** (`?tema=cusuco`) | La mascota: un cusuco que se enrolla como una bola para protegerse. La rueda es su caparazón. | `docs/disenos/cusuco.md` |
-| **Ronda** (`?tema=ronda`) | Una ronda de personas tomadas de la mano alrededor de la bolsa, en el morado de la guaria. | `docs/disenos/ronda.md` |
-| **Carreta de Sarchí** (`?tema=carreta`, por defecto) | La rueda pintada de la carreta. | `docs/diseno.md` |
-| **Fintech** (`?tema=fintech`) | Una app de finanzas sobria. | `docs/diseno.md` |
+| Opción | Campo de marca | La "cosa" de Rounda | Voz | DESIGN.md |
+| --- | --- | --- | --- | --- |
+| **A · Sarchí** (`?tema=sarchi`, por defecto) | Rojo carreta con fleco dorado | La rueda pintada de la carreta, que gira; sus colores solo en la rueda y la marca | "La tanda de siempre. Nadie se va con la plata." | `docs/disenos/sarchi.md` |
+| **B · Montaña** (`?tema=montana`) | Verde montaña con línea amarilla | El punto del logo da la vuelta a la rueda y señala a quien cobra | "Cuentas claras, tandas largas." | `docs/disenos/montana.md` |
 
-Lo que no cambia en ningún mundo: el nombre **Rounda** y su logo (un aro con un punto que da vueltas), la rueda con un
-círculo central donde está la bolsa, el español llano sin jerga cripto, y las reglas de movimiento de `docs/diseno.md`.
+En las dos: el nombre **Rounda** y su logo (un aro con un punto que da vueltas) en blanco sobre la barra de color, la
+rueda con un círculo central donde está la bolsa, español llano sin jerga cripto, y cada página vestida según su
+función (`docs/diseno.md`).
 
 ## Do's and Don'ts
 
-- Do elegir un mundo y copiar su archivo de `docs/disenos/` a este DESIGN.md; después, borrar los otros temas
-  (pasos en `docs/diseno.md`).
+- Do elegir una opción y copiar su archivo de `docs/disenos/` a este DESIGN.md; después, borrar la otra (pasos en
+  `docs/diseno.md`).
 - Do pasar `npx @google/design.md lint` sobre cada DESIGN.md antes de subirlo.
-- Don't mezclar piezas de dos mundos en una misma pantalla.
+- Don't mezclar piezas de las dos opciones en una misma pantalla.

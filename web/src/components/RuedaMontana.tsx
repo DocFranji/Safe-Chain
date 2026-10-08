@@ -1,6 +1,7 @@
-// La rueda del diseño "lima": un segmento por persona alrededor del cubo oscuro donde está la bolsa.
-// - El segmento se llena de lima cuando esa persona paga la ronda.
-// - La rueda no gira: el punto del logo (aro + punto) da la vuelta por fuera y se detiene en quien cobra.
+// La rueda de la opción "montana": un segmento por persona alrededor del cubo verde donde está la bolsa.
+// - El segmento se pinta de verde cuando esa persona paga la ronda.
+// - La rueda no gira: el punto del logo (aro + punto) da la vuelta por fuera y se detiene junto a quien cobra.
+//   El logo y la rueda son la misma idea.
 // - El aro del cubo es el tiempo que le queda a la ronda.
 import type { CSSProperties, ReactNode } from 'react'
 import type { ModeloRueda } from '../lib/rueda'
@@ -21,13 +22,13 @@ function polar(r: number, grados: number) {
   return { x: r * Math.sin(a), y: -r * Math.cos(a) }
 }
 
-export function RuedaLima({ m, centro, etiqueta }: { m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
+export function RuedaMontana({ m, centro, etiqueta }: { m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
   const paso = 360 / m.n
   const forma = segmentoAnular(m.n, R_ADENTRO, R_AFUERA, 2.4)
   const quienCobra = m.asientos.find((a) => a.turno)
   return (
-    <svg className={m.activa ? 'rueda-lima activa' : 'rueda-lima'} viewBox="-270 -238 540 476" role="img" aria-label={etiqueta}>
-      <circle className="rl-pista" r={R_PUNTO} />
+    <svg className={m.activa ? 'rueda-montana activa' : 'rueda-montana'} viewBox="-270 -238 540 476" role="img" aria-label={etiqueta}>
+      <circle className="rm-pista" r={R_PUNTO} />
       {m.asientos.map((a) => {
         const clases = ['nodo', a.libre && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
           .filter(Boolean)
@@ -37,7 +38,7 @@ export function RuedaLima({ m, centro, etiqueta }: { m: ModeloRueda; centro: Rea
         return (
           <g key={a.i} className={clases} style={{ '--i': a.i } as CSSProperties}>
             <g transform={`rotate(${a.i * paso})`}>
-              <path className="rl-segmento" d={forma} />
+              <path className="rm-segmento" d={forma} />
             </g>
             <text className="nodo-turno" x={num.x} y={num.y + 7}>
               {a.numero}
@@ -56,8 +57,8 @@ export function RuedaLima({ m, centro, etiqueta }: { m: ModeloRueda; centro: Rea
       })}
 
       {/* El cubo: la bolsa y, alrededor, el tiempo de la ronda. */}
-      <circle className="rl-cubo" r={R_CUBO} />
-      <circle className="rl-tiempo-pista" r={R_TIEMPO} />
+      <circle className="rm-cubo" r={R_CUBO} />
+      <circle className="rm-tiempo-pista" r={R_TIEMPO} />
       {m.activa && (
         <circle
           className={m.vencida ? 'rueda-tiempo vencida' : 'rueda-tiempo'}
@@ -71,8 +72,8 @@ export function RuedaLima({ m, centro, etiqueta }: { m: ModeloRueda; centro: Rea
 
       {/* El punto del logo: da la vuelta (siempre hacia adelante) y queda junto a quien cobra. */}
       {m.activa && quienCobra && (
-        <g className="rl-orbita" style={{ transform: `rotate(${-m.giro}deg)` }}>
-          <circle className="rl-punto" cy={-R_PUNTO} r={10} />
+        <g className="rm-orbita" style={{ transform: `rotate(${-m.giro}deg)` }}>
+          <circle className="rm-punto" cy={-R_PUNTO} r={10} />
         </g>
       )}
     </svg>
