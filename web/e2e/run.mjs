@@ -25,6 +25,8 @@ const browser = await chromium.launch(opcionesNavegador())
   const { page, errores } = await nuevaPagina(browser, { est })
   await page.goto(BASE + '#/tandas')
   await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  // El saldo llega en otra consulta que las tandas: se espera como en las demás pruebas de la cuenta.
+  await page.waitForSelector('text=Tu saldo:', { timeout: 15000 }).catch(() => {})
   const t = await texto(page)
   check('Lobby: muestra las 5 tandas', (await page.locator('.tarjeta').count()) === 5, `tarjetas=${await page.locator('.tarjeta').count()}`)
   check('Lobby: la más nueva va primero', (await page.locator('.tarjeta h2').first().innerText()) === 'Tanda 5')
