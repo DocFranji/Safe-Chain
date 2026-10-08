@@ -99,7 +99,7 @@ archivo (cuadrado, 640 px, u 880 px en el cierre).
 - **Figma MCP:** las cinco fotos, generadas con su IA de imágenes y bajadas cuando la persona abrió `www.figma.com`
   en la red del entorno. En el archivo de Figma, la página "Dos opciones" tiene una lámina por opción (portada con la
   rueda como vector, colores como variables `Rounda / Sarchí` y `Rounda / Montaña`, letra, gente, cierre y
-  movimiento). Las fotos de las láminas esperan a que la red permita `mcp.figma.com`, por donde se suben.
+  movimiento), con las fotos subidas en sus círculos.
 - **Context7** (fuentes de Fontsource), **Playwright** (capturas y pruebas de navegador) y el protocolo de **Chrome
   DevTools** (CLS y LCP de la portada).
 - **Understand-Anything (Egonex-AI):** registrado en `.claude/settings.json`; solo carga en sesiones que arrancan
