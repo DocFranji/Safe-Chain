@@ -149,7 +149,7 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
                 ? nombreDe(beneficiario.direccion)
                 : datos.turnos?.opciones.modo.tag === 'Subasta'
                   ? 'quien gane la subasta'
-                  : '—'}
+                  : '-'}
             </strong>{' '}
             · bolsa de{' '}
             <strong>

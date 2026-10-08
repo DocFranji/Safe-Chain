@@ -1,49 +1,42 @@
-# Design
+---
+version: alpha
+name: Rounda (diseños en prueba)
+description: Índice de los cinco mundos visuales en prueba de Rounda. Cada mundo nuevo tiene su propio DESIGN.md completo en docs/disenos; cuando el equipo elija uno, ese archivo pasa a ser este.
+omitted:
+  - section: colors
+    reason: "Cada mundo define los suyos: docs/disenos/lima.md, docs/disenos/cusuco.md y docs/disenos/ronda.md (Carreta y Fintech en docs/diseno.md)."
+  - section: typography
+    reason: "Por mundo, en los mismos archivos."
+  - section: rounded
+    reason: "Por mundo, en los mismos archivos."
+  - section: spacing
+    reason: "Por mundo, en los mismos archivos."
+  - section: components
+    reason: "Por mundo, en los mismos archivos."
+---
 
-Dos mundos visuales en prueba para Rounda, elegibles con `?tema=carreta|fintech` (ver `docs/diseno.md` para los
-contratos de dirección y `PRODUCT.md` para la verdad del producto). Las variables tienen el mismo nombre en los dos;
-los valores viven en `web/src/index.css` y las piezas propias de cada mundo en `web/src/temas.css` y
-`web/src/landing/landing.css`.
+# Rounda: diseños en prueba
 
-## Tokens
+## Overview
 
-| Variable | Carreta de Sarchí | Fintech | Uso |
-| --- | --- | --- | --- |
-| `--papel` | `#ffffff` | `#f5f6f8` | Fondo |
-| `--superficie` | `#ffffff` | `#ffffff` | Paneles y tarjetas |
-| `--superficie-2` | `#fff3cc` | `#f0f2f5` | Resaltado suave, hover |
-| `--tinta` | `#1a1410` | `#0d1117` | Texto principal |
-| `--tinta-2` | `#5c5048` | `#5b6472` | Texto secundario (≥ 6:1 sobre blanco) |
-| `--linea` | tinta al 14 % | `#e3e6eb` | Divisiones |
-| `--borde` | `#1a1410` | `#c9ced6` | Contorno de piezas y campos |
-| `--grosor` | `2px` | `1px` | Grosor de los contornos |
-| `--marca` | `#c8261b` (rojo carreta) | `#0b7a5c` | Barra, portada, cierre |
-| `--acento` | `#1e46a8` (cobalto) | `#0b7a5c` | Acción principal |
-| `--turno` | `#f6b800` | `#f59e0b` | A quien le toca cobrar, lo elegido |
-| `--pago` | `#1e8449` | `#0e9f6e` | Pagó, correcto |
-| `--alerta` | `#b8211a` | `#d9480f` | Vencido, mora, error |
-| `--radio` / `--radio-chico` | `16px` / `10px` | `16px` / `12px` | Esquinas |
-| `--sombra` | ninguna (contorno de tinta) | sombra fina de dos capas | Profundidad |
-| `--titulos` | Bungee (400) | Geist (650, −0.02em) | Títulos y cifras grandes |
-| `--texto` | Atkinson Hyperlegible Next | Geist | Texto |
+Rounda tiene cinco mundos visuales para elegir con la web de verdad. Se cambian con la franja "Diseño en prueba" de
+arriba o con `?tema=` antes del `#` en la URL; los tres nuevos tienen modo oscuro (`?modo=oscuro` o el botón de la
+franja). Los textos, los flujos y los datos son los mismos en todos: cambia la identidad.
 
-Colores de la rueda de la carreta: `--c-rojo`, `--c-amarillo`, `--c-azul`, `--c-verde` (y `--c-naranja` para la
-gráfica). Ningún segmento comparte color con sus vecinos (`coloresSinRepetir` en `web/src/lib/rueda.ts`).
+| Mundo | La "cosa" de Rounda | DESIGN.md |
+| --- | --- | --- |
+| **Lima** (`?tema=lima`) | El punto del logo da la vuelta a la rueda y se detiene en quien cobra. | `docs/disenos/lima.md` |
+| **Cusuco** (`?tema=cusuco`) | La mascota: un cusuco que se enrolla como una bola para protegerse. La rueda es su caparazón. | `docs/disenos/cusuco.md` |
+| **Ronda** (`?tema=ronda`) | Una ronda de personas tomadas de la mano alrededor de la bolsa, en el morado de la guaria. | `docs/disenos/ronda.md` |
+| **Carreta de Sarchí** (`?tema=carreta`, por defecto) | La rueda pintada de la carreta. | `docs/diseno.md` |
+| **Fintech** (`?tema=fintech`) | Una app de finanzas sobria. | `docs/diseno.md` |
 
-## Movimiento
+Lo que no cambia en ningún mundo: el nombre **Rounda** y su logo (un aro con un punto que da vueltas), la rueda con un
+círculo central donde está la bolsa, el español llano sin jerga cripto, y las reglas de movimiento de `docs/diseno.md`.
 
-`--ease-out: cubic-bezier(0.23, 1, 0.32, 1)` para entrar y responder; `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`
-para moverse en pantalla. `--t-presion: 140ms`, `--t-rapido: 200ms`, `--t-medio: 280ms`. La rueda de la carreta gira
-en 900 ms y pinta un segmento en 500 ms. Detalle en `docs/diseno.md`.
+## Do's and Don'ts
 
-## Componentes con carácter propio
-
-- **La rueda** (`Rueda.tsx`, `RuedaCarreta.tsx`): en la carreta, un segmento por persona dentro de una llanta blanca,
-  la flecha arriba marca quién cobra y la rueda gira una ronda a la vez; en fintech, un anillo de tiempo con un
-  círculo por persona.
-- **La barra**: roja con fleco de triángulos amarillos (carreta) o blanca con línea (fintech), pegada arriba en
-  pantallas anchas.
-- **La historia**: línea de tiempo con un punto por evento, del color de lo que pasó.
-- **Botones**: ceden al apretar (`scale(0.97)`); en la carreta, con contorno de tinta.
-
-Fuentes servidas desde el sitio (`@fontsource`): Bungee, Geist y Atkinson Hyperlegible Next.
+- Do elegir un mundo y copiar su archivo de `docs/disenos/` a este DESIGN.md; después, borrar los otros temas
+  (pasos en `docs/diseno.md`).
+- Do pasar `npx @google/design.md lint` sobre cada DESIGN.md antes de subirlo.
+- Don't mezclar piezas de dos mundos en una misma pantalla.

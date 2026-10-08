@@ -1,8 +1,12 @@
 /*
- * Colores, letras y movimiento de toda la app. Hay dos mundos en prueba (src/lib/tema.ts, docs/diseno.md):
+ * Colores, letras y movimiento de toda la app. Hay cinco mundos en prueba (src/lib/tema.ts, docs/diseno.md):
  *   [data-tema='carreta']  la rueda pintada de la carreta de Sarchí: blanco, tinta negra, rojo, amarillo, cobalto y verde.
  *   [data-tema='fintech']  una app de finanzas moderna: gris muy claro, blanco, un verde de marca.
- * Los nombres de las variables son los mismos en los dos: el resto del CSS solo usa variables.
+ *   [data-tema='lima']     fintech amable: salvia, tinta, un verde lima para actuar y el cubo oscuro de la rueda.
+ *   [data-tema='cusuco']   la mascota cusuco: cielo pálido, turquesa para actuar y la terracota del caparazón.
+ *   [data-tema='ronda']    personas tomadas de la mano: blanco orquídea y el morado de la guaria.
+ * Los tres últimos tienen modo oscuro ([data-modo='oscuro'], ver tema.ts).
+ * Los nombres de las variables son los mismos en todos: el resto del CSS solo usa variables.
  */
 :root {
   /* Movimiento (curvas fuertes: las de CSS por defecto se sienten flojas).
@@ -111,6 +115,246 @@
   --titulos-espacio: -0.02em;
 }
 
+/* ---------- Lima (DESIGN.md) ---------- */
+:root[data-tema='lima'] {
+  --c-rojo: #c8352b;
+  --c-naranja: #e8862a;
+  --c-amarillo: #f2a71b;
+  --c-azul: #3d6fb5;
+  --c-verde: #b0e65c;
+  --c-tinta: #141712;
+
+  --papel: #f0f2ec;
+  --superficie: #fbfcf9;
+  --superficie-2: #e5e9df;
+  --tinta: #141712;
+  --tinta-2: #4b5247;
+  --linea: #d8ddd2;
+  --borde: #858d80;
+  --grosor: 1px;
+  --marca: #b0e65c;
+  --sobre-marca: #141712;
+  --acento: #b0e65c;
+  --sobre-acento: #141712;
+  --acento-borde: #3b6a14;
+  --acento-texto: #3b6a14;
+  --turno: #f2a71b;
+  --turno-suave: #fdf0d2;
+  --sobre-turno: #141712;
+  --pago: #5c9a2a;
+  --pago-suave: #e6f5d3;
+  --pago-texto: #2f6410;
+  --alerta: #c8352b;
+  --alerta-suave: #fbe3df;
+  --alerta-texto: #9a2219;
+  --cubo: #141712;
+  --sobre-cubo: #f0f2ec;
+  --sobre-cubo-2: #aab3a4;
+  --brillo: rgba(176, 230, 92, 0.45);
+  --sombra: none;
+  --sombra-alta: 0 18px 40px -22px rgba(20, 40, 10, 0.35);
+  --foco: #3b6a14;
+  --radio: 24px;
+  --radio-chico: 14px;
+  /* Todo en Outfit: el cero de Atkinson lleva raya y, en una app de dinero, "1 000" se leía como "1 ØØØ". */
+  --texto: 'Outfit Variable', system-ui, sans-serif;
+  --titulos: 'Outfit Variable', system-ui, sans-serif;
+  --titulos-peso: 750;
+  --titulos-espacio: -0.025em;
+}
+:root[data-tema='lima'][data-modo='oscuro'] {
+  color-scheme: dark;
+  --c-tinta: #eef2ea;
+  --papel: #0f120e;
+  --superficie: #171b15;
+  --superficie-2: #20251d;
+  --tinta: #eef2ea;
+  --tinta-2: #a9b2a3;
+  --linea: #2a3027;
+  --borde: #6b7466;
+  --acento-borde: #b0e65c;
+  --acento-texto: #c3ef80;
+  --turno-suave: #3a2d10;
+  --sobre-turno: #141712;
+  --pago: #b0e65c;
+  --pago-suave: #223018;
+  --pago-texto: #c3ef80;
+  --alerta: #ff7b6b;
+  --alerta-suave: #3a1814;
+  --alerta-texto: #ffb4a8;
+  --cubo: #232920;
+  --sobre-cubo: #eef2ea;
+  --sobre-cubo-2: #a9b2a3;
+  --sombra-alta: 0 18px 40px -22px rgba(0, 0, 0, 0.7);
+  --foco: #c3ef80;
+}
+
+/* ---------- Cusuco ---------- */
+:root[data-tema='cusuco'] {
+  --c-rojo: #d1393b;
+  --c-naranja: #b4582f;
+  --c-amarillo: #f6c445;
+  --c-azul: #2f6db3;
+  --c-verde: #22b3a6;
+  --c-tinta: #1b2433;
+  /* La mascota (src/components/Cusuco.tsx). */
+  --cusuco-cuerpo: #e7bf8e;
+  --cusuco-panza: #f6dfbf;
+  --cusuco-caparazon: #b4582f;
+  --cusuco-banda: #8a4224;
+  --cusuco-mejilla: #f09a84;
+  --cusuco-tinta: #1b2433;
+
+  --papel: #e8f0f7;
+  --superficie: #fafcfe;
+  --superficie-2: #d7e4ef;
+  --tinta: #1b2433;
+  --tinta-2: #475467;
+  --linea: #cbd8e4;
+  --borde: #7a8899;
+  --grosor: 2px;
+  --marca: #22b3a6;
+  --sobre-marca: #1b2433;
+  --acento: #22b3a6;
+  --sobre-acento: #1b2433;
+  --acento-borde: #1b2433;
+  --acento-texto: #0d6e66;
+  --turno: #f6c445;
+  --turno-suave: #fdf0c9;
+  --sobre-turno: #1b2433;
+  --pago: #1a9a8f;
+  --pago-suave: #d5f1ed;
+  --pago-texto: #0b5f58;
+  --alerta: #d1393b;
+  --alerta-suave: #fbe1df;
+  --alerta-texto: #9b1f22;
+  --cubo: #f6c445;
+  --sobre-cubo: #1b2433;
+  --sobre-cubo-2: #4a3c12;
+  --brillo: rgba(34, 179, 166, 0.35);
+  --sombra: 0 3px 0 #cbd8e4;
+  --sombra-alta: 0 18px 36px -20px rgba(27, 36, 51, 0.4);
+  --foco: #0d6e66;
+  --radio: 28px;
+  --radio-chico: 16px;
+  --texto: 'Nunito Variable', system-ui, sans-serif;
+  --titulos: 'Nunito Variable', system-ui, sans-serif;
+  --titulos-peso: 900;
+  --titulos-espacio: -0.01em;
+}
+:root[data-tema='cusuco'][data-modo='oscuro'] {
+  color-scheme: dark;
+  --c-tinta: #e9f0f7;
+  --cusuco-tinta: #0b111b;
+  --papel: #0e1622;
+  --superficie: #162131;
+  --superficie-2: #1f2c3e;
+  --tinta: #e9f0f7;
+  --tinta-2: #a3b1c2;
+  --linea: #283749;
+  --borde: #5f6f82;
+  --acento: #2cc0b2;
+  --marca: #2cc0b2;
+  --sobre-acento: #0b111b;
+  --acento-borde: #2cc0b2;
+  --acento-texto: #6fe0d4;
+  --turno-suave: #3a3012;
+  --sobre-turno: #0b111b;
+  --pago: #2cc0b2;
+  --pago-suave: #12302e;
+  --pago-texto: #6fe0d4;
+  --alerta: #ff7a72;
+  --alerta-suave: #3b1a1c;
+  --alerta-texto: #ffb3ac;
+  --sobre-cubo: #0b111b;
+  --sombra: 0 3px 0 #0a101a;
+  --sombra-alta: 0 18px 36px -20px rgba(0, 0, 0, 0.7);
+  --foco: #6fe0d4;
+}
+
+/* ---------- Ronda ---------- */
+:root[data-tema='ronda'] {
+  --c-rojo: #c53030;
+  --c-naranja: #e2813a;
+  --c-amarillo: #f6b93b;
+  --c-azul: #3b5fb0;
+  --c-verde: #2f8f62;
+  --c-tinta: #221a26;
+  /* Los colores de la ropa de cada persona de la ronda (se reparten sin repetir vecinos). */
+  --gente-1: #7b2d8e;
+  --gente-2: #f6b93b;
+  --gente-3: #3aa39d;
+  --gente-4: #e2813a;
+
+  --papel: #f7f4f8;
+  --superficie: #fdfcfd;
+  --superficie-2: #ece5ef;
+  --tinta: #221a26;
+  --tinta-2: #5a4f60;
+  --linea: #e0d7e4;
+  --borde: #8a7f90;
+  --grosor: 1.5px;
+  --marca: #7b2d8e;
+  --sobre-marca: #fdfcfd;
+  --acento: #7b2d8e;
+  --sobre-acento: #fdfcfd;
+  --acento-borde: #7b2d8e;
+  --acento-texto: #7b2d8e;
+  --turno: #f6b93b;
+  --turno-suave: #fdf0d2;
+  --sobre-turno: #221a26;
+  --pago: #7b2d8e;
+  --pago-suave: #f1e2f5;
+  --pago-texto: #6a2179;
+  --alerta: #c53030;
+  --alerta-suave: #fbe2e2;
+  --alerta-texto: #962020;
+  --cubo: #7b2d8e;
+  --sobre-cubo: #fdfcfd;
+  --sobre-cubo-2: #ead2f0;
+  --brillo: rgba(123, 45, 142, 0.28);
+  --sombra: none;
+  --sombra-alta: 0 20px 40px -24px rgba(60, 20, 70, 0.4);
+  --foco: #7b2d8e;
+  --radio: 20px;
+  --radio-chico: 12px;
+  --texto: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --titulos: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --titulos-peso: 750;
+  --titulos-espacio: -0.025em;
+}
+:root[data-tema='ronda'][data-modo='oscuro'] {
+  color-scheme: dark;
+  --c-tinta: #f3eef5;
+  --gente-1: #d39ae3;
+  --papel: #151018;
+  --superficie: #1f1823;
+  --superficie-2: #2a2130;
+  --tinta: #f3eef5;
+  --tinta-2: #b6a9bc;
+  --linea: #322838;
+  --borde: #6e6275;
+  --marca: #d39ae3;
+  --sobre-marca: #151018;
+  --acento: #d39ae3;
+  --sobre-acento: #151018;
+  --acento-borde: #d39ae3;
+  --acento-texto: #e2b8ee;
+  --turno-suave: #3a2d10;
+  --sobre-turno: #151018;
+  --pago: #d39ae3;
+  --pago-suave: #35233c;
+  --pago-texto: #e2b8ee;
+  --alerta: #ff7f7f;
+  --alerta-suave: #3d1a1d;
+  --alerta-texto: #ffb8b8;
+  --cubo: #d39ae3;
+  --sobre-cubo: #151018;
+  --sobre-cubo-2: #4a2a55;
+  --sombra-alta: 0 20px 40px -24px rgba(0, 0, 0, 0.7);
+  --foco: #e2b8ee;
+}
+
 *,
 *::before,
 *::after {
@@ -182,7 +426,7 @@ dd,
   justify-content: center;
   gap: 6px 12px;
   padding: 6px 12px;
-  background: var(--c-tinta);
+  background: #14110f; /* fija: la franja no es parte de ningún diseño */
   color: #ffffff;
   font-family: var(--texto);
   font-size: 13px;
@@ -213,5 +457,26 @@ dd,
 }
 .selector-tema button[aria-pressed='true'] {
   background: #ffffff;
-  color: var(--c-tinta);
+  color: #14110f;
+}
+.selector-tema .selector-tema-modo {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+/* En el celular, las cinco opciones caben en una fila que se desliza de lado. */
+@media (max-width: 600px) {
+  .selector-tema {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .selector-tema::-webkit-scrollbar {
+    display: none;
+  }
+  .selector-tema > * {
+    flex: none;
+  }
+  .selector-tema button {
+    white-space: nowrap;
+  }
 }

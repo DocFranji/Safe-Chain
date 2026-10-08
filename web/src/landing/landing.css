@@ -1,8 +1,11 @@
 /*
- * Portada de Rounda (#/). Todo vive bajo .ln. Usa los colores y letras del tema (index.css) y tiene dos
- * composiciones, una por diseño en prueba (src/lib/tema.ts):
+ * Portada de Rounda (#/). Todo vive bajo .ln. Usa los colores y letras del tema (index.css) y tiene una
+ * composición por diseño en prueba (src/lib/tema.ts):
  *   Carreta: la portada roja con su fleco, la rueda pintada, la sección amarilla de la seguridad y el cierre en tinta.
  *   Fintech: blanca y limpia, la rueda dentro de una tarjeta como si fuera la app, el cierre en verde.
+ *   Lima: salvia, el resaltador lima en la promesa, pasos en un riel y la seguridad en una cuadrícula de piezas.
+ *   Cusuco: cielo pálido, la mascota llega rodando y saluda junto a la rueda, piezas de juguete con contorno.
+ *   Ronda: blanco orquídea, la ronda de personas como portada y los colores de su ropa en los pasos.
  * Un solo momento animado: la rueda de ejemplo (RuedaMuestra.tsx). Lo demás solo aparece al entrar en pantalla.
  */
 .ln {
@@ -183,11 +186,11 @@
 }
 
 /* ---------- Portada ---------- */
-/* En el celular, una columna: promesa, explicación, rueda y cómo entrar. */
+/* En el celular, una columna: promesa, explicación, cómo entrar y la rueda. */
 .ln-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'titulo' 'intro' 'rueda' 'cuenta';
+  grid-template-areas: 'titulo' 'intro' 'cuenta' 'rueda'; /* el botón para entrar queda a la vista sin bajar */
   gap: 28px;
   padding: 56px 0 88px;
 }
@@ -250,79 +253,13 @@
   font-size: 14px;
 }
 
-/* La tarjeta para entrar (Google o Freighter). */
-.ln-cuenta {
+/* Cómo entrar: el botón principal (abrir la app o Google) y la demo. */
+.ln-acciones {
   grid-area: cuenta;
   align-self: start;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  max-width: 480px;
-  padding: 26px;
-  border-radius: 22px;
-  background: var(--superficie);
-  color: var(--tinta);
-}
-.ln-cuenta h2 {
-  font-family: var(--titulos);
-  font-weight: var(--titulos-peso);
-  letter-spacing: var(--titulos-espacio);
-  font-size: 28px;
-  line-height: 1.1;
-}
-.ln-sub {
-  font-size: 15px;
-  color: var(--tinta-2);
-}
-.ln-separador {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  font-size: 14px;
-  color: var(--tinta-2);
-}
-.ln-separador::before,
-.ln-separador::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--linea);
-}
-.ln-requisitos {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.ln-requisitos li {
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 12px;
-  align-items: start;
-  font-size: 15px;
-  color: var(--tinta-2);
-}
-.ln-requisitos li > span {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: var(--grosor) solid var(--borde);
-  border-radius: 50%;
-  color: var(--tinta);
-  font-size: 13px;
-  font-weight: 800;
-}
-.ln-requisitos strong {
-  color: var(--tinta);
-}
-.ln-legal {
-  font-size: 13px;
-  color: var(--tinta-2);
-  text-align: center;
 }
 
 /* ---------- Secciones ---------- */
@@ -457,6 +394,11 @@
   gap: 28px;
   padding: 104px 0;
 }
+.ln-cierre-texto {
+  max-width: 40em;
+  font-size: 18px;
+  text-wrap: pretty;
+}
 .ln-cierre h2 {
   max-width: 14ch;
   font-family: var(--titulos);
@@ -512,9 +454,6 @@
 }
 [data-tema='carreta'] .ln .rc-flecha {
   stroke: var(--c-rojo);
-}
-[data-tema='carreta'] .ln-cuenta {
-  border: 3px solid var(--c-tinta);
 }
 [data-tema='carreta'] .ln .ln-boton {
   border-color: var(--c-tinta);
@@ -588,6 +527,9 @@
   --ln-fondo: var(--c-tinta);
   color: #ffffff;
 }
+[data-tema='carreta'] .ln-hero .ln-boton.secundario {
+  border-color: #ffffff;
+}
 [data-tema='carreta'] .ln-cierre .ln-boton.principal {
   border-color: var(--c-amarillo);
   background: var(--c-amarillo);
@@ -627,10 +569,6 @@
   border: 1px solid var(--linea);
   border-radius: 24px;
   background: var(--superficie);
-  box-shadow: var(--sombra-alta);
-}
-[data-tema='fintech'] .ln-cuenta {
-  border: 1px solid var(--linea);
   box-shadow: var(--sombra-alta);
 }
 [data-tema='fintech'] .ln-paso-num {
@@ -681,7 +619,436 @@
   color: var(--acento);
 }
 
+/* =====================================================================================================
+   MUNDOS NUEVOS: base común de Lima, Cusuco y Ronda
+   Promesa de dos renglones a la izquierda y la rueda a la derecha; pasos en un riel; la seguridad en una
+   cuadrícula de piezas (la gráfica grande y las cuatro reglas); un cierre centrado con una sola acción.
+   ===================================================================================================== */
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-h1 {
+  max-width: 14ch;
+  font-size: clamp(42px, 5vw, 64px);
+  line-height: 1.02;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-intro {
+  max-width: 30em;
+  color: var(--tinta-2);
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-rueda-nota {
+  color: var(--tinta-2);
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-titulo-seccion {
+  max-width: 18ch;
+  font-size: clamp(34px, 4.4vw, 56px);
+  line-height: 1.04;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-texto-grande {
+  max-width: 34em;
+  color: var(--tinta-2);
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-seccion {
+  padding: 88px 0;
+}
+/* Pasos: un riel horizontal que une los números (es una secuencia). */
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-pasos {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+}
+@media (min-width: 900px) {
+  :is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-paso:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 27px;
+    left: 68px;
+    right: -20px;
+    height: 2px;
+    background: var(--linea);
+  }
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-paso-num {
+  width: 56px;
+  height: 56px;
+  font-size: 24px;
+}
+/* Seguridad: la gráfica grande a la izquierda y las cuatro reglas en una cuadrícula de 2 × 2. */
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-bento {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+@media (min-width: 900px) {
+  :is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-bento {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-grafica {
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+}
+/* La gráfica llena la pieza: el título arriba y las barras crecen hasta abajo. */
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-grafica-barras {
+  flex: 1;
+  min-height: 180px;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-reglas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radio);
+  background: var(--superficie);
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla::before {
+  content: none;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla dt {
+  font-family: var(--titulos);
+  font-weight: var(--titulos-peso);
+  letter-spacing: var(--titulos-espacio);
+  font-size: 22px;
+  line-height: 1.15;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-regla dd {
+  color: var(--tinta-2);
+}
+/* El cierre: una pieza centrada con una sola acción. */
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-cierre {
+  align-items: center;
+  margin: 24px 0 56px;
+  padding: 72px 28px;
+  border-radius: 32px;
+  text-align: center;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-cierre h2 {
+  max-width: 16ch;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1.02;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-cierre-texto {
+  max-width: 34em;
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-pie {
+  border-top: 1px solid var(--linea);
+}
+:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .ln-boton {
+  border-radius: 999px;
+}
+
+/* =====================================================================================================
+   LIMA
+   ===================================================================================================== */
+[data-tema='lima'] .ln-barra {
+  border-bottom: 1px solid var(--linea);
+}
+[data-tema='lima'] .ln-logo-orbita::after {
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+[data-tema='lima'] .ln-h1 {
+  max-width: 20ch;
+  font-size: clamp(40px, 4.6vw, 58px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+/* El resaltador lima: pasa por debajo de la parte que importa una sola vez, al entrar. */
+[data-tema='lima'] .ln-enfasis {
+  padding: 0 0.06em;
+  background: linear-gradient(var(--acento), var(--acento)) no-repeat 0 82% / 100% 0.36em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  animation: ln-resaltar 900ms var(--ease-out) 450ms backwards;
+}
+:root[data-tema='lima'][data-modo='oscuro'] .ln-enfasis {
+  background: none;
+  color: var(--acento);
+}
+@keyframes ln-resaltar {
+  from {
+    background-size: 0% 0.36em;
+  }
+}
+[data-tema='lima'] .ln .ln-boton.principal {
+  border: 1px solid var(--acento-borde);
+}
+[data-tema='lima'] .ln-paso-num {
+  background: var(--tinta);
+  color: var(--acento);
+}
+[data-tema='lima'] .ln-grafica,
+[data-tema='lima'] .ln-regla {
+  border: 1px solid var(--linea);
+}
+[data-tema='lima'] .ln-grafica-barras > div {
+  border: 1px solid var(--acento-borde);
+  background: var(--acento);
+}
+[data-tema='lima'] .ln-regla:nth-child(1) {
+  border-color: transparent;
+  background: var(--pago-suave);
+}
+[data-tema='lima'] .ln-regla:nth-child(3) {
+  border-color: transparent;
+  background: var(--superficie-2);
+}
+/* Una pieza oscura, como el cubo de la rueda: las reglas públicas. */
+[data-tema='lima'] .ln-regla:nth-child(4) {
+  border-color: transparent;
+  background: var(--cubo);
+  color: var(--sobre-cubo);
+}
+[data-tema='lima'] .ln-regla:nth-child(4) dt {
+  color: var(--acento);
+}
+[data-tema='lima'] .ln-regla:nth-child(4) dd {
+  color: var(--sobre-cubo-2);
+}
+[data-tema='lima'] .ln-cierre {
+  --ln-fondo: transparent;
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+[data-tema='lima'] .ln-cierre .ln-boton.principal {
+  border-color: var(--sobre-acento);
+  background: var(--sobre-acento);
+  color: var(--acento);
+}
+
+/* =====================================================================================================
+   CUSUCO
+   ===================================================================================================== */
+[data-tema='cusuco'] .ln-logo-orbita::after {
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+[data-tema='cusuco'] .ln-nav {
+  font-weight: 800;
+}
+[data-tema='cusuco'] .ln-h1 {
+  max-width: 19ch;
+  font-size: clamp(40px, 4.4vw, 56px);
+  font-weight: 900;
+}
+[data-tema='cusuco'] .ln-enfasis {
+  color: var(--cusuco-caparazon);
+}
+/* Botones de juguete: contorno de tinta y un borde de abajo que se hunde al apretar. */
+[data-tema='cusuco'] .ln .ln-boton {
+  border: 2px solid var(--tinta);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 var(--tinta);
+  font-weight: 900;
+}
+[data-tema='cusuco'] .ln .ln-boton:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--tinta);
+}
+[data-tema='cusuco'] .ln-barra .ln-boton.contorno {
+  box-shadow: 0 3px 0 var(--tinta);
+}
+/* La mascota junto a la rueda: llega rodando hecha bola, se desenrolla y saluda. */
+@media (max-width: 979px) {
+  [data-tema='cusuco'] .ln-hero-rueda {
+    position: relative;
+  }
+}
+/* La mascota se para en el renglón de la nota, abajo a la izquierda de la rueda; la nota se corre a su lado. */
+.ln-cusuco {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  bottom: 0;
+  width: 200px;
+  aspect-ratio: 220 / 150;
+  pointer-events: none;
+}
+[data-tema='cusuco'] .ln-hero-rueda .ln-rueda-nota {
+  display: flex;
+  align-items: center;
+  min-height: 116px;
+  margin-top: -36px;
+  padding-left: 216px;
+  text-align: left;
+}
+.ln-cusuco svg {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.ln-cusuco .ln-cusuco-bola {
+  width: 62%;
+  opacity: 0;
+  animation: cusuco-rueda 900ms var(--ease-out) 300ms backwards;
+}
+.ln-cusuco-pie {
+  animation: cusuco-aparece 360ms var(--ease-out) 1100ms backwards;
+}
+.ln-cusuco-pie .cusuco-pata-saludo {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: cusuco-saluda 520ms var(--ease-in-out) 1500ms 2 alternate;
+}
+@keyframes cusuco-rueda {
+  0% {
+    opacity: 1;
+    transform: translateX(-160%) rotate(-540deg);
+  }
+  80% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0) rotate(0deg) scale(0.96);
+  }
+}
+@keyframes cusuco-aparece {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+}
+@keyframes cusuco-saluda {
+  to {
+    transform: rotate(-22deg);
+  }
+}
+[data-tema='cusuco'] .ln-paso-num {
+  border: 2px solid var(--tinta);
+  background: var(--turno);
+  color: var(--sobre-turno);
+  font-weight: 900;
+}
+[data-tema='cusuco'] .ln-paso:not(:last-child)::after {
+  height: 0;
+  border-top: 3px dashed var(--cusuco-caparazon);
+  background: none;
+}
+[data-tema='cusuco'] .ln-grafica,
+[data-tema='cusuco'] .ln-regla {
+  border: 2px solid var(--tinta);
+  border-radius: var(--radio);
+  background: var(--superficie);
+}
+.ln-grafica-cusuco {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  font-weight: 700;
+}
+.ln-grafica-cusuco svg {
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+[data-tema='cusuco'] .ln-grafica-barras > div {
+  border: 2px solid var(--cusuco-tinta);
+  background: var(--cusuco-caparazon);
+}
+[data-tema='cusuco'] .ln-regla:nth-child(2) {
+  background: var(--turno-suave);
+}
+[data-tema='cusuco'] .ln-regla:nth-child(3) {
+  background: var(--pago-suave);
+}
+[data-tema='cusuco'] .ln-cierre {
+  --ln-fondo: transparent;
+  border: 2px solid var(--tinta);
+  background: var(--turno);
+  color: var(--sobre-turno);
+}
+[data-tema='cusuco'] .ln-cierre .ln-boton.principal {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+
+/* =====================================================================================================
+   RONDA
+   ===================================================================================================== */
+[data-tema='ronda'] .ln-h1 {
+  max-width: 12ch;
+  font-size: clamp(46px, 6vw, 80px);
+  font-weight: 800;
+  line-height: 0.98;
+}
+[data-tema='ronda'] .ln-enfasis {
+  color: var(--acento);
+}
+[data-tema='ronda'] .ln-titulo-seccion,
+[data-tema='ronda'] .ln-cierre h2 {
+  font-weight: 800;
+}
+/* Los números de los pasos llevan los colores de la ropa de la ronda. */
+[data-tema='ronda'] .ln-paso-num {
+  background: var(--gente-1);
+  color: var(--sobre-acento);
+  font-weight: 800;
+}
+[data-tema='ronda'] .ln-paso:nth-child(2) .ln-paso-num {
+  background: var(--gente-2);
+  color: #221a26;
+}
+[data-tema='ronda'] .ln-paso:nth-child(3) .ln-paso-num {
+  background: var(--gente-3);
+  color: #221a26;
+}
+[data-tema='ronda'] .ln-paso:nth-child(4) .ln-paso-num {
+  background: var(--gente-4);
+  color: #221a26;
+}
+[data-tema='ronda'] .ln-paso:not(:last-child)::after {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--tinta);
+  opacity: 0.85;
+}
+[data-tema='ronda'] .ln-grafica-barras > div {
+  background: var(--gente-1);
+}
+[data-tema='ronda'] .ln-grafica-barras > div:nth-child(2) {
+  background: var(--gente-3);
+}
+[data-tema='ronda'] .ln-grafica-barras > div:nth-child(3) {
+  background: var(--gente-4);
+}
+[data-tema='ronda'] .ln-grafica-barras > div:nth-child(n + 4) {
+  background: var(--gente-2);
+}
+[data-tema='ronda'] .ln-regla:nth-child(2) {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+[data-tema='ronda'] .ln-regla:nth-child(2) dd {
+  color: var(--sobre-acento);
+  opacity: 0.88;
+}
+[data-tema='ronda'] .ln-regla:nth-child(3) {
+  background: var(--turno-suave);
+}
+[data-tema='ronda'] .ln-regla:nth-child(3) dd {
+  color: var(--tinta);
+}
+[data-tema='ronda'] .ln-cierre {
+  --ln-fondo: transparent;
+  background: var(--pago-suave);
+}
+[data-tema='ronda'] .ln-cierre h2 {
+  color: var(--pago-texto);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ln-cusuco-bola {
+    display: none;
+  }
+}
+
 /* ---------- Móvil ---------- */
+
 @media (max-width: 640px) {
   .ln-nav a {
     display: none;
@@ -691,9 +1058,6 @@
   }
   .ln-hero {
     padding: 40px 0 72px;
-  }
-  .ln-cuenta {
-    padding: 22px;
   }
   .ln-seccion,
   .ln-cierre {

@@ -1,16 +1,22 @@
 // La "rueda" de la tanda: cada persona es un lugar del círculo, en orden de turno.
-// Hay dos dibujos, uno por diseño en prueba (src/lib/tema.ts):
+// Hay un dibujo por diseño en prueba (src/lib/tema.ts):
 // - Carreta: una rueda pintada que gira una ronda a la vez (RuedaCarreta.tsx).
 // - Fintech: un anillo con el tiempo de la ronda y un círculo por persona (aquí abajo).
+// - Lima: segmentos que se llenan de lima y el punto del logo que señala a quien cobra (RuedaLima.tsx).
+// - Cusuco: las placas del caparazón del cusuco enrollado, con la moneda al centro (RuedaCusuco.tsx).
+// - Ronda: personas tomadas de la mano alrededor de la bolsa (RuedaRonda.tsx).
 // El modelo (quién está dónde, quién pagó, cuánto gira) es común: src/lib/rueda.ts.
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import { monto, duracion } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { armarRueda, type ModeloRueda } from '../lib/rueda'
-import { useTema } from '../lib/tema'
+import { useTema, type Tema } from '../lib/tema'
 import { useSimbolo } from '../hooks/useMoneda'
 import { RuedaCarreta } from './RuedaCarreta'
+import { RuedaLima } from './RuedaLima'
+import { RuedaCusuco } from './RuedaCusuco'
+import { RuedaRonda } from './RuedaRonda'
 
 type Props = { datos: DatosTanda; ahora: number; yo: string | null }
 
@@ -23,31 +29,46 @@ export function Rueda({ datos, ahora, yo }: Props) {
 
   return (
     <figure className="rueda">
-      {tema === 'carreta' ? (
-        <RuedaCarreta m={m} centro={centro} etiqueta={etiqueta} />
-      ) : (
-        <RuedaAnillo m={m} centro={centro} etiqueta={etiqueta} />
-      )}
+      <DibujoRueda tema={tema} m={m} centro={centro} etiqueta={etiqueta} />
 
       {estado !== 'Abierta' && (
         <figcaption className="leyenda">
-          {tema === 'carreta' ? (
-            <>
-              <span><i className="muestra flecha" /> Cobra esta ronda</span>
-              <span><i className="muestra pintado" /> Pagó esta ronda</span>
-              <span><i className="muestra cobro"><Visto /></i> Ya cobró</span>
-            </>
-          ) : (
-            <>
-              <span><i className="muestra turno" /> Le toca cobrar</span>
-              <span><i className="muestra pago" /> Pagó esta ronda</span>
-              <span><i className="muestra cobro"><Visto /></i> Ya cobró</span>
-            </>
-          )}
+          <span>
+            <i className={`muestra ${MUESTRA_TURNO[tema]}`} /> {tema === 'fintech' ? 'Le toca cobrar' : 'Cobra esta ronda'}
+          </span>
+          <span>
+            <i className={`muestra ${MUESTRA_PAGO[tema]}`} /> Pagó esta ronda
+          </span>
+          <span>
+            <i className="muestra cobro">
+              <Visto />
+            </i>{' '}
+            Ya cobró
+          </span>
         </figcaption>
       )}
     </figure>
   )
+}
+
+// La leyenda dibuja lo mismo que la rueda de cada diseño: cómo se marca a quien cobra y lo pagado.
+const MUESTRA_TURNO: Record<Tema, string> = { carreta: 'flecha', fintech: 'turno', lima: 'punto-lima', cusuco: 'cabeza', ronda: 'luz' }
+const MUESTRA_PAGO: Record<Tema, string> = { carreta: 'pintado', fintech: 'pago', lima: 'pintado', cusuco: 'pintado', ronda: 'ropa' }
+
+/** El dibujo de la rueda según el diseño en prueba (también lo usa la rueda de ejemplo de la portada). */
+export function DibujoRueda({ tema, m, centro, etiqueta }: { tema: Tema; m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
+  switch (tema) {
+    case 'carreta':
+      return <RuedaCarreta m={m} centro={centro} etiqueta={etiqueta} />
+    case 'lima':
+      return <RuedaLima m={m} centro={centro} etiqueta={etiqueta} />
+    case 'cusuco':
+      return <RuedaCusuco m={m} centro={centro} etiqueta={etiqueta} />
+    case 'ronda':
+      return <RuedaRonda m={m} centro={centro} etiqueta={etiqueta} />
+    default:
+      return <RuedaAnillo m={m} centro={centro} etiqueta={etiqueta} />
+  }
 }
 
 /** La marca de "ya cobró", dibujada (no un carácter). */
@@ -63,7 +84,7 @@ const R_ANILLO = 132 // donde van las personas, sobre el anillo del tiempo
 const R_NOMBRE_ANILLO = 186
 const CIRC_ANILLO = 2 * Math.PI * R_ANILLO
 
-export function RuedaAnillo({ m, centro, etiqueta }: { m: ModeloRueda; centro: React.ReactNode; etiqueta: string }) {
+export function RuedaAnillo({ m, centro, etiqueta }: { m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
   return (
     <svg className="rueda-anillo" viewBox="-250 -214 500 428" role="img" aria-label={etiqueta}>
       <circle className="rueda-pista" r={R_ANILLO} />

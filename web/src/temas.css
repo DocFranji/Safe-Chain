@@ -480,3 +480,794 @@
   stroke: var(--c-tinta);
   stroke-width: 3;
 }
+
+/* =====================================================================================================
+   LIMA
+   Fintech amable: tarjetas casi blancas sobre salvia, una línea de 1 px y nada de sombras. El verde lima es
+   el único acento (acción principal, lo pagado y la bolsa); el texto sobre la lima va siempre en tinta.
+   ===================================================================================================== */
+:root[data-tema='lima'] {
+  --barra-fondo: color-mix(in srgb, var(--papel) 88%, transparent);
+  --barra-linea: 1px solid var(--linea);
+  --barra-tinta: var(--tinta);
+  --menu-tinta: var(--tinta-2);
+  --menu-hover: var(--superficie-2);
+  --menu-activo: var(--tinta);
+  --menu-activo-tinta: var(--papel);
+  --logo-punto: var(--acento);
+  --tarjeta-borde-hover: var(--borde);
+  --boton-principal-borde: var(--acento-borde);
+}
+:root[data-tema='lima'] .barra::before {
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+}
+/* El punto del logo lleva un aro de tinta: sobre la salvia, la lima sola no se distingue. */
+:root[data-tema='lima'] .logo-orbita::after {
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+:root[data-tema='lima'] .selector h1 {
+  font-size: 44px;
+  line-height: 1.05;
+}
+:root[data-tema='lima'] .panel h2 {
+  font-size: 24px;
+}
+:root[data-tema='lima'] :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+  font-size: 20px;
+}
+:root[data-tema='lima']
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow: none;
+}
+:root[data-tema='lima'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+/* Botones en píldora; el principal en lima con borde verde oscuro. */
+:root[data-tema='lima'] .boton {
+  border-width: 1px;
+  border-radius: 999px;
+  padding-inline: 22px;
+}
+:root[data-tema='lima'] :is(.boton.secundario, .boton.chico) {
+  background: var(--superficie);
+  border-color: var(--borde);
+}
+:root[data-tema='lima'] .boton.chico {
+  padding-inline: 16px;
+}
+@media (hover: hover) and (pointer: fine) {
+  :root[data-tema='lima'] .boton.principal:hover:not(:disabled) {
+    filter: brightness(1.05) saturate(1.05);
+    box-shadow: 0 10px 24px -14px var(--brillo);
+  }
+}
+:root[data-tema='lima'] .etiqueta {
+  border: 0;
+  padding: 3px 12px;
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+}
+:root[data-tema='lima'] .etiqueta.abierta {
+  background: var(--pago-suave);
+  color: var(--pago-texto);
+}
+:root[data-tema='lima'] .etiqueta.por-repartir {
+  background: var(--turno-suave);
+  color: var(--tinta);
+}
+:root[data-tema='lima'] .etiqueta.en-curso {
+  background: var(--tinta);
+  color: var(--papel);
+}
+:root[data-tema='lima'] .etiqueta.en-curso::before {
+  background: var(--acento);
+}
+:root[data-tema='lima'] .etiqueta.cancelada {
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+}
+:root[data-tema='lima'] .lugar {
+  border: 1.5px dashed var(--borde);
+}
+:root[data-tema='lima'] .lugar.lleno {
+  border: 1.5px solid var(--acento-borde);
+  background: var(--acento);
+}
+:root[data-tema='lima'] .filtro {
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--tinta-2);
+}
+:root[data-tema='lima'] .filtro.activo {
+  border-color: var(--tinta);
+  background: var(--tinta);
+  color: var(--papel);
+}
+:root[data-tema='lima'] :is(.modo, .moneda) {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-chico);
+  background: var(--superficie);
+}
+:root[data-tema='lima'] :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
+  border-color: var(--acento-borde);
+  background: var(--pago-suave);
+  box-shadow: 0 0 0 1px var(--acento-borde) inset;
+}
+:root[data-tema='lima'] th {
+  border-bottom: 1px solid var(--linea);
+  color: var(--tinta-2);
+  font-weight: 700;
+  text-transform: none;
+}
+:root[data-tema='lima'] td {
+  border-bottom-color: var(--linea);
+}
+:root[data-tema='lima'] .tarjeta-cobro {
+  border: 1px solid var(--acento-borde);
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+:root[data-tema='lima'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-family: var(--titulos);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+:root[data-tema='lima'] .dato dd.alerta {
+  color: var(--alerta);
+}
+
+/* =====================================================================================================
+   CUSUCO
+   Un mundo de juguete: contornos de tinta de 2 px como los de la mascota, esquinas muy redondas, botones que
+   se hunden al apretar (el borde de abajo desaparece) y la terracota del caparazón en los detalles.
+   ===================================================================================================== */
+:root[data-tema='cusuco'] {
+  --barra-fondo: var(--superficie);
+  --barra-linea: 2px solid var(--linea);
+  --barra-tinta: var(--tinta);
+  --menu-tinta: var(--tinta-2);
+  --menu-hover: var(--superficie-2);
+  --menu-activo: var(--turno);
+  --menu-activo-tinta: var(--sobre-turno);
+  --logo-punto: var(--cusuco-caparazon);
+  --tarjeta-borde-hover: var(--tinta);
+}
+:root[data-tema='cusuco'] .menu a {
+  font-weight: 800;
+}
+:root[data-tema='cusuco'] .selector h1 {
+  font-size: 42px;
+  line-height: 1.05;
+}
+:root[data-tema='cusuco'] .panel h2 {
+  font-size: 24px;
+}
+:root[data-tema='cusuco'] :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+  font-size: 20px;
+}
+:root[data-tema='cusuco']
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border: 2px solid var(--tinta);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow: none;
+}
+:root[data-tema='cusuco'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+/* Botones que se hunden: un borde inferior de tinta que desaparece al apretar. */
+:root[data-tema='cusuco'] .boton {
+  border: 2px solid var(--tinta);
+  border-radius: 16px;
+  font-weight: 800;
+  box-shadow: 0 4px 0 var(--tinta);
+  margin-bottom: 4px;
+}
+:root[data-tema='cusuco'] .boton:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--tinta);
+}
+:root[data-tema='cusuco'] :is(.boton.secundario, .boton.chico) {
+  background: var(--superficie);
+}
+:root[data-tema='cusuco'] .boton.chico {
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--tinta);
+  margin-bottom: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  :root[data-tema='cusuco'] .boton.principal:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 0 var(--tinta);
+  }
+  :root[data-tema='cusuco'] :is(.boton.secundario, .boton.chico):hover:not(:disabled) {
+    border-color: var(--tinta);
+  }
+}
+:root[data-tema='cusuco'] .etiqueta {
+  border: 2px solid var(--tinta);
+  background: var(--superficie);
+  color: var(--tinta);
+  font-weight: 800;
+}
+:root[data-tema='cusuco'] :is(.etiqueta.abierta, .etiqueta.por-repartir) {
+  background: var(--turno);
+  color: var(--sobre-turno);
+}
+:root[data-tema='cusuco'] .etiqueta.en-curso {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+:root[data-tema='cusuco'] .etiqueta.en-curso::before {
+  background: var(--sobre-acento);
+}
+:root[data-tema='cusuco'] .etiqueta.cancelada {
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+}
+/* Los asientos son placas del caparazón. */
+:root[data-tema='cusuco'] .lugar {
+  width: 16px;
+  border-radius: 6px;
+  border: 2px dashed var(--borde);
+}
+:root[data-tema='cusuco'] .lugar.lleno {
+  border: 2px solid var(--cusuco-tinta);
+  background: var(--cusuco-caparazon);
+}
+:root[data-tema='cusuco'] .filtro {
+  border: 2px solid var(--tinta);
+  border-radius: 999px;
+  background: var(--superficie);
+  font-weight: 800;
+}
+:root[data-tema='cusuco'] .filtro.activo {
+  background: var(--turno);
+  color: var(--sobre-turno);
+}
+:root[data-tema='cusuco'] :is(.modo, .moneda) {
+  border: 2px solid var(--tinta);
+  border-radius: var(--radio-chico);
+  background: var(--superficie);
+}
+:root[data-tema='cusuco'] :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
+  background: var(--turno-suave);
+  box-shadow: 0 0 0 2px var(--tinta) inset;
+}
+:root[data-tema='cusuco'] th {
+  border-bottom: 2px solid var(--tinta);
+  color: var(--tinta);
+  font-weight: 800;
+  text-transform: none;
+}
+:root[data-tema='cusuco'] .tarjeta-cobro {
+  border: 2px solid var(--tinta);
+  background: var(--turno);
+  color: var(--sobre-turno);
+}
+:root[data-tema='cusuco'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-family: var(--titulos);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+:root[data-tema='cusuco'] .dato dd.alerta {
+  color: var(--alerta);
+}
+
+/* =====================================================================================================
+   RONDA
+   Cálido y humano: piezas sin contorno sobre el blanco orquídea, el morado de la guaria para actuar y la ropa
+   de colores de cada persona en los asientos. Letra Bricolage en títulos.
+   ===================================================================================================== */
+:root[data-tema='ronda'] {
+  --barra-fondo: var(--papel);
+  --barra-linea: 0;
+  --barra-tinta: var(--tinta);
+  --menu-tinta: var(--tinta-2);
+  --menu-hover: var(--superficie-2);
+  --menu-activo: var(--pago-suave);
+  --menu-activo-tinta: var(--pago-texto);
+  --logo-punto: var(--turno);
+  --tarjeta-borde-hover: transparent;
+}
+:root[data-tema='ronda'] .selector h1 {
+  font-size: 46px;
+  line-height: 1.02;
+}
+:root[data-tema='ronda'] .panel h2 {
+  font-size: 25px;
+}
+:root[data-tema='ronda'] :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+  font-size: 21px;
+}
+:root[data-tema='ronda']
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border: 0;
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow: 0 1px 0 var(--linea);
+}
+:root[data-tema='ronda'] .opciones-historial {
+  padding: 12px 16px 16px;
+}
+:root[data-tema='ronda'] .boton {
+  border-width: 1.5px;
+  border-radius: 999px;
+  padding-inline: 22px;
+}
+:root[data-tema='ronda'] :is(.boton.secundario, .boton.chico) {
+  background: transparent;
+  border-color: var(--borde);
+}
+:root[data-tema='ronda'] .boton.chico {
+  padding-inline: 16px;
+}
+:root[data-tema='ronda'] .etiqueta {
+  border: 0;
+  padding: 3px 12px;
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+}
+:root[data-tema='ronda'] :is(.etiqueta.abierta, .etiqueta.por-repartir) {
+  background: var(--turno-suave);
+  color: var(--tinta);
+}
+:root[data-tema='ronda'] .etiqueta.en-curso {
+  background: var(--pago-suave);
+  color: var(--pago-texto);
+}
+:root[data-tema='ronda'] .etiqueta.cancelada {
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+}
+/* Los asientos: cada persona con el color de su ropa en la ronda. */
+:root[data-tema='ronda'] .lugar {
+  border: 1.5px dashed var(--borde);
+}
+:root[data-tema='ronda'] .lugar.lleno {
+  border: 0;
+  background: var(--gente-1);
+}
+:root[data-tema='ronda'] .lugar.lleno:nth-child(4n + 2) {
+  background: var(--gente-2);
+}
+:root[data-tema='ronda'] .lugar.lleno:nth-child(4n + 3) {
+  background: var(--gente-3);
+}
+:root[data-tema='ronda'] .lugar.lleno:nth-child(4n + 4) {
+  background: var(--gente-4);
+}
+:root[data-tema='ronda'] .filtro {
+  border: 0;
+  border-radius: 999px;
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+}
+:root[data-tema='ronda'] .filtro.activo {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+:root[data-tema='ronda'] :is(.modo, .moneda) {
+  border: 1.5px solid var(--linea);
+  border-radius: var(--radio-chico);
+  background: var(--superficie);
+}
+:root[data-tema='ronda'] :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+  box-shadow: 0 0 0 1px var(--acento) inset;
+}
+:root[data-tema='ronda'] th {
+  border-bottom: 1.5px solid var(--linea);
+  color: var(--tinta-2);
+  font-weight: 700;
+  text-transform: none;
+}
+:root[data-tema='ronda'] td {
+  border-bottom-color: var(--linea);
+}
+:root[data-tema='ronda'] .tarjeta-cobro {
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+:root[data-tema='ronda'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-family: var(--titulos);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+:root[data-tema='ronda'] .dato dd.alerta {
+  color: var(--alerta);
+}
+
+/* Detalles del navegador con los colores de cada mundo nuevo (selección, cursor de texto y barras). */
+:root:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) {
+  caret-color: var(--acento-texto);
+  scrollbar-color: var(--borde) var(--papel);
+  accent-color: var(--acento-texto);
+}
+
+/* =====================================================================================================
+   LAS RUEDAS DE LOS MUNDOS NUEVOS
+   ===================================================================================================== */
+
+/* ---------- Lima: segmentos que se llenan, el cubo oscuro y el punto del logo que da la vuelta ---------- */
+.rl-pista {
+  fill: none;
+  stroke: var(--linea);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 7;
+  stroke-linecap: round;
+}
+.rl-segmento {
+  fill: var(--superficie);
+  stroke: var(--borde);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition:
+    fill 500ms ease,
+    stroke 500ms ease,
+    transform 400ms var(--ease-out);
+}
+.rueda-lima .nodo.pago .rl-segmento,
+.rueda-lima:not(.activa) .nodo:not(.libre) .rl-segmento {
+  fill: var(--acento);
+  stroke: var(--acento-borde);
+}
+.rueda-lima .nodo.turno .rl-segmento {
+  stroke: var(--tinta);
+  stroke-width: 3;
+}
+.rueda-lima .nodo.libre .rl-segmento {
+  fill: none;
+  stroke-dasharray: 6 6;
+}
+.rueda-lima .nodo.moroso .rl-segmento {
+  fill: var(--alerta-suave);
+  stroke: var(--alerta);
+  stroke-dasharray: 6 5;
+}
+.rueda-lima .nodo-turno {
+  font-family: var(--titulos);
+  font-size: 20px;
+  font-weight: 700;
+}
+.rueda-lima .nodo.pago .nodo-turno,
+.rueda-lima:not(.activa) .nodo:not(.libre) .nodo-turno {
+  fill: var(--sobre-acento);
+}
+.rueda-lima .nodo-nombre {
+  font-size: 17px;
+  font-weight: 700;
+}
+.rl-cubo {
+  fill: var(--cubo);
+}
+.rl-tiempo-pista {
+  fill: none;
+  stroke: var(--linea);
+  stroke-width: 5;
+}
+.rueda-lima .rueda-tiempo {
+  stroke: var(--acento-borde);
+  stroke-width: 5;
+}
+:root[data-modo='oscuro'] .rueda-lima .rueda-tiempo {
+  stroke: var(--acento);
+}
+.rueda-lima .centro text {
+  fill: var(--sobre-cubo);
+}
+.rueda-lima .centro .centro-grande {
+  fill: var(--acento);
+  font-family: var(--titulos);
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.rueda-lima .centro .centro-medio {
+  font-family: var(--titulos);
+  font-size: 24px;
+  font-weight: 750;
+}
+.rueda-lima .centro :is(.centro-sub, .centro-nota) {
+  fill: var(--sobre-cubo-2);
+}
+.rueda-lima .centro .centro-sub {
+  fill: var(--sobre-cubo);
+  font-weight: 700;
+}
+.rueda-lima .centro .centro-nota.alerta {
+  fill: #ff9a8c;
+}
+.rueda-lima .nodo-cobro circle {
+  fill: var(--tinta);
+}
+.rueda-lima .nodo-cobro path {
+  stroke: var(--papel);
+}
+.rl-orbita {
+  transition: transform 900ms var(--ease-in-out);
+}
+.rl-punto {
+  fill: var(--acento);
+  stroke: var(--tinta);
+  stroke-width: 3;
+}
+
+/* ---------- Cusuco: placas del caparazón, moneda al centro y la cabeza que asoma ---------- */
+.rueda-cusuco .ru-giro,
+.rueda-cusuco .ru-orbita {
+  transition: transform 900ms var(--ease-in-out);
+}
+.ru-placa {
+  fill: var(--superficie);
+  stroke: var(--cusuco-tinta);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  transition:
+    fill 500ms ease,
+    transform 400ms var(--ease-out);
+}
+:root[data-modo='oscuro'] .ru-placa {
+  stroke: var(--tinta-2);
+}
+.ru-banda {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke 500ms ease;
+}
+.rueda-cusuco .nodo.pago .ru-placa,
+.rueda-cusuco:not(.activa) .nodo:not(.libre) .ru-placa {
+  fill: var(--cusuco-caparazon);
+  stroke: var(--cusuco-tinta);
+}
+.rueda-cusuco .nodo.pago .ru-banda,
+.rueda-cusuco:not(.activa) .nodo:not(.libre) .ru-banda {
+  stroke: var(--cusuco-banda);
+}
+.rueda-cusuco .nodo.turno .ru-placa {
+  transform: translateY(-8px);
+}
+.rueda-cusuco .nodo.libre .ru-placa {
+  fill: none;
+  stroke: var(--borde);
+  stroke-dasharray: 7 6;
+}
+.rueda-cusuco .nodo.moroso .ru-placa {
+  fill: var(--alerta-suave);
+  stroke: var(--alerta);
+  stroke-dasharray: 7 5;
+}
+.ru-moneda {
+  fill: var(--cubo);
+  stroke: var(--cusuco-tinta);
+  stroke-width: 3;
+}
+.ru-moneda-canto {
+  fill: none;
+  stroke: var(--cusuco-tinta);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+  opacity: 0.5;
+}
+.rueda-cusuco .rueda-tiempo {
+  stroke: var(--acento);
+  stroke-width: 6;
+}
+.rueda-cusuco .centro text {
+  fill: var(--sobre-cubo);
+}
+.rueda-cusuco .centro .centro-grande {
+  font-size: 40px;
+  font-weight: 900;
+}
+.rueda-cusuco .centro .centro-medio {
+  font-size: 22px;
+  font-weight: 900;
+}
+.rueda-cusuco .centro :is(.centro-sub, .centro-nota) {
+  fill: var(--sobre-cubo-2);
+  font-weight: 800;
+}
+.rueda-cusuco .centro .centro-nota.alerta {
+  fill: #9b1f22;
+}
+.rueda-cusuco .nodo-turno {
+  font-size: 19px;
+  font-weight: 900;
+  fill: var(--tinta);
+}
+.rueda-cusuco .ru-orbita.pintada .nodo-turno {
+  fill: #fafcfe; /* sobre la terracota, 4.7:1 */
+}
+.rueda-cusuco .nodo-nombre {
+  font-size: 17px;
+  font-weight: 800;
+}
+.rueda-cusuco .nodo-cobro circle {
+  fill: var(--acento);
+  stroke: var(--cusuco-tinta);
+  stroke-width: 2;
+}
+.rueda-cusuco .nodo-cobro path {
+  stroke: var(--cusuco-tinta);
+}
+.cusuco-cabeza {
+  animation: cusuco-asoma 420ms var(--ease-out) backwards 300ms;
+}
+@keyframes cusuco-asoma {
+  from {
+    opacity: 0;
+    transform: translateY(-140px);
+  }
+}
+
+/* ---------- Ronda: personas de la mano alrededor de la bolsa ---------- */
+.rueda-ronda .rr-orbita {
+  transition: transform 900ms var(--ease-in-out);
+}
+.rr-brazos {
+  fill: none;
+  stroke: var(--tinta);
+  stroke-width: 4;
+  opacity: 0.85;
+}
+.rr-bolsa {
+  fill: var(--cubo);
+}
+.rueda-ronda .rueda-tiempo {
+  stroke: var(--turno);
+  stroke-width: 6;
+}
+.rueda-ronda .centro text {
+  fill: var(--sobre-cubo);
+}
+.rueda-ronda .centro .centro-grande {
+  font-family: var(--titulos);
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.rueda-ronda .centro .centro-medio {
+  font-family: var(--titulos);
+  font-size: 23px;
+  font-weight: 750;
+}
+.rueda-ronda .centro :is(.centro-sub, .centro-nota) {
+  fill: var(--sobre-cubo-2);
+}
+.rueda-ronda .centro .centro-sub {
+  fill: var(--sobre-cubo);
+  font-weight: 700;
+}
+.rueda-ronda .centro .centro-nota.alerta {
+  fill: var(--turno);
+  font-weight: 800;
+}
+.rr-luz {
+  fill: var(--turno-suave);
+  stroke: var(--turno);
+  stroke-width: 3;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.rueda-ronda .nodo.turno .rr-luz {
+  opacity: 1;
+}
+.rr-cabeza {
+  fill: var(--tinta);
+}
+.rr-camiseta {
+  fill: var(--superficie);
+  stroke: var(--tinta);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  transition: fill 500ms ease;
+}
+.rueda-ronda .nodo.pago .rr-camiseta,
+.rueda-ronda:not(.activa) .nodo:not(.libre) .rr-camiseta {
+  fill: var(--ropa);
+}
+.rueda-ronda .nodo.libre :is(.rr-camiseta, .rr-cabeza) {
+  fill: var(--papel);
+  stroke: var(--borde);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+.rueda-ronda .nodo.moroso .rr-camiseta {
+  fill: var(--alerta-suave);
+  stroke: var(--alerta);
+  stroke-dasharray: 6 4;
+}
+.rueda-ronda .nodo-turno {
+  font-family: var(--titulos);
+  font-size: 19px;
+  font-weight: 800;
+  fill: var(--tinta);
+}
+/* Camiseta pintada: el número en tinta (también en oscuro, porque la ropa sigue clara); sobre la guaria, en blanco. */
+.rueda-ronda .nodo.pago .nodo-turno,
+.rueda-ronda:not(.activa) .nodo:not(.libre) .nodo-turno {
+  fill: #221a26;
+}
+.rueda-ronda .nodo.pago.ropa-0 .nodo-turno,
+.rueda-ronda:not(.activa) .nodo.ropa-0:not(.libre) .nodo-turno {
+  fill: var(--sobre-acento);
+}
+.rueda-ronda .nodo-nombre {
+  font-size: 17px;
+  font-weight: 700;
+}
+.rueda-ronda .nodo-cobro circle {
+  fill: var(--acento);
+}
+.rueda-ronda .nodo-cobro path {
+  stroke: var(--sobre-acento);
+}
+
+/* ---------- Leyendas de los mundos nuevos ---------- */
+.muestra.punto-lima {
+  background: var(--acento);
+  border: 3px solid var(--tinta);
+}
+:root:is([data-tema='lima'], [data-tema='cusuco']) .muestra.pintado {
+  border: 2px solid var(--acento-borde);
+  border-radius: 4px;
+  background: var(--acento);
+}
+:root[data-tema='cusuco'] .muestra.pintado {
+  border-color: var(--cusuco-tinta);
+  background: var(--cusuco-caparazon);
+}
+.muestra.cabeza {
+  border: 2px solid var(--cusuco-tinta);
+  background: var(--cusuco-cuerpo);
+  border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+}
+.muestra.luz {
+  background: var(--turno-suave);
+  border: 3px solid var(--turno);
+}
+.muestra.ropa {
+  border-radius: 4px 4px 3px 3px;
+  background: var(--gente-1);
+}
+:root:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .muestra.cobro {
+  background: var(--tinta);
+}
+:root:is([data-tema='lima'], [data-tema='cusuco'], [data-tema='ronda']) .muestra svg path {
+  stroke: var(--papel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rl-orbita,
+  .rueda-cusuco .ru-giro,
+  .rueda-cusuco .ru-orbita,
+  .rueda-ronda .rr-orbita,
+  .rl-segmento,
+  .ru-placa,
+  .rr-camiseta {
+    transition: none;
+  }
+  .cusuco-cabeza {
+    animation-name: aparecer-suave;
+  }
+}
+
+/* Cusuco: mientras algo carga, el cusuco enrollado rueda (en vez del círculo que gira). */
+:root[data-tema='cusuco'] .cargando::before {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='17' fill='%23b4582f'/%3E%3Cpath d='M13 6 Q10 20 13 34 M27 6 Q30 20 27 34 M20 3 V37' stroke='%238a4224' stroke-width='3' fill='none'/%3E%3Ccircle cx='20' cy='20' r='17' fill='none' stroke='%231b2433' stroke-width='3'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  animation-duration: 1.1s;
+}

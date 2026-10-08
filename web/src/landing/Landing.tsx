@@ -5,19 +5,30 @@ import { RuedaMuestra } from './RuedaMuestra'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { RUTA_DEMO, RUTA_INICIO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
+import { useTema, type Tema } from '../lib/tema'
+import { Cusuco } from '../components/Cusuco'
+
+// La promesa de la portada. Cada diseño en prueba tiene su frase; la parte resaltada va en "enfasis".
+const PROMESA: Record<Tema, { antes: string; enfasis: string }> = {
+  carreta: { antes: 'La tanda de siempre, ', enfasis: 'sin que nadie se vaya con la plata.' },
+  fintech: { antes: 'La tanda de siempre, ', enfasis: 'sin que nadie se vaya con la plata.' },
+  lima: { antes: 'La tanda donde ', enfasis: 'nadie se va con la plata.' },
+  cusuco: { antes: 'Tu tanda, ', enfasis: 'protegida como un cusuco.' },
+  ronda: { antes: 'En esta ronda, ', enfasis: 'todos cobran.' },
+}
 
 const PASOS = [
-  { t: 'Crea o únete', d: 'Define la cuota, cuántas personas y cada cuánto se paga. Comparte el enlace con tu grupo.' },
-  { t: 'Deja tu colateral', d: 'Antes de entrar ves cuánto vas a depositar. Quien cobra primero deja más.' },
-  { t: 'Paga cada ronda', d: 'Todos aportan la misma cuota. Si alguien se atrasa, paga una multa.' },
-  { t: 'Cobra en tu turno', d: 'Al cerrar la ronda, el total va a quien le toca. Al final recuperas tu colateral con rendimiento.' },
+  { t: 'Crea o únete', d: 'Defines la cuota, cuántas personas y cada cuánto se paga. Mandas el enlace a tu grupo.' },
+  { t: 'Deja tu garantía', d: 'Antes de entrar ves cuánto vas a depositar. Quien cobra primero deja más.' },
+  { t: 'Paga cada ronda', d: 'Todos ponen la misma cuota. Si te atrasas, pagas una multa.' },
+  { t: 'Cobra en tu turno', d: 'Al cerrar la ronda, la bolsa le llega a quien le toca. Al final recuperas tu garantía con rendimiento.' },
 ]
 
 const REGLAS = [
-  { t: 'Colateral escalonado', d: 'Cobrar primero cuesta más garantía, así nadie gana con irse.' },
-  { t: 'Multas por atraso', d: 'Pagar tarde tiene un costo que se reparte entre quienes cumplen.' },
-  { t: 'Tu colateral genera rendimiento', d: 'Mientras espera, el dinero no está quieto.' },
-  { t: 'Reglas públicas', d: 'El contrato corre en Stellar. Cualquiera puede revisar cada pago.' },
+  { t: 'Garantía escalonada', d: 'Cobrar primero cuesta más garantía, así que irse con la bolsa no sale a cuenta.' },
+  { t: 'Multas por atraso', d: 'Si pagas tarde, pagas una multa, y esa multa se reparte entre quienes cumplieron.' },
+  { t: 'Tu garantía gana rendimiento', d: 'Mientras esperas tu turno, la garantía queda en una bóveda que genera rendimiento.' },
+  { t: 'Reglas públicas', d: 'El contrato corre en Stellar y cualquiera puede revisar cada pago.' },
 ]
 
 /**
@@ -36,34 +47,45 @@ function irASeccion(id: string) {
 
 export function Landing() {
   const raiz = useRef<HTMLDivElement>(null)
+  const tema = useTema()
+  const google = useSesionGoogle()
   useRevelar(raiz)
+  const promesa = PROMESA[tema]
 
   return (
     <div ref={raiz} className="ln">
-
       <div className="ln-contenedor">
         <header className="ln-barra">
           <p className="ln-marca">
-            <span className="ln-logo" aria-hidden="true"><span className="ln-logo-orbita" /></span>
+            <span className="ln-logo" aria-hidden="true">
+              <span className="ln-logo-orbita" />
+            </span>
             Rounda
           </p>
           <nav className="ln-nav">
-            <a href={RUTA_INICIO} onClick={irASeccion('como')}>Cómo funciona</a>
-            <a href={RUTA_INICIO} onClick={irASeccion('seguridad')}>Seguridad</a>
-            <a className="ln-boton contorno" href={RUTA_LOBBY}>Abrir app</a>
+            <a href={RUTA_INICIO} onClick={irASeccion('como')}>
+              Cómo funciona
+            </a>
+            <a href={RUTA_INICIO} onClick={irASeccion('seguridad')}>
+              Seguridad
+            </a>
+            <a className="ln-boton contorno" href={RUTA_LOBBY}>
+              Abrir la app
+            </a>
           </nav>
         </header>
 
-        {/* La portada es una grilla: a la izquierda la promesa y cómo entrar; a la derecha, la rueda funcionando. */}
+        {/* La portada: a la izquierda la promesa y cómo entrar; a la derecha, la rueda funcionando. */}
         <section className="ln-hero">
           <h1 className="ln-h1 ln-entrada d1">
-            La tanda de siempre, <span className="ln-enfasis">sin que nadie se vaya con el dinero.</span>
+            {promesa.antes}
+            <span className="ln-enfasis">{promesa.enfasis}</span>
           </h1>
           <p className="ln-intro ln-entrada d2">
-            Un grupo aporta la misma cuota cada ronda y, por turnos, uno recibe todo. Aquí las reglas las cumple un contrato
-            inteligente: cobra a tiempo, aplica multas por atraso y protege a quienes cobran al final.
+            Todos ponen la misma cuota y, por turnos, uno cobra la bolsa. Un contrato en Stellar hace cumplir las reglas.
           </p>
           <div className="ln-hero-rueda ln-entrada d2">
+            {tema === 'cusuco' && <CusucoQueLlega />}
             <RuedaMuestra />
           </div>
           <EntradaApp />
@@ -71,13 +93,15 @@ export function Landing() {
 
         <section id="como" className="ln-seccion">
           <div className="ln-encabezado" data-revelar="subir">
-            <h2 className="ln-titulo-seccion">Cuatro pasos.</h2>
-            <p className="ln-texto-grande">Lo mismo que una tanda entre amigos, con las cuentas siempre claras.</p>
+            <h2 className="ln-titulo-seccion">De unirte a cobrar, en cuatro pasos.</h2>
+            <p className="ln-texto-grande">Igual que la tanda entre amigos, con las cuentas siempre a la vista.</p>
           </div>
           <ol className="ln-pasos">
             {PASOS.map((p, i) => (
               <li key={p.t} className="ln-paso" data-revelar="subir" data-retraso={i * 120}>
-                <span className="ln-paso-num" aria-hidden="true">{i + 1}</span>
+                <span className="ln-paso-num" aria-hidden="true">
+                  {i + 1}
+                </span>
                 <h3>{p.t}</h3>
                 <p>{p.d}</p>
               </li>
@@ -87,25 +111,30 @@ export function Landing() {
 
         <section id="seguridad" className="ln-seccion">
           <div className="ln-encabezado" data-revelar="subir">
-            <h2 className="ln-titulo-seccion" style={{ maxWidth: '16ch' }}>El riesgo de siempre: el primero cobra y desaparece.</h2>
+            <h2 className="ln-titulo-seccion">El miedo de siempre: que el primero cobre y desaparezca.</h2>
+            <p className="ln-texto-grande">
+              Cada persona deja una garantía al unirse. Si alguien deja de pagar, su garantía cubre al grupo.
+            </p>
           </div>
-          <div className="ln-dos-columnas">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-              <p className="ln-texto-grande" data-revelar="subir">
-                Por eso cada quien deja un colateral al unirse. Quien cobra antes deja más, porque tiene más que perder.
-                Si alguien deja de pagar, su colateral cubre a los demás.
-              </p>
-              <div className="ln-grafica" data-revelar="subir" data-retraso="150">
-                <p className="ln-grafica-titulo">Colateral según tu turno</p>
-                <div className="ln-grafica-barras">
-                  {/* Para 5 personas con garantía del 100 %: 400, 300, 200, 100 y 100 sobre 400 (el último nunca baja de 1 cuota). */}
-                  {[100, 75, 50, 25, 25].map((h, i) => (
-                    <div key={i} data-revelar="crecer" data-retraso={200 + i * 100} style={{ height: `${h}%` }} />
-                  ))}
+          <div className="ln-dos-columnas ln-bento">
+            <div className="ln-grafica" data-revelar="subir" data-retraso="150">
+              {tema === 'cusuco' && (
+                <div className="ln-grafica-cusuco">
+                  <Cusuco pose="bola" />
+                  <p>El cusuco se enrolla para protegerse. Con la garantía, el grupo protege su plata.</p>
                 </div>
-                <div className="ln-grafica-ejes">
-                  {['1.º', '2.º', '3.º', '4.º', '5.º'].map((t) => <span key={t}>{t}</span>)}
-                </div>
+              )}
+              <p className="ln-grafica-titulo">Garantía según tu turno</p>
+              <div className="ln-grafica-barras">
+                {/* Para 5 personas con garantía del 100 %: 400, 300, 200, 100 y 100 sobre 400 (el último nunca baja de 1 cuota). */}
+                {[100, 75, 50, 25, 25].map((h, i) => (
+                  <div key={i} data-revelar="crecer" data-retraso={200 + i * 100} style={{ height: `${h}%` }} />
+                ))}
+              </div>
+              <div className="ln-grafica-ejes">
+                {['1.º', '2.º', '3.º', '4.º', '5.º'].map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
               </div>
             </div>
             <dl className="ln-reglas">
@@ -120,14 +149,19 @@ export function Landing() {
         </section>
 
         <section className="ln-cierre" data-revelar="subir">
-          <h2>¿Listo para tu primera tanda?</h2>
-          <a className="ln-boton principal pastilla" style={{ position: 'relative' }} href={RUTA_LOBBY}>
-            Abrir la app →
+          <h2>¿Arrancamos tu primera tanda?</h2>
+          <p className="ln-cierre-texto">
+            {google
+              ? 'Entras con tu cuenta de Google y te creamos una billetera de prueba. Si ya usas Freighter, también sirve.'
+              : 'Necesitas Freighter, la billetera de Stellar para el navegador, puesta en Testnet. Los TUSD de prueba se piden gratis dentro de la app.'}
+          </p>
+          <a className="ln-boton principal pastilla" href={RUTA_LOBBY}>
+            Abrir la app
           </a>
         </section>
 
         <footer className="ln-pie">
-          <span>Rounda funciona en la red de pruebas de Stellar (testnet), con TUSD de prueba.</span>
+          <span>Funciona en la red de pruebas de Stellar (testnet): nada de esto usa dinero real.</span>
           {TANDA_ID && (
             <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
               Ver el contrato en el explorador
@@ -139,11 +173,21 @@ export function Landing() {
   )
 }
 
+/** El cusuco llega rodando hecho bola, se desenrolla y saluda (con "reducir movimiento", solo saluda). */
+function CusucoQueLlega() {
+  return (
+    <div className="ln-cusuco" aria-hidden="true">
+      <Cusuco pose="bola" className="ln-cusuco-bola" />
+      <Cusuco pose="saluda" className="ln-cusuco-pie" />
+    </div>
+  )
+}
+
 /* ---------- Entrada a la app ----------
  * No hay contraseñas. Se entra de una de dos formas:
  *  - con Google (Privy): se crea una billetera Stellar para esa cuenta, sin instalar nada;
- *  - con Freighter, la billetera de Stellar, como siempre.
- * Si la web no tiene VITE_PRIVY_APP_ID, solo aparece el camino de Freighter. */
+ *  - con Freighter, la billetera de Stellar, como siempre (desde la app).
+ * Si la web no tiene VITE_PRIVY_APP_ID, el botón principal abre la app (y ahí se conecta Freighter). */
 function EntradaApp() {
   const google = useSesionGoogle()
   const [quiereEntrar, setQuiereEntrar] = useState(false)
@@ -154,18 +198,9 @@ function EntradaApp() {
   }, [quiereEntrar, google?.conectada])
 
   return (
-    <div className="ln-cuenta ln-entrada d3">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <h2>Empieza en un minuto</h2>
-        <p className="ln-sub">
-          {google
-            ? 'Sin contraseñas: entra con tu cuenta de Google y te creamos tu billetera de pruebas.'
-            : 'Sin registro ni contraseñas: tu billetera Stellar es tu cuenta.'}
-        </p>
-      </div>
-
-      {google &&
-        (google.conectada ? (
+    <div className="ln-acciones ln-entrada d3">
+      {google ? (
+        google.conectada ? (
           <a className="ln-boton principal" href={RUTA_LOBBY}>
             Ir a mis tandas
           </a>
@@ -181,51 +216,15 @@ function EntradaApp() {
             <LogoGoogle />
             Continuar con Google
           </button>
-        ))}
-
-      {!google?.conectada && (
-        <a className={google ? 'ln-boton secundario' : 'ln-boton principal'} href={RUTA_LOBBY}>
-          {google ? 'Entrar con Freighter' : 'Abrir la app'}
+        )
+      ) : (
+        <a className="ln-boton principal" href={RUTA_LOBBY}>
+          Abrir la app
         </a>
       )}
       <a className="ln-boton secundario" href={RUTA_DEMO}>
         Ver la demo en vivo
       </a>
-
-      {google ? (
-        <p className="ln-legal">
-          ¿Ya usas Freighter? También puedes conectarla dentro de la app. Funciona en la red de pruebas de Stellar: nada de lo
-          que ves aquí usa dinero real.
-        </p>
-      ) : (
-        <>
-          <div className="ln-separador">para participar necesitas</div>
-
-          <ol className="ln-requisitos">
-            <li>
-              <span>1</span>
-              <p>
-                <a href="https://freighter.app" target="_blank" rel="noreferrer">
-                  Freighter
-                </a>
-                , la billetera de Stellar (extensión para el navegador de escritorio).
-              </p>
-            </li>
-            <li>
-              <span>2</span>
-              <p>
-                Ponerla en <strong>Testnet</strong>: es dinero de prueba, no cuesta nada.
-              </p>
-            </li>
-            <li>
-              <span>3</span>
-              <p>Pedir TUSD gratis dentro de la app y listo.</p>
-            </li>
-          </ol>
-
-          <p className="ln-legal">Funciona en la red de pruebas de Stellar. Nada de lo que ves aquí usa dinero real.</p>
-        </>
-      )}
     </div>
   )
 }

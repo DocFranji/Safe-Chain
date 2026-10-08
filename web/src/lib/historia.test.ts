@@ -102,7 +102,7 @@ describe('narrar: la historia de la demo', () => {
 
   it('no se rompe si faltan datos', () => {
     const [h] = narrar([ev({ name: 'EvCubierto', data: { id: 1 } })], f)
-    expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió —')
+    expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió -')
   })
 })
 
