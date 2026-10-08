@@ -42,14 +42,38 @@ Cusuco, también se queda `Cusuco.tsx`. Lo común queda en `App.css`.
   revisan las pruebas y flujos.
 - **Impeccable** (piso de calidad y revisión), **Emil Kowalski** (curvas y tiempos de movimiento) y **Addy Osmani**
   (tramos verificados, revisión del código), como en la ronda anterior.
-- **Figma MCP:** la generación de imágenes funciona, pero la red de este entorno bloquea `www.figma.com` y no se
-  pudieron bajar; la mascota y las figuras se dibujaron en SVG propio. Con ese dominio permitido se pueden sumar
-  ilustraciones o fotos generadas.
+- **Figma MCP:** archivo "Rounda · Tres mundos nuevos (Lima, Cusuco, Ronda)"
+  (https://www.figma.com/design/FHxW6exHlK46ntowFypZqd), con una colección de variables por mundo (el plan Starter
+  permite un solo modo por colección) y una lámina por mundo: promesa, botones, colores enlazados a las variables y
+  la rueda y la mascota importadas como vectores desde la web. La generación de imágenes también funciona, pero la
+  red de este entorno bloquea `www.figma.com` y no se pudieron bajar; por eso la mascota y las figuras se dibujaron
+  en SVG propio. Con ese dominio permitido se pueden sumar ilustraciones o fotos generadas.
 - **Context7:** rutas de importación de las fuentes variables de Fontsource. **Playwright** (capturas en claro y oscuro,
   escritorio y 390 px, y las 351 pruebas de navegador por tema) y el protocolo de Chrome DevTools a través de
-  Playwright para medir rendimiento.
+  Playwright para medir rendimiento (ver abajo).
 - **Understand-Anything (Egonex-AI):** quedó registrado en `.claude/settings.json`, pero solo carga en sesiones que
   arrancan desde `main`; esta sesión no lo tiene.
+
+## Rendimiento de la portada (protocolo de Chrome DevTools)
+
+Medido en la vista previa local, con 6 s de la rueda de ejemplo girando:
+
+| Mundo | CLS escritorio / 390 px | LCP escritorio / 390 px |
+| --- | --- | --- |
+| Lima | 0.000 / 0.000 | 496 / 372 ms |
+| Cusuco | 0.000 / 0.000 | 464 / 416 ms |
+| Ronda | 0.000 / 0.000 | 444 / 496 ms |
+| Carreta | 0.000 / 0.000 | 436 / 392 ms |
+| Fintech | 0.000 / 0.000 | 476 / 420 ms |
+
+Dos arreglos salieron de esta medición, y valen para los cinco mundos:
+
+- La entrada de la portada partía de opacidad 0. Chrome no contaba la promesa como contenido principal, y en Cusuco
+  el LCP terminaba en 3 s, medido sobre un texto chico de la rueda. Ahora la entrada parte visible y solo sube 18 px
+  (regla de Impeccable).
+- Con el texto visible desde el inicio se notaba el cambio de fuente: en Ronda, en el celular, el CLS llegaba a
+  0.138. Ahora la app pide las letras del tema antes de dibujar, con un tope de 400 ms (`letrasListas` en
+  `web/src/lib/tema.ts`).
 
 ## Contrato de dirección: Lima
 

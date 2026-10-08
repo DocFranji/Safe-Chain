@@ -119,6 +119,33 @@ export function iniciarTema() {
   }
 }
 
+/** Las letras de cada tema, como las pide document.fonts.load (una por familia: son fuentes variables). */
+export function letrasDe(tema: Tema): string[] {
+  switch (tema) {
+    case 'lima':
+      return ['800 1em "Outfit Variable"']
+    case 'cusuco':
+      return ['900 1em "Nunito Variable"']
+    case 'ronda':
+      return ['800 1em "Bricolage Grotesque Variable"']
+    case 'fintech':
+      return ['650 1em "Geist Variable"']
+    default:
+      return ['1em Bungee', '400 1em "Atkinson Hyperlegible Next Variable"']
+  }
+}
+
+/**
+ * Pide las letras del tema antes de dibujar la app, con un tope: así el texto no salta cuando llega la fuente
+ * (antes lo tapaba la animación de entrada) y la página nunca espera más de `tope` milisegundos.
+ */
+export function letrasListas(tope = 400): Promise<void> {
+  if (!('fonts' in document)) return Promise.resolve()
+  const cargar = Promise.all(letrasDe(actual).map((f) => document.fonts.load(f))).then(() => undefined)
+  const esperar = new Promise<void>((listo) => setTimeout(listo, tope))
+  return Promise.race([cargar, esperar]).catch(() => undefined)
+}
+
 function suscribir(avisar: () => void) {
   oyentes.add(avisar)
   return () => {

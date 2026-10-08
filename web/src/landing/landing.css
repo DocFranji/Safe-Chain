@@ -1067,7 +1067,7 @@
 
 /* ---------- Entrada y aparición al bajar (useRevelar) ---------- */
 .ln-entrada {
-  animation: ln-subir 0.8s var(--ease-out) both;
+  animation: ln-subir 0.7s var(--ease-out) both;
 }
 .ln-entrada.d1 {
   animation-delay: 0.05s;
@@ -1097,11 +1097,11 @@
     transform: rotate(360deg);
   }
 }
+/* La portada entra desde un estado ya visible (solo sube un poco): si partiera de opacidad 0, el navegador no
+   contaría la promesa como el contenido principal (LCP) y la página se mediría más lenta de lo que se ve. */
 @keyframes ln-subir {
   from {
-    opacity: 0;
-    transform: translateY(28px);
-    filter: blur(8px);
+    transform: translateY(18px);
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { elegirModo, elegirTema, esModo, esTema, TEMA_POR_DEFECTO, TEMAS, tieneOscuro } from './tema'
+import { elegirModo, elegirTema, esModo, esTema, letrasDe, TEMA_POR_DEFECTO, TEMAS, tieneOscuro } from './tema'
 
 describe('elegirTema', () => {
   it('la URL manda sobre lo guardado y la configuración', () => {
@@ -40,5 +40,13 @@ describe('elegirModo', () => {
   it('ignora valores que no son un modo', () => {
     expect(esModo('noche')).toBe(false)
     expect(elegirModo('lima', '?modo=noche', 'azul', false)).toBe('claro')
+  })
+})
+
+describe('letrasDe', () => {
+  it('cada mundo pide al menos una letra propia antes de dibujar', () => {
+    for (const t of TEMAS) expect(letrasDe(t.id).length).toBeGreaterThan(0)
+    expect(letrasDe('ronda')[0]).toContain('Bricolage Grotesque Variable')
+    expect(letrasDe('cusuco')[0]).toContain('Nunito Variable')
   })
 })
