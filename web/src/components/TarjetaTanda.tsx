@@ -1,4 +1,5 @@
 // Una tanda en el lobby: lo justo para decidir si entrar (bolsa, cupos, cuota, garantía).
+import type { CSSProperties } from 'react'
 import type { ResumenTanda } from '../lib/lectura'
 import { bolsa, colateralDeTurno } from '../lib/colateral'
 import { claseEstado, duracion, etiquetaEstado, monto } from '../lib/formato'
@@ -61,7 +62,7 @@ export function TarjetaTanda({ resumen, yo, ahora }: Props) {
 
         <div className="lugares" aria-hidden="true">
           {Array.from({ length: n }, (_, i) => (
-            <span key={i} className={i < miembros.length ? 'lugar lleno' : 'lugar'} />
+            <span key={i} className={i < miembros.length ? 'lugar lleno' : 'lugar'} style={{ '--i': i } as CSSProperties} />
           ))}
         </div>
         <p className="tarjeta-datos">

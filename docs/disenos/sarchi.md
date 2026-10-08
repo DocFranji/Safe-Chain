@@ -171,6 +171,13 @@ components:
   link-dark:
     backgroundColor: "{colors.dark-surface}"
     textColor: "{colors.dark-link}"
+  photo:
+    backgroundColor: "{colors.surface-soft}"
+    rounded: "{rounded.full}"
+    size: 300px
+  photo-orbit-closing:
+    backgroundColor: "{colors.detail}"
+    height: 2px
 ---
 
 # Rounda: Sarchí (opción A)
@@ -216,8 +223,9 @@ lleva raya.
 
 Portada partida: la promesa a la izquierda y la rueda pintada a la derecha, directo sobre el rojo como un emblema;
 el fleco dorado la cierra. Debajo, tres hechos que se pueden comprobar, los pasos en un riel con discos de tinta, la
-seguridad (la gráfica de garantías y tres reglas) y un cierre rojo con una sola acción. Cada página de la app se
-viste según su función (`web/src/paginas.css`).
+la gente (tres fotos en círculo: la tanda de la familia, la oficina y el barrio), la seguridad (la gráfica de
+garantías y tres reglas) y un cierre rojo con una sola acción y la foto de un artesano pintando una rueda. Cada página
+de la app se viste según su función (`web/src/paginas.css`).
 
 ## Elevation & Depth
 
@@ -236,6 +244,9 @@ redondeado de la pintura.
   dorado. Gira una ronda a la vez (900 ms, ease-in-out) y quien cobra queda bajo la flecha.
 - **Etiquetas:** "Abierta" en dorado suave, "En curso" en verde suave, "Cancelada" en rojo suave.
 - **Tarjeta de cobro:** roja con texto blanco.
+- **Fotos:** en círculo, con un arco grueso alrededor, cada uno de un color de la carreta (rojo, dorado, cobalto); en
+  el cierre, dorado. Al entrar en pantalla, el círculo se abre y el arco se pinta. Son ilustrativas, hechas con IA.
+- **Movimiento de marca:** el fleco se desenrolla al cargar la portada y al abrir la app.
 
 ## Do's and Don'ts
 

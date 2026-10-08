@@ -2,7 +2,9 @@
  * Portada de Rounda (#/). Todo vive bajo .ln. Usa los colores y letras de la opción en prueba (index.css):
  *   A · Sarchí: portada roja con el fleco dorado de la carreta y la rueda pintada sobre su llanta blanca.
  *   B · Montaña: portada verde con la rueda en un medallón blanco dentro de una órbita amarilla (el logo en grande).
- * Un solo momento animado: la rueda de ejemplo (RuedaMuestra.tsx). Lo demás solo aparece al entrar en pantalla.
+ * Movimiento (reglas de Emil Kowalski en docs/diseno.md): la rueda de ejemplo gira (RuedaMuestra.tsx); al cargar, el fleco
+ * de Sarchí se desenrolla y la órbita de Montaña se dibuja; al bajar, las fotos se abren, sus órbitas se dibujan y el
+ * riel de los pasos se traza. Todo una sola vez, con transform, opacity, clip-path o el trazo del SVG.
  */
 .ln {
   --ln-ancho: 1200px;
@@ -595,16 +597,47 @@
 .ln-regla dd {
   color: var(--tinta-2);
 }
-/* El cierre: una pieza en el color de la marca, centrada, con una sola acción. */
+/* El cierre: una pieza en el color de la marca con una sola acción y la foto de donde viene la opción. */
 .ln-cierre {
   --ln-fondo: transparent;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 32px;
   margin: 24px 0 56px;
-  padding: 72px 28px;
+  padding: 56px 28px 64px;
   border-radius: 28px;
   background: var(--marca);
   color: var(--sobre-marca);
   text-align: center;
+}
+.ln-cierre-columna {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.ln-foto.ln-foto-cierre {
+  order: -1;
+  width: min(100%, 230px);
+}
+@media (min-width: 900px) {
+  .ln-cierre {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+    align-items: center;
+    justify-items: start;
+    gap: 48px;
+    padding: 64px 72px;
+    text-align: left;
+  }
+  .ln-cierre-columna {
+    align-items: flex-start;
+  }
+  .ln-foto.ln-foto-cierre {
+    order: 0;
+    justify-self: end;
+    width: min(100%, 340px);
+  }
 }
 .ln-cierre h2 {
   max-width: 16ch;
@@ -623,6 +656,106 @@
 }
 .ln-pie {
   border-top: 1px solid var(--linea);
+}
+
+/* La gente: tres fotos en círculo con su órbita (como el logo). La del medio baja un poco: se lee como una ronda. */
+.ln-gente-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 48px 40px;
+}
+.ln-gente-item {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+}
+@media (min-width: 900px) {
+  .ln-gente-item:nth-child(2) {
+    margin-top: 80px;
+  }
+}
+.ln-gente-item h3 {
+  margin-bottom: 6px;
+  font-family: var(--titulos);
+  font-weight: var(--titulos-peso);
+  font-stretch: var(--titulos-ancho, 100%);
+  font-size: 22px;
+  line-height: 1.15;
+}
+.ln-gente-item p {
+  max-width: 30ch;
+  font-size: 16px;
+  color: var(--tinta-2);
+  text-wrap: pretty;
+}
+.ln-gente-item:nth-child(1) .ln-foto {
+  --giro: -150deg;
+}
+.ln-gente-item:nth-child(2) .ln-foto {
+  --giro: -35deg;
+}
+.ln-gente-item:nth-child(3) .ln-foto {
+  --giro: 75deg;
+}
+
+/* Foto en círculo con la órbita alrededor. La órbita es un arco con trazo (pathLength 100): --arco dice cuánto
+   de la vuelta se dibuja y --giro dónde empieza; el punto del logo va en la punta del arco. */
+.ln-foto {
+  --arco: 68;
+  --giro: -120deg;
+  --orbita-color: var(--acento);
+  --orbita-grosor: 1;
+  position: relative;
+  width: min(100%, 300px);
+  aspect-ratio: 1;
+  padding: 6%;
+}
+.ln-foto-marco {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  clip-path: circle(50% at 50% 50%);
+  background: var(--superficie-2);
+  transition: clip-path 1s var(--ease-out) var(--retraso, 0ms);
+}
+.ln-foto-marco img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 1.3s var(--ease-out) var(--retraso, 0ms);
+}
+.ln-orbita {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.ln-orbita-arco {
+  fill: none;
+  stroke: var(--orbita-color);
+  stroke-width: var(--orbita-grosor);
+  stroke-linecap: round;
+  stroke-dasharray: var(--arco) 200;
+  stroke-dashoffset: 0;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(var(--giro));
+  transition: stroke-dashoffset 1.2s var(--ease-in-out) calc(var(--retraso, 0ms) + 200ms);
+}
+.ln-orbita-punto {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(calc(var(--giro) + var(--arco) * 3.6deg));
+  transition: transform 1.2s var(--ease-in-out) calc(var(--retraso, 0ms) + 200ms);
+}
+.ln-orbita-punto circle {
+  fill: var(--marca-detalle);
+  stroke: var(--marca);
+  stroke-width: 0.7;
 }
 
 /* =====================================================================================================
@@ -703,6 +836,28 @@
 }
 [data-tema='sarchi'] .ln-cierre {
   border-radius: var(--radio);
+}
+/* Las órbitas de las fotos van pintadas como la rueda: gruesas, cada una de un color de la carreta, sin punto. */
+[data-tema='sarchi'] .ln-foto {
+  --arco: 58;
+  --orbita-grosor: 2.4;
+}
+[data-tema='sarchi'] .ln-gente-item:nth-child(1) .ln-foto {
+  --orbita-color: var(--c-rojo);
+}
+[data-tema='sarchi'] .ln-gente-item:nth-child(2) .ln-foto {
+  --orbita-color: var(--c-amarillo);
+}
+[data-tema='sarchi'] .ln-gente-item:nth-child(3) .ln-foto {
+  --orbita-color: var(--c-azul);
+}
+[data-tema='sarchi'] .ln-foto-cierre {
+  --arco: 70;
+  --giro: 150deg;
+  --orbita-color: var(--marca-detalle);
+}
+[data-tema='sarchi'] .ln-orbita-punto {
+  display: none;
 }
 
 /* =====================================================================================================
@@ -799,6 +954,15 @@
 [data-tema='montana'] .ln-regla:first-child dd {
   color: rgba(255, 255, 255, 0.86);
 }
+/* Las órbitas de las fotos son el logo: una línea fina casi completa con el punto amarillo en la punta. */
+[data-tema='montana'] .ln-foto {
+  --arco: 76;
+  --orbita-grosor: 0.8;
+}
+[data-tema='montana'] .ln-foto-cierre {
+  --giro: 120deg;
+  --orbita-color: rgba(255, 255, 255, 0.6);
+}
 [data-tema='montana'] .ln .ln-cierre .ln-boton.principal {
   border-color: var(--marca-detalle);
   background: var(--marca-detalle);
@@ -849,7 +1013,62 @@
 .ln [data-revelar='crecer'].oculto {
   transform: scaleY(0.04);
 }
+/* Fotos: el círculo se abre desde el centro, la foto se asienta y la órbita se dibuja con el punto en la punta. */
+.ln [data-revelar='foto'].oculto {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.ln [data-revelar].oculto .ln-foto-marco {
+  clip-path: circle(32% at 50% 50%);
+}
+.ln [data-revelar].oculto .ln-foto-marco img {
+  transform: scale(1.16);
+}
+.ln [data-revelar].oculto .ln-orbita-arco {
+  stroke-dashoffset: var(--arco);
+}
+.ln [data-revelar].oculto .ln-orbita-punto {
+  transform: rotate(var(--giro));
+}
+/* Pasos: el número se asienta y el riel se traza hacia el paso siguiente. */
+.ln-paso-num {
+  transition: transform 0.6s var(--ease-rebote, var(--ease-out)) calc(var(--retraso, 0ms) + 120ms);
+}
+.ln-paso.oculto .ln-paso-num {
+  transform: scale(0.72);
+}
+.ln-paso::after {
+  transform-origin: left center;
+  transition: transform 0.9s var(--ease-out) calc(var(--retraso, 0ms) + 320ms);
+}
+.ln-paso.oculto::after {
+  transform: scaleX(0);
+}
+/* Al cargar, el gesto de cada marca: el fleco de la carreta se desenrolla; la órbita del medallón se dibuja. */
+[data-tema='sarchi'] .ln-hero::after {
+  animation: ln-fleco 1.1s var(--ease-out) 0.35s both;
+}
+@property --ln-orbita {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+[data-tema='montana'] .ln-hero-rueda::before {
+  -webkit-mask: conic-gradient(#000 var(--ln-orbita), transparent 0);
+  mask: conic-gradient(#000 var(--ln-orbita), transparent 0);
+  animation: ln-orbita 1.6s var(--ease-in-out) 0.3s both;
+}
 
+@keyframes ln-fleco {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes ln-orbita {
+  from {
+    --ln-orbita: 0%;
+  }
+}
 @keyframes ln-girar {
   to {
     transform: rotate(360deg);

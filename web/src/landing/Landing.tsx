@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import './landing.css'
 import { useRevelar } from './useRevelar'
 import { RuedaMuestra } from './RuedaMuestra'
+import { FotoCierre, Gente } from './Gente'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { RUTA_DEMO, RUTA_INICIO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
@@ -109,6 +110,8 @@ export function Landing() {
           </li>
         </ul>
 
+        <Gente />
+
         <section id="como" className="ln-seccion">
           <div className="ln-encabezado" data-revelar="subir">
             <h2 className="ln-titulo-seccion">De unirte a cobrar, en cuatro pasos.</h2>
@@ -161,19 +164,22 @@ export function Landing() {
         </section>
 
         <section className="ln-cierre" data-revelar="subir">
-          <h2>¿Arrancamos tu primera tanda?</h2>
-          <p className="ln-cierre-texto">
-            {google
-              ? 'Entras con tu cuenta de Google y te creamos una billetera de prueba. Si ya usas Freighter, también sirve.'
-              : 'Necesitas Freighter, la billetera de Stellar para el navegador, puesta en Testnet. Los TUSD de prueba se piden gratis dentro de la app.'}
-          </p>
-          <a className="ln-boton principal pastilla" href={RUTA_LOBBY}>
-            Abrir la app
-          </a>
+          <div className="ln-cierre-columna">
+            <h2>¿Arrancamos tu primera tanda?</h2>
+            <p className="ln-cierre-texto">
+              {google
+                ? 'Entras con tu cuenta de Google y te creamos una billetera de prueba. Si ya usas Freighter, también sirve.'
+                : 'Necesitas Freighter, la billetera de Stellar para el navegador, puesta en Testnet. Los TUSD de prueba se piden gratis dentro de la app.'}
+            </p>
+            <a className="ln-boton principal pastilla" href={RUTA_LOBBY}>
+              Abrir la app
+            </a>
+          </div>
+          <FotoCierre tema={tema} />
         </section>
 
         <footer className="ln-pie">
-          <span>Rounda: tandas con contrato inteligente en Stellar (testnet).</span>
+          <span>Rounda: tandas con contrato inteligente en Stellar (testnet). Fotos ilustrativas hechas con IA.</span>
           {TANDA_ID && (
             <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
               Ver el contrato en el explorador

@@ -31,8 +31,8 @@ franja).
 | **B · Montaña** (`?tema=montana`) | Verde montaña con línea amarilla | El punto del logo da la vuelta a la rueda y señala a quien cobra | "Cuentas claras, tandas largas." | `docs/disenos/montana.md` |
 
 En las dos: el nombre **Rounda** y su logo (un aro con un punto que da vueltas) en blanco sobre la barra de color, la
-rueda con un círculo central donde está la bolsa, español llano sin jerga cripto, y cada página vestida según su
-función (`docs/diseno.md`).
+rueda con un círculo central donde está la bolsa, fotos de gente en círculo con una órbita alrededor (hechas con IA
+y avisadas en el pie), español llano sin jerga cripto, y cada página vestida según su función (`docs/diseno.md`).
 
 ## Do's and Don'ts
 

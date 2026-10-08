@@ -10,6 +10,9 @@
 3. **Ahora, dos opciones que combinan las dos primeras**, como pidió la persona, sin límites para cambiar todo. Las
    dos tienen personalidad y buen branding, sirven para el hackathon y para un producto real después. Cada página
    está vestida según su función.
+4. **Gente y movimiento.** La persona pidió fotos de personas, como en las páginas de Mastercard o PayPal, y
+   animaciones en las dos opciones. Las fotos van en círculo con una órbita alrededor (el aro y el punto del logo) y
+   todo entra con un gesto propio de cada marca.
 
 Se cambian con la franja "Diseño en prueba" o con `?tema=sarchi|montana` antes del `#`. Las dos tienen modo oscuro:
 sigue al teléfono, o se fija con `?modo=claro|oscuro` o el botón "Modo oscuro" de la franja.
@@ -52,13 +55,32 @@ lejos. El color tiene un trabajo (marca, turno, pagado, alerta) y no se reparte 
 
 | Página | Función | Cómo se nota |
 | --- | --- | --- |
-| Portada (`#/`) | Convencer y entrar | Campo de marca, promesa en dos renglones, una sola acción, la prueba (contrato público, sin contraseñas, dinero de prueba) |
+| Portada (`#/`) | Convencer y entrar | Campo de marca, promesa en dos renglones, una sola acción, la prueba (contrato público, sin contraseñas, dinero de prueba), la gente de cada tanda en fotos y un cierre con la foto de la marca |
 | Tandas (`#/tandas`) | Comparar y elegir | La bolsa en grande, los lugares libres como la rueda en chiquito, la línea de entrada resaltada en las abiertas |
 | Tanda (`#/tanda/N`) | Pagar y cobrar | La acción del momento a todo el ancho y más alta; en el celular, el panel va antes de la rueda |
 | Crear (`#/crear`) | Llenar un formulario | Título más bajo, campos de 52 px, la vista previa fija al lado mientras se llena |
 | Demo (`#/demo`) | Proyectar ante el jurado | Escenario oscuro en las dos opciones, con un brillo del color de la marca, letra grande y la rueda al centro |
 | Historial y perfil | Leer | Una columna de 44 rem, más interlineado, el nivel como un sello |
 | Estado (`#/estado`) | Diagnosticar | Filas compactas y los datos técnicos en letra de ancho fijo |
+
+## Fotos (`web/src/landing/Gente.tsx`)
+
+Cinco fotos ilustrativas hechas con la IA de imágenes de Figma (modelo `gemini-3.1-flash-image`). Son personas que no
+existen, en escenas de Costa Rica; el pie de la portada lo dice ("Fotos ilustrativas hechas con IA"). Viven en
+`web/src/assets/fotos/` en WebP (de 34 a 92 KB, unos 300 KB en total) y cargan solo al bajar (`loading="lazy"`,
+con ancho y alto fijos para que nada salte).
+
+| Foto | Dónde | Opción |
+| --- | --- | --- |
+| `familia.webp`: abuela y nieta con un celular en la cocina | "La de la familia" | Las dos |
+| `oficina.webp`: compañeros almorzando en una soda | "La de la oficina" | Las dos |
+| `barrio.webp`: vecinos en el corredor de una casa | "La del barrio" | Las dos |
+| `artesano.webp`: un artesano pinta una rueda de carreta | Cierre | A · Sarchí |
+| `finca.webp`: una joven en un cafetal con montañas | Cierre | B · Montaña |
+
+Cada foto va en un círculo con su órbita (`FotoOrbita`): en Sarchí, un arco grueso de un color de la carreta; en
+Montaña, una línea fina con el punto amarillo del logo en la punta. Para cambiar una foto basta con reemplazar el
+archivo (cuadrado, 640 px, u 880 px en el cierre).
 
 ## Herramientas usadas
 
@@ -72,9 +94,10 @@ lejos. El color tiene un trabajo (marca, turno, pagado, alerta) y no se reparte 
 - **DESIGN.md de Google + awesome-design-md:** `docs/disenos/sarchi.md` y `montana.md`, lint sin avisos. La
   referencia de Mastercard dio la regla de color de Sarchí: los colores de la marca solo en la marca.
 - **Stop Slop:** frases de la portada directas y con la voz de cada opción.
-- **Emil Kowalski:** curvas y tiempos (abajo). **Addy Osmani:** tramos verificados y revisión del propio diff.
-- **Figma MCP:** láminas de las dos opciones con sus variables, y la rueda como vector desde la web. La generación de
-  imágenes funciona, pero la red de esta sesión bloquea `www.figma.com` y no se pueden bajar.
+- **Emil Kowalski:** curvas, tiempos y el plan de movimiento (abajo): cada animación responde para qué existe y
+  cuántas veces se ve. **Addy Osmani:** tramos verificados y revisión del propio diff.
+- **Figma MCP:** las cinco fotos, generadas con su IA de imágenes y bajadas cuando la persona abrió `www.figma.com`
+  en la red del entorno; antes, las láminas con variables y la rueda como vector.
 - **Context7** (fuentes de Fontsource), **Playwright** (capturas y pruebas de navegador) y el protocolo de **Chrome
   DevTools** (CLS y LCP de la portada).
 - **Understand-Anything (Egonex-AI):** registrado en `.claude/settings.json`; solo carga en sesiones que arrancan
@@ -87,9 +110,18 @@ lejos. El color tiene un trabajo (marca, turno, pagado, alerta) y no se reparte 
    pantalla (el giro de la rueda, el punto que da la vuelta). Nunca `ease-in`.
 3. Apretar 140 ms, hover y avisos 200 ms, páginas 280 ms. Solo celebrar (pagar, cobrar) o girar la rueda dura más.
 4. Solo `transform` y `opacity` en HTML. En SVG, `transform` recalcula el diseño en cada cuadro: nada infinito ahí.
-5. Nada aparece desde `scale(0)` ni desde opacidad 0 en la portada (la promesa entra ya visible y solo sube 18 px).
-   Hover solo con mouse. Con "reducir movimiento" quedan los fundidos.
-6. Un solo momento animado por pantalla: en la portada, la rueda de ejemplo.
+5. Nada aparece desde `scale(0)` ni desde opacidad 0 en la primera vista de la portada (la promesa entra ya visible
+   y solo sube 18 px). Hover solo con mouse. Con "reducir movimiento" nada se esconde y quedan los fundidos.
+6. Cada gesto pasa una sola vez y es de la marca. Lo único que sigue moviéndose es la rueda de ejemplo.
+
+| Dónde | Sarchí | Montaña | Para qué |
+| --- | --- | --- | --- |
+| Portada, al cargar | El fleco dorado se desenrolla (1.1 s) | La órbita amarilla se dibuja alrededor del medallón (1.6 s) | Presentar la marca |
+| Fotos, al bajar | El círculo se abre, la foto se asienta y el arco de color se pinta | Igual, con el punto del logo en la punta de la órbita | Presentar a la gente sin saltos |
+| Pasos, al bajar | El número se asienta y el riel se traza hacia el siguiente | Igual | Mostrar que es una secuencia |
+| Gráfica de garantías | Las barras crecen | Igual | Explicar que cobrar primero cuesta más |
+| App, al entrar | El fleco de la barra se desenrolla | La línea amarilla se traza | La marca, una vez (la barra no se vuelve a dibujar al cambiar de página) |
+| Lista de tandas | Los lugares ocupados se llenan uno tras otro (35 ms entre uno y otro) | Igual | Ver cuánto falta para arrancar |
 
 ## Piso de calidad (Impeccable)
 
@@ -98,5 +130,5 @@ caracteres como íconos (la marca de "ya cobró" es un trazo SVG), fuentes servi
 de dibujar, con un tope de 400 ms), contraste AA en textos en claro y oscuro, y detalles del navegador (cursor de
 texto, barras de desplazamiento, color de los controles) con los colores de la marca.
 
-Mediciones de la portada con el protocolo de Chrome DevTools (vía Playwright), a 1440 px y a 390 px: CLS 0.000 en
-las dos opciones; LCP de 432 a 496 ms en Sarchí y de 468 a 496 ms en Montaña.
+Mediciones de la portada con fotos y animaciones, con el protocolo de Chrome DevTools (vía Playwright), a 1440 px y
+a 390 px: CLS 0.000 en las dos opciones; LCP de 500 a 556 ms en Sarchí y de 452 a 520 ms en Montaña.

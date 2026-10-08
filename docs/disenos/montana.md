@@ -171,6 +171,17 @@ components:
     backgroundColor: "{colors.dark-accent}"
     textColor: "{colors.dark-on-accent}"
     rounded: "{rounded.full}"
+  photo:
+    backgroundColor: "{colors.surface-soft}"
+    rounded: "{rounded.full}"
+    size: 300px
+  photo-orbit:
+    backgroundColor: "{colors.accent}"
+    height: 1px
+  photo-orbit-dot:
+    backgroundColor: "{colors.detail}"
+    rounded: "{rounded.full}"
+    size: 10px
 ---
 
 # Rounda: Montaña (opción B)
@@ -210,9 +221,10 @@ desde el sitio.
 ## Layout
 
 Portada partida en verde: la promesa en dos renglones a la izquierda y el medallón a la derecha, cruzando hacia la
-sección blanca. Debajo, tres hechos que se pueden comprobar, los pasos en un riel (el primero en amarillo), la
-seguridad (la gráfica de garantías y tres reglas; la primera en verde de marca) y un cierre verde con la acción en
-amarillo. Cada página de la app se viste según su función (`web/src/paginas.css`).
+sección blanca. Debajo, tres hechos que se pueden comprobar, la gente (tres fotos en círculo: la tanda de la familia,
+la oficina y el barrio), los pasos en un riel (el primero en amarillo), la seguridad (la gráfica de garantías y tres
+reglas; la primera en verde de marca) y un cierre verde con la acción en amarillo y la foto de una joven en un
+cafetal. Cada página de la app se viste según su función (`web/src/paginas.css`).
 
 ## Elevation & Depth
 
@@ -231,6 +243,11 @@ Botones, etiquetas y filtros en píldora; piezas de 18 px; campos de 12 px; el m
   punto del logo a su lado; el cubo verde muestra la bolsa en amarillo y el tiempo de la ronda en un aro amarillo.
   La rueda no gira: el punto avanza (900 ms, ease-in-out).
 - **Etiquetas:** "Abierta" en amarillo suave, "En curso" en verde suave, "Cancelada" en rojo suave.
+- **Fotos:** en círculo, dentro de una órbita fina verde con el punto amarillo en la punta (el logo otra vez); en el
+  cierre, la órbita es blanca. Al entrar en pantalla, el círculo se abre y el punto recorre la órbita mientras se
+  dibuja. Son ilustrativas, hechas con IA.
+- **Movimiento de marca:** la órbita del medallón se dibuja al cargar la portada; la línea amarilla de la barra se
+  traza al abrir la app.
 
 ## Do's and Don'ts
 

@@ -201,7 +201,30 @@ details[open] > :not(summary) {
   }
 }
 
+/* ---------- La marca al abrir la app: el fleco de Sarchí se desenrolla y la línea de Montaña se traza ---------- */
+/* La barra es la misma en todas las páginas de la app: solo se ve al entrar, no en cada cambio de página. */
+:root:is([data-tema='sarchi'], [data-tema='montana']) .barra::after {
+  animation: trazar-borde 900ms var(--ease-out) 150ms backwards;
+}
+
+/* ---------- Lista de tandas: los lugares ocupados se llenan uno tras otro (se ve cuánto falta para arrancar) ---------- */
+.lugar.lleno {
+  animation: lugar-entra 320ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms + 120ms);
+}
+
 /* ---------- Animaciones ---------- */
+@keyframes trazar-borde {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes lugar-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
 @keyframes aparecer {
   from {
     opacity: 0;
@@ -292,6 +315,11 @@ details[open] > :not(summary) {
     animation-name: aparecer-suave;
     animation-delay: 0ms;
   }
+  .lugar.lleno {
+    animation-name: aparecer-suave;
+    animation-delay: 0ms;
+  }
+  :root:is([data-tema='sarchi'], [data-tema='montana']) .barra::after,
   .nodo-halo,
   .etiqueta.en-curso::before,
   .tarjeta-cobro::after,
