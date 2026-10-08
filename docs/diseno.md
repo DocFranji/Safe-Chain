@@ -97,7 +97,9 @@ archivo (cuadrado, 640 px, u 880 px en el cierre).
 - **Emil Kowalski:** curvas, tiempos y el plan de movimiento (abajo): cada animación responde para qué existe y
   cuántas veces se ve. **Addy Osmani:** tramos verificados y revisión del propio diff.
 - **Figma MCP:** las cinco fotos, generadas con su IA de imágenes y bajadas cuando la persona abrió `www.figma.com`
-  en la red del entorno; antes, las láminas con variables y la rueda como vector.
+  en la red del entorno. En el archivo de Figma, la página "Dos opciones" tiene una lámina por opción (portada con la
+  rueda como vector, colores como variables `Rounda / Sarchí` y `Rounda / Montaña`, letra, gente, cierre y
+  movimiento). Las fotos de las láminas esperan a que la red permita `mcp.figma.com`, por donde se suben.
 - **Context7** (fuentes de Fontsource), **Playwright** (capturas y pruebas de navegador) y el protocolo de **Chrome
   DevTools** (CLS y LCP de la portada).
 - **Understand-Anything (Egonex-AI):** registrado en `.claude/settings.json`; solo carga en sesiones que arrancan
