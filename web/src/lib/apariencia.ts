@@ -1,5 +1,6 @@
 // Claro u oscuro y las letras de Rounda (diseño Órbita, DESIGN.md).
-// El modo sigue al teléfono o la computadora; ?modo=claro|oscuro en la URL (antes del #) lo fija, por ejemplo para
+// El modo arranca según el teléfono o la computadora. Cada persona lo cambia con el botón de la barra (BotonModo) y
+// queda guardado en su navegador; ?modo=claro|oscuro en la URL (antes del #) manda sobre todo, por ejemplo para
 // grabar el video. Se aplica antes de dibujar la app para que no parpadee el modo equivocado.
 import { useSyncExternalStore } from 'react'
 
@@ -15,11 +16,30 @@ export function esModo(x: unknown): x is Modo {
   return x === 'claro' || x === 'oscuro'
 }
 
-/** Claro u oscuro: manda la URL y, si no dice nada, el sistema. */
-export function elegirModo(busqueda: string, sistemaOscuro: boolean): Modo {
+const CLAVE = 'rounda:modo'
+
+/** Claro u oscuro: manda la URL, luego lo que la persona eligió con el botón y, si no eligió, el sistema. */
+export function elegirModo(busqueda: string, guardado: string | null, sistemaOscuro: boolean): Modo {
   const deUrl = new URLSearchParams(busqueda).get('modo')
   if (esModo(deUrl)) return deUrl
+  if (esModo(guardado)) return guardado
   return sistemaOscuro ? 'oscuro' : 'claro'
+}
+
+function leer(): string | null {
+  try {
+    return localStorage.getItem(CLAVE)
+  } catch {
+    return null
+  }
+}
+
+function guardar(valor: Modo) {
+  try {
+    localStorage.setItem(CLAVE, valor)
+  } catch {
+    // Sin almacenamiento (modo privado): la elección dura lo que dure la pestaña.
+  }
 }
 
 function sistemaOscuro(): boolean {
@@ -29,14 +49,25 @@ function sistemaOscuro(): boolean {
 let modo: Modo = 'claro'
 const oyentes = new Set<() => void>()
 
-function aplicar() {
-  modo = elegirModo(window.location.search, sistemaOscuro())
+function pintar() {
   document.documentElement.dataset.modo = modo
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', COLOR_BARRA[modo])
   oyentes.forEach((avisar) => avisar())
 }
 
-/** Se llama una vez, antes de dibujar la app. Después sigue al sistema cuando cambia (por ejemplo, de noche). */
+function aplicar() {
+  modo = elegirModo(window.location.search, leer(), sistemaOscuro())
+  pintar()
+}
+
+/** Lo que hace el botón de la barra: cambia el modo y lo recuerda en este navegador. */
+export function cambiarModo(nuevo: Modo) {
+  modo = nuevo
+  guardar(nuevo)
+  pintar()
+}
+
+/** Se llama una vez, antes de dibujar la app. Si nadie eligió, sigue al sistema cuando cambia (de noche, por ejemplo). */
 export function iniciarApariencia() {
   aplicar()
   if (typeof window.matchMedia === 'function') {
