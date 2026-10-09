@@ -6,7 +6,7 @@ import { Networks } from '@stellar/stellar-sdk'
 export const RPC_URL: string = import.meta.env.VITE_RPC_URL ?? 'https://soroban-testnet.stellar.org'
 export const NETWORK_PASSPHRASE: string = Networks.TESTNET
 export const TANDA_ID: string =
-  import.meta.env.VITE_TANDA_ID ?? 'CADFZFJDRFSM4WT6VO3F4IXM2Z4ZKKD3VLOELAMJMUFDCXZ2I2E3BYMC'
+  import.meta.env.VITE_TANDA_ID ?? 'CAUT2PXKDEKE4ZWNXULA23SYRCK25FLQBXO3IV2HYVVY5JIKVKXURQ2Q'
 export const TOKEN_ID: string =
   import.meta.env.VITE_TOKEN_ID ?? 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ5'
 
