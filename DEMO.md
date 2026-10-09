@@ -102,8 +102,9 @@ PRINCIPAL=1 bash scripts/demo_blend.sh     # tanda en USDC en el contrato princi
 | Ana no paga | Su garantía **sale de Blend** y cubre su cuota | "Ni siquiera hay que avisarle a Blend: el contrato retira lo justo y Beto cobra completo." |
 | Liquidez | "Blend tiene 28 453 USDC libres para retirar" (también en `#/estado`) | "Si un día Blend estuviera prestado al 100 %, cerrar la ronda esperaría unos minutos. Nadie pierde dinero." |
 
-Para que el jurado cree una tanda en USDC: en la barra de su cuenta, **"Recibir USDC de prueba"** (una firma; Blend
-le envía 1 000 USDC), y en `#/crear` elige **USDC**.
+Para que el jurado cree una tanda en USDC: en la barra de su cuenta abre **"Tandas con intereses reales (Blend)"** y
+toca **"Recibir USDC de prueba"** (una firma; Blend le envía 1 000 USDC). Después, en `#/crear`, abre **"Opciones
+avanzadas"** y elige **USDC**.
 
 ## Que el jurado lo pruebe (solo Freighter)
 
@@ -120,7 +121,9 @@ for p in ana beto; do T --source $p -- unirse --id "$ID" --miembro "$(stellar ke
 echo "Tanda abierta para el jurado: $ID  (entran 100 TUSD de garantía)"
 ```
 
-La persona del jurado entra como tercera, la tanda arranca, y desde la web puede pagar su cuota y cerrar la ronda con el botón. También puede **crear su propia tanda** desde `#/crear`.
+La persona del jurado entra como tercera, la tanda arranca, y desde la web puede pagar su cuota y entregar el pozo con el botón. También puede **crear su propia tanda** desde `#/crear`: para que dure minutos y no semanas, que use la plantilla **"Prueba rápida (1 minuto)"**.
+
+**Entrar desde el enlace de invitación** (`…/#/tanda/<id>`): la persona ve *"Ana te invita a una tanda"* con el monto y el depósito, y el botón para entrar ahí mismo. Con Google, su cuenta de práctica se prepara sola (cuenta, dólares de práctica y saldo); con Freighter es un botón y una confirmación.
 
 ## Si algo falla
 

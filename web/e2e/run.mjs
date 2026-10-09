@@ -360,7 +360,7 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.close()
 }
 
-// ---------------------------------------------------------------- 7. Onboarding de cuenta nueva
+// ---------------------------------------------------------------- 7. Onboarding de cuenta nueva (UX: un solo botón)
 {
   const est = nuevoEstado()
   const NUEVA = ME
@@ -368,21 +368,67 @@ const browser = await chromium.launch(opcionesNavegador())
   const { page, errores } = await nuevaPagina(browser, { est, direccion: NUEVA })
   await page.goto(BASE + '#/tandas')
   await page.waitForSelector('.barra-cuenta')
-  check('Cuenta nueva: pide activar con Friendbot', /Prepara tu cuenta de práctica/.test(await texto(page)))
+  const barra = async () => (await page.locator('.barra-cuenta').innerText()).replace(/[\u00a0\u202f]/g, ' ')
+  check('Cuenta nueva: ofrece preparar la cuenta de práctica', /Prepara tu cuenta de práctica/.test(await barra()))
+  check('Cuenta nueva: un solo botón, sin Friendbot ni TUSD', (await page.getByRole('button', { name: 'Preparar mi cuenta' }).count()) === 1 && !/Friendbot|TUSD|XLM/.test(await barra()))
   await shot(page, '07-cuenta-nueva')
   await page.getByRole('button', { name: 'Preparar mi cuenta' }).click()
-  await page.waitForSelector('text=Listo: tu cuenta está preparada.')
-  await page.waitForSelector('text=Un último paso: activa tus dólares de práctica', { timeout: 15000 })
-  check('Cuenta nueva: tras activar, pide aceptar TUSD', true)
-  est.cuentas[NUEVA].trustline = true // (la firma real con Freighter no se puede simular aquí)
+  // El mismo botón crea la cuenta y pide la única confirmación (activar los dólares de práctica). La firma real
+  // con Freighter no se puede simular aquí: el paso 2 falla y queda "Intentar de nuevo", con la cuenta ya creada.
+  await page.getByRole('button', { name: 'Intentar de nuevo' }).waitFor({ timeout: 15000 }).catch(() => {})
+  check('Preparar: crea la cuenta y sigue solo con el paso 2 (la confirmación)', est.cuentas[NUEVA]?.existe === true && (await page.getByRole('button', { name: 'Intentar de nuevo' }).count()) === 1)
+  est.cuentas[NUEVA].trustline = true // (como si la persona hubiera confirmado en Freighter)
   await page.waitForSelector('text=Tienes:', { timeout: 15000 })
-  check('Cuenta con trustline: muestra saldo 0', /Tienes:\s*\$0/.test((await texto(page)).replace(/ /g, ' ')))
-  await page.getByRole('button', { name: 'Recibir más dólares de práctica' }).click()
+  check('Cuenta lista sin saldo: muestra $0', /Tienes:\s*\$0/.test(await barra()))
+  const recibir = page.getByRole('button', { name: 'Recibir dólares de práctica' })
+  check('Cuenta lista sin saldo: "Recibir dólares de práctica" es el botón principal', /principal/.test((await recibir.getAttribute('class')) ?? ''))
+  await recibir.click()
   await page.waitForSelector('text=Listo: recibiste dólares de práctica.')
-  await page.waitForFunction(() => /Tienes:\s*\$1.?000/.test(document.body.innerText.replace(/ /g, ' ')), null, { timeout: 15000 })
-  check('Faucet: el saldo sube a $1 000', true)
+  await page.waitForFunction(() => /Tienes:\s*\$1.?000/.test(document.body.innerText.replace(/[\u00a0\u202f]/g, ' ')), null, { timeout: 15000 })
+  check('Recibir: el saldo sube a $1 000', true)
+  check('Con saldo: "Recibir más dólares de práctica" pasa a ser chico', (await page.getByRole('button', { name: 'Recibir más dólares de práctica' }).count()) === 1)
   await shot(page, '08-cuenta-lista')
   check('Onboarding: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- UX: entrar por invitación
+{
+  // Llego por el enlace de la tanda 5 (la creó Beto) y todavía no estoy en ella.
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est, viewport: { width: 375, height: 800 } })
+  await page.goto(BASE + '#/tanda/5')
+  await page.waitForSelector('.invitacion', { timeout: 15000 }).catch(() => {})
+  const inv = ((await page.locator('.invitacion').innerText().catch(() => '')) ?? '').replace(/[\u00a0\u202f]/g, ' ')
+  check('Invitación: "Beto te invita a una tanda"', /Beto te invita a una tanda/.test(inv), inv)
+  check('Invitación: "5 personas · $50 por semana"', /5 personas · \$50 por semana/.test(inv), inv)
+  check('Invitación: cuánto recibe cada turno y cuánto dejo de depósito', /Cada semana una persona recibe \$250\./.test(inv) && /Dejas \$\d+ de depósito de seguridad y lo recuperas al final/.test(inv), inv)
+  check('Invitación: el botón para unirme está en la misma tarjeta', (await page.locator('.panel').first().getByRole('button', { name: /Unirme y dejar/ }).count()) === 1)
+  const desborde = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+  check('Invitación (375 px): sin desborde horizontal', !desborde)
+  await shot(page, 'ux-invitacion-375')
+  check('Invitación: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // La misma invitación sin haber entrado todavía.
+  const est = nuevoEstado()
+  const { page } = await nuevaPagina(browser, { est, conectado: false, viewport: { width: 375, height: 800 } })
+  await page.goto(BASE + '#/tanda/5')
+  await page.waitForSelector('.invitacion', { timeout: 15000 }).catch(() => {})
+  const panel = await page.locator('.panel').first().innerText().catch(() => '')
+  check('Invitación sin cuenta: la ve igual y el botón para entrar está ahí mismo', /Beto te invita a una tanda/.test(panel) && /Instalar Freighter|Conectar billetera Stellar|Entrar con Google/.test(panel), panel.slice(0, 400))
+  await shot(page, 'ux-invitacion-sin-cuenta-375')
+  await page.close()
+}
+{
+  // Quien creó la tanda no se ve invitado a sí mismo.
+  const est = nuevoEstado()
+  const { page } = await nuevaPagina(browser, { est })
+  await page.goto(BASE + '#/tanda/3')
+  await page.waitForSelector('.panel', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(800)
+  check('Invitación: no aparece para quien creó la tanda', (await page.locator('.invitacion').count()) === 0)
   await page.close()
 }
 
@@ -1153,7 +1199,10 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.goto(BASE + '#/tandas')
   await page.waitForSelector('.cuenta-usdc', { timeout: 15000 }).catch(() => {})
   let t = await texto(page)
-  check('M4: la barra invita a recibir USDC de prueba de Blend', /rendimiento real en Blend/.test(t) && (await page.getByRole('button', { name: 'Recibir USDC de prueba' }).count()) === 1, t.slice(0, 400))
+  check('M4: la oferta de USDC de Blend queda plegada (no es parte del camino principal)', (await page.locator('details.cuenta-usdc-mas').count()) === 1 && !(await page.locator('details.cuenta-usdc-mas').evaluate((d) => d.open)))
+  await page.locator('details.cuenta-usdc-mas summary').click()
+  const tb = await texto(page)
+  check('M4: la barra invita a recibir USDC de prueba de Blend', /rendimiento real en Blend/.test(tb) && (await page.getByRole('button', { name: 'Recibir USDC de prueba' }).count()) === 1, tb.slice(0, 400))
   await page.getByRole('button', { name: 'Recibir USDC de prueba' }).click()
   await page.waitForSelector('.cuenta-usdc .aviso.error', { timeout: 15000 }).catch(() => {})
   check('M4: si ya recibió USDC, lo explica', /ya recibió sus dólares de prueba de Blend/.test(await texto(page)))
@@ -1437,7 +1486,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.goto(BASE + '#/tanda/5')
   await page.waitForSelector('.panel', { timeout: 15000 }).catch(() => {})
   await page.waitForTimeout(800)
-  check('Tanda abierta ajena: la invitación no es lo principal', (await page.locator('.invitar-principal').count()) === 0 && (await page.locator('.invitar').count()) === 1)
+  check('Tanda abierta ajena: no ve "Invita a tu grupo" (lo suyo es unirse)', (await page.locator('.invitar-principal').count()) === 0 && (await page.locator('.invitar').count()) === 0)
   await page.close()
 }
 

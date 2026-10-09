@@ -74,3 +74,30 @@ export async function pedirFaucet(direccion: string): Promise<void> {
   // Sin JSON válido casi siempre significa que el sitio no tiene la función del faucet (por ejemplo, `npm run dev`).
   throw new ErrorAmigable(typeof mensaje === 'string' ? mensaje : 'Aquí no se pueden pedir dólares de práctica (el servicio no está disponible).')
 }
+
+/** Los pasos de "Preparar mi cuenta", para contarle a la persona en cuál va. */
+export type PasoPreparar = 'crear' | 'activar' | 'recibir'
+
+/**
+ * Prepara una cuenta nueva de una sola vez: la crea (Friendbot), activa los dólares de práctica (trustline,
+ * la única firma) y le regala dólares de práctica (faucet). Se salta lo que ya está hecho.
+ */
+export async function prepararCuenta(
+  direccion: string,
+  estado: EstadoCuenta,
+  saldo: bigint | null,
+  alAvanzar: (paso: PasoPreparar) => void = () => {},
+): Promise<void> {
+  if (!estado.existe) {
+    alAvanzar('crear')
+    await activarConFriendbot(direccion)
+  }
+  if (!estado.trustline) {
+    alAvanzar('activar')
+    await aceptarTusd(direccion)
+  }
+  if ((saldo ?? 0n) === 0n && FAUCET_URL) {
+    alAvanzar('recibir')
+    await pedirFaucet(direccion)
+  }
+}

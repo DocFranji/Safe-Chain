@@ -15,7 +15,8 @@ import { useGarantiaConHistorial } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { duracion, porcentaje } from '../lib/formato'
 import { dinero } from '../lib/glosario'
-import { nombreDe } from '../lib/nombres'
+import { nombreConocido, nombreDe } from '../lib/nombres'
+import { cadaCuanto, lineaTanda } from '../lib/resumen'
 import { SIN_TURNO, eligeTurno, type Modo } from '../lib/turnos'
 import { comoConseguir, useMoneda } from '../hooks/useMoneda'
 
@@ -52,6 +53,9 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   const antes = puedeCerrarAntes(tanda, pagaron.length, modo, ahora)
   const beneficiario = estado === 'Activa' ? miembros.find((m) => m.posicion === tanda.ronda_actual) : undefined
   const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
+  // Quien llega por un enlace a una tanda abierta (y no está en ella) ve primero la invitación.
+  const invitado = estado === 'Abierta' && !mio && !esCreador && tanda.n_miembros > miembros.length
+  const anfitrion = nombreConocido(tanda.creador)
   const multa = (tanda.cuota * BigInt(tanda.penalidad_bps)) / 10_000n
   // Si ya sabemos que no alcanza el saldo, no pedimos firmar algo que va a fallar.
   const faltaParaUnirse = saldo !== null && colateralSiguiente !== null && saldo < colateralSiguiente ? colateralSiguiente - saldo : 0n
@@ -76,10 +80,26 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
 
   return (
     <section className="panel" aria-labelledby="panel-titulo">
-      <h2 id="panel-titulo">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</h2>
+      {invitado ? (
+        <div className="invitacion">
+          <h2 id="panel-titulo">{anfitrion ? `${anfitrion} te invita a una tanda` : 'Te invitaron a una tanda'}</h2>
+          <p className="invitacion-linea">{lineaTanda({ cuota: tanda.cuota, n: tanda.n_miembros, periodoSeg: Number(tanda.periodo_seg) })}</p>
+          <p className="explica">
+            {`${cadaCuanto(Number(tanda.periodo_seg)).replace(/^c/, 'C')} una persona recibe ${dinero(bolsa)}.`}{' '}
+            {colateralSiguiente !== null && !eligeTurno(modo) && (
+              <>
+                Dejas <strong>{dinero(colateralSiguiente)}</strong> de depósito de seguridad y lo recuperas al final, con
+                intereses.
+              </>
+            )}
+          </p>
+        </div>
+      ) : (
+        <h2 id="panel-titulo">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</h2>
+      )}
 
       <dl className="datos">
-        {estado === 'Abierta' && (
+        {estado === 'Abierta' && !invitado && (
           <>
             <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
             {colateralSiguiente !== null && (
@@ -112,8 +132,8 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
       <div className="acciones">
         {!yo ? (
           <>
-            <p>Entra para participar en esta tanda.</p>
-            <BotonesEntrar billetera={billetera} />
+            {!invitado && <p>Entra para participar en esta tanda.</p>}
+            <BotonesEntrar billetera={billetera} textoGoogle={invitado ? 'Entrar con Google y unirme' : 'Entrar con Google'} />
           </>
         ) : !billetera.redCorrecta ? (
           <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>
@@ -135,8 +155,8 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                     ? 'Tu turno se sorteará cuando se llene la tanda.'
                     : modo === 'Subasta'
                       ? 'Tu turno se decide en las subastas de cada turno.'
-                      : `Tu turno será el ${miembros.length + 1}.`}{' '}
-                  El depósito de seguridad se te devuelve al final, con intereses.
+                      : `Tu turno será el ${miembros.length + 1}: cobras ${dinero(bolsa)} en ese turno.`}
+                  {!invitado && ' El depósito de seguridad se te devuelve al final, con intereses.'}
                 </p>
               </>
             )}

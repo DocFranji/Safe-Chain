@@ -24,7 +24,7 @@ function hora(iso: string): string {
 export function LineaDeTiempo({ eventos, error, recientePrimero = true, limite }: Props) {
   const formato = { nombre: nombreDe, dinero }
   if (eventos === null) {
-    return <p className="explica">{error ? 'No pudimos leer la historia ahora mismo.' : 'Leyendo la historia desde la red…'}</p>
+    return <p className="explica">{error ? 'No pudimos leer la historia ahora mismo.' : 'Cargando lo que ha pasado…'}</p>
   }
   if (eventos.length === 0) {
     return (

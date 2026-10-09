@@ -31,6 +31,7 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
   const saldoMoneda = useSaldoEn(moneda, billetera.direccion, saldo)
   const yo = billetera.direccion
   // Mientras la tanda está abierta, para quien ya está adentro (o la creó) lo principal es invitar: va arriba.
+  // Quien todavía no está en la tanda no ve la invitación: lo suyo es unirse.
   const adentro = !!datos && yo !== null && (datos.tanda.creador === yo || datos.miembros.some((m) => m.direccion === yo))
   const libres = datos ? datos.tanda.n_miembros - datos.miembros.length : 0
   const invitar = datos && estado === 'Abierta' && libres > 0 && (
@@ -64,7 +65,6 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
             <Rueda datos={datos} ahora={ahora} yo={billetera.direccion} />
             <div className="columna">
               <PanelRonda id={id} datos={datos} billetera={billetera} saldo={saldoMoneda} ahora={ahora} alCambiar={recargar} />
-              {!adentro && invitar}
               {(estado === 'Abierta' || estado === 'Activa' || estado === 'PorLiquidar') && <Rendimiento datos={datos} />}
             </div>
           </div>

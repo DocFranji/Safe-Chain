@@ -55,7 +55,7 @@ export function ComoProbar({ billetera, cuenta }: { billetera: Billetera; cuenta
     },
     {
       titulo: 'Conecta tu billetera',
-      detalle: 'Usa el botón «Conectar billetera» de arriba a la derecha y acepta en Freighter.',
+      detalle: 'Usa el botón «Conectar billetera Stellar» de arriba a la derecha y acepta en Freighter.',
       hecho: conectada,
       actual: billetera.comprobada && billetera.instalada && !conectada,
     },
