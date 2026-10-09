@@ -1,5 +1,5 @@
-// La rueda de la opción "montana": un segmento por persona alrededor del cubo verde donde está la bolsa.
-// - El segmento se pinta de verde cuando esa persona paga la ronda.
+// La rueda de Rounda: un segmento por persona alrededor del cubo marino donde está la bolsa.
+// - El segmento se pinta de azul cuando esa persona paga la ronda.
 // - La rueda no gira: el punto del logo (aro + punto) da la vuelta por fuera y se detiene junto a quien cobra.
 //   El logo y la rueda son la misma idea.
 // - El aro del cubo es el tiempo que le queda a la ronda.
@@ -22,12 +22,12 @@ function polar(r: number, grados: number) {
   return { x: r * Math.sin(a), y: -r * Math.cos(a) }
 }
 
-export function RuedaMontana({ m, centro, etiqueta }: { m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
+export function RuedaOrbita({ m, centro, etiqueta }: { m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
   const paso = 360 / m.n
   const forma = segmentoAnular(m.n, R_ADENTRO, R_AFUERA, 2.4)
   const quienCobra = m.asientos.find((a) => a.turno)
   return (
-    <svg className={m.activa ? 'rueda-montana activa' : 'rueda-montana'} viewBox="-270 -238 540 476" role="img" aria-label={etiqueta}>
+    <svg className={m.activa ? 'rueda-orbita activa' : 'rueda-orbita'} viewBox="-270 -238 540 476" role="img" aria-label={etiqueta}>
       <circle className="rm-pista" r={R_PUNTO} />
       {m.asientos.map((a) => {
         const clases = ['nodo', a.libre && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
