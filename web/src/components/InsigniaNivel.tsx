@@ -19,7 +19,7 @@ export function Insignia({ nivel, puntaje, href }: { nivel: NombreNivel; puntaje
       {nivel}
     </>
   )
-  const titulo = `Historial ${nivel} · ${puntaje} puntos`
+  const titulo = `Reputación ${nivel} · ${puntaje} puntos`
   return href ? (
     <a className={`insignia nivel-${nivel.toLowerCase()}`} href={href} title={titulo} aria-label={titulo}>
       {texto}

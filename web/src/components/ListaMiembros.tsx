@@ -2,7 +2,7 @@
 import type { DatosTanda } from '../hooks/useTanda'
 import { dinero } from '../lib/glosario'
 import { saldoSuDeuda } from '../lib/deudas'
-import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
+import { nombreDe } from '../lib/nombres'
 import { EXPLORADOR } from '../config'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
 import { InsigniaNivel } from './InsigniaNivel'
@@ -47,7 +47,6 @@ export function ListaMiembros({ datos, yo }: Props) {
                     </a>
                     <InsigniaNivel dir={m.direccion} />
                     {m.direccion === yo && <span className="marca-yo">tú</span>}
-                    {NOMBRES[m.direccion] && <span className="dir">{direccionCorta(m.direccion)}</span>}
                   </td>
                   <td className="num">
                     {dinero(m.colateral)}

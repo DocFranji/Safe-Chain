@@ -118,7 +118,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
             )}
           </p>
         </div>
-      ) : (
+      ) : estado === 'Finalizada' && mio ? null /* lo dice la pantalla de cierre, arriba */ : (
         <div className={`siguiente siguiente-${siguiente.tono}`}>
           {estado === 'Activa' && <p className="siguiente-etapa">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</p>}
           <h2 id="panel-titulo">{siguiente.titulo}</h2>
@@ -227,7 +227,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
               </>
             )}
 
-            {estado === 'Finalizada' && (
+            {estado === 'Finalizada' && !mio && (
               <p className="explica">Esta tanda terminó. Cada persona ya recibió su depósito y su parte de los intereses.</p>
             )}
 

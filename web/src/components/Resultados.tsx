@@ -4,7 +4,7 @@ import type { DatosTanda } from '../hooks/useTanda'
 import type { EventoTanda } from '../lib/historia'
 import { resultadosDesdeEventos } from '../lib/rpc'
 import { dinero } from '../lib/glosario'
-import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
+import { nombreDe } from '../lib/nombres'
 import { EXPLORADOR, TANDA_ID } from '../config'
 
 type Props = {
@@ -92,7 +92,6 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                       <td>
                         {nombreDe(m.direccion)}
                         {m.direccion === yo && <span className="marca-yo">tú</span>}
-                        {NOMBRES[m.direccion] && <span className="dir">{direccionCorta(m.direccion)}</span>}
                       </td>
                       <td className="num">{dinero(m.colateral_inicial)}</td>
                       <td className="num">{hayPagos ? dinero(final) : '-'}</td>

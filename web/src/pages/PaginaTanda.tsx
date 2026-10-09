@@ -18,6 +18,7 @@ import { monedaDe } from '../lib/monedas'
 import { MonedaContexto, useSaldoEn } from '../hooks/useMoneda'
 import { esRecienCreada } from '../lib/recienCreada'
 import { nombreConocido } from '../lib/nombres'
+import { CierreTanda } from '../components/CierreTanda'
 
 type Props = { id: number; billetera: Billetera; saldo: bigint | null }
 
@@ -61,6 +62,7 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
       {datos && (
         <>
           {adentro && invitar}
+          {estado === 'Finalizada' && yo && <CierreTanda datos={datos} yo={yo} eventos={historia.eventos} />}
           <div className="escenario">
             <Rueda datos={datos} ahora={ahora} yo={billetera.direccion} />
             <div className="columna">

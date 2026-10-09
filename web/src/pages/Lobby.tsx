@@ -1,4 +1,4 @@
-// Pantalla de inicio: todas las tandas, con filtros, y el acceso a crear una nueva.
+// "Mis tandas": con sesión empieza en las tandas de quien mira; también se pueden ver las abiertas y todas.
 import { useState } from 'react'
 import { useTandas } from '../hooks/useTandas'
 import { useAhora } from '../hooks/useTanda'
@@ -12,11 +12,11 @@ import { RUTA_CREAR } from '../lib/rutas'
 type Filtro = 'todas' | 'abiertas' | 'en-curso' | 'terminadas' | 'mias'
 
 const FILTROS: { id: Filtro; texto: string }[] = [
-  { id: 'todas', texto: 'Todas' },
+  { id: 'mias', texto: 'Mis tandas' },
   { id: 'abiertas', texto: 'Abiertas' },
   { id: 'en-curso', texto: 'En curso' },
   { id: 'terminadas', texto: 'Terminadas' },
-  { id: 'mias', texto: 'Mis tandas' },
+  { id: 'todas', texto: 'Todas' },
 ]
 
 function coincide(r: ResumenTanda, filtro: Filtro, yo: string | null): boolean {
@@ -37,8 +37,10 @@ function coincide(r: ResumenTanda, filtro: Filtro, yo: string | null): boolean {
 
 export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cuenta }) {
   const { total, lista, error, listo, hayMas, verMas } = useTandas()
-  const [filtro, setFiltro] = useState<Filtro>('todas')
+  // null = automático: "Mis tandas" si hay sesión, "Todas" si no.
+  const [elegido, setFiltro] = useState<Filtro | null>(null)
   const yo = billetera.direccion
+  const filtro: Filtro = elegido ?? (yo ? 'mias' : 'todas')
   const ahora = useAhora()
 
   const visibles = lista.filter((r) => coincide(r, filtro, yo))
@@ -46,14 +48,14 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
   return (
     <section className="lobby" aria-labelledby="lobby-titulo">
       <div className="selector">
-        <h1 id="lobby-titulo">Tandas</h1>
+        <h1 id="lobby-titulo">{yo ? 'Mis tandas' : 'Tandas'}</h1>
         <a className="boton principal" href={RUTA_CREAR}>
           Crear una tanda
         </a>
       </div>
       <p className="explica lobby-intro">
-        Ahorra en grupo sin miedo a que alguien desaparezca: Rounda guarda el dinero, y si alguien no paga, su depósito de seguridad cubre su cuota.
-        Elige una tanda abierta para unirte o crea la tuya.
+        Ahorra en grupo sin miedo a que alguien desaparezca: Rounda guarda el dinero, y si alguien no paga, su depósito
+        de seguridad cubre su cuota. Crea la tuya o únete a una con el enlace que te manden.
       </p>
       <ComoProbar billetera={billetera} cuenta={cuenta} />
 
@@ -94,7 +96,20 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
             <p className="explica">Entra (arriba a la derecha) para ver las tandas en las que participas.</p>
           )}
 
-          {visibles.length === 0 ? (
+          {visibles.length === 0 && filtro === 'mias' && yo ? (
+            <div className="vacio">
+              <h2>Todavía no estás en ninguna tanda</h2>
+              <p>Crea una y manda el enlace a tu grupo, o únete a una con el enlace que te manden.</p>
+              <div className="fila-botones">
+                <a className="boton principal" href={RUTA_CREAR}>
+                  Crear una tanda
+                </a>
+                <button type="button" className="boton secundario" onClick={() => setFiltro('abiertas')}>
+                  Ver tandas abiertas
+                </button>
+              </div>
+            </div>
+          ) : visibles.length === 0 ? (
             <p className="explica sin-resultados">No hay tandas en esta categoría por ahora.</p>
           ) : (
             <ul className="tarjetas">
