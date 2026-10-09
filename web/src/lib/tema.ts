@@ -1,26 +1,29 @@
-// Diseño en prueba: dos opciones de marca para elegir con la web de verdad (docs/diseno.md). Las dos combinan
-// la identidad de la carreta de Sarchí con la seriedad de una app de finanzas:
+// Diseño en prueba: opciones de marca para elegir con la web de verdad (docs/diseno.md).
+// - "orbita" (C, por defecto): la estética de las plantillas de Framer (Vallure y otras) con movimiento de círculos
+//   y giros: marino y azul eléctrico, blanco, sombras en capas y la ronda de personas que gira en la portada.
 // - "sarchi" (A): el rojo de la carreta en la barra y la portada; los colores pintados viven solo en la rueda.
 // - "montana" (B): verde montaña y amarillo; el punto del logo da la vuelta a la rueda y señala a quien cobra.
-// Se elige con ?tema=sarchi|montana en la URL (antes del #), con el selector de arriba o con VITE_TEMA.
-// Las dos tienen modo oscuro: sigue al teléfono, o se fija con ?modo=claro|oscuro o el botón de la franja.
-// Cuando el equipo elija una, se borran este archivo, el selector y la opción que no quedó.
+// Se elige con ?tema=orbita|sarchi|montana en la URL (antes del #), con el selector de arriba o con VITE_TEMA.
+// Todas tienen modo oscuro: sigue al teléfono, o se fija con ?modo=claro|oscuro o el botón de la franja.
+// Cuando el equipo elija una, se borran este archivo, el selector y las opciones que no quedaron.
 import { useSyncExternalStore } from 'react'
 
-export type Tema = 'sarchi' | 'montana'
+export type Tema = 'orbita' | 'sarchi' | 'montana'
 export type Modo = 'claro' | 'oscuro'
 
 export const TEMAS: { id: Tema; nombre: string; oscuro: boolean }[] = [
+  { id: 'orbita', nombre: 'C · Órbita', oscuro: true },
   { id: 'sarchi', nombre: 'A · Sarchí', oscuro: true },
   { id: 'montana', nombre: 'B · Montaña', oscuro: true },
 ]
 
-export const TEMA_POR_DEFECTO: Tema = 'sarchi'
+export const TEMA_POR_DEFECTO: Tema = 'orbita'
 const CLAVE = 'rounda:tema'
 const CLAVE_MODO = 'rounda:modo'
 
 /** Color de la barra del navegador en el celular: el de la barra de la marca. */
 const COLOR_BARRA: Record<Tema, Record<Modo, string>> = {
+  orbita: { claro: '#070c24', oscuro: '#05070f' },
   sarchi: { claro: '#a31f1a', oscuro: '#7f1914' },
   montana: { claro: '#0e3b2c', oscuro: '#0b2a20' },
 }
@@ -113,6 +116,7 @@ export function iniciarTema() {
 
 /** Las letras de cada tema, como las pide document.fonts.load (una por familia: son fuentes variables). */
 export function letrasDe(tema: Tema): string[] {
+  if (tema === 'orbita') return ['500 1em "Geist Variable"', '400 1em "Geist Variable"']
   return tema === 'montana'
     ? ['750 1em "Bricolage Grotesque Variable"', '400 1em "Geist Variable"']
     : ['800 1em "Archivo Variable"']

@@ -1,15 +1,10 @@
 // La rueda de la portada: la misma de la app (el dibujo de cada diseño), con una tanda de ejemplo
 // de 5 personas que avanza sola. Cada ronda tiene tres momentos: paga quien cobra, pagan casi todos, pagan todos;
 // después la rueda gira y cobra la siguiente persona. Con "reducir movimiento" se queda quieta en un momento.
-import { useEffect, useState } from 'react'
 import { coloresSinRepetir, type ModeloRueda } from '../lib/rueda'
 import { useTema } from '../lib/tema'
 import { DibujoRueda } from '../components/Rueda'
-
-const NOMBRES = ['Ana', 'Beto', 'Carla', 'Tú', 'Diego']
-const N = NOMBRES.length
-const MOMENTOS = 3 // por ronda
-const PASO_MS = 1300
+import { MOMENTOS, N, NOMBRES, usePasoMuestra } from './muestra'
 
 function modeloMuestra(paso: number): ModeloRueda {
   const vueltas = Math.floor(paso / MOMENTOS) // rondas que ya pasaron (no vuelve atrás: la rueda siempre gira hacia adelante)
@@ -41,14 +36,11 @@ function modeloMuestra(paso: number): ModeloRueda {
   }
 }
 
-export function RuedaMuestra() {
+/** Sin `paso`, la rueda avanza sola; con `paso`, la mueve quien la usa (así otra pieza muestra la misma ronda). */
+export function RuedaMuestra({ paso: pasoDado, nota = true }: { paso?: number; nota?: boolean }) {
   const tema = useTema()
-  const [paso, setPaso] = useState(4) // ronda 2, a medio pagar
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const t = setInterval(() => setPaso((p) => p + 1), PASO_MS)
-    return () => clearInterval(t)
-  }, [])
+  const pasoPropio = usePasoMuestra(pasoDado === undefined)
+  const paso = pasoDado ?? pasoPropio
 
   const m = modeloMuestra(paso)
   const ronda = Math.floor(paso / MOMENTOS) % N
@@ -69,7 +61,7 @@ export function RuedaMuestra() {
   return (
     <figure className="rueda ln-rueda">
       <DibujoRueda tema={tema} m={m} centro={centro} etiqueta={etiqueta} />
-      <figcaption className="ln-rueda-nota">Una tanda de ejemplo: 5 personas, cuota de 100 TUSD.</figcaption>
+      {nota && <figcaption className="ln-rueda-nota">Una tanda de ejemplo: 5 personas, cuota de 100 TUSD.</figcaption>}
     </figure>
   )
 }

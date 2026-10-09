@@ -47,12 +47,12 @@ export function Rueda({ datos, ahora, yo }: Props) {
 }
 
 // La leyenda dibuja lo mismo que la rueda de cada diseño: cómo se marca a quien cobra y lo pagado.
-const MUESTRA_TURNO: Record<Tema, string> = { sarchi: 'flecha', montana: 'punto' }
-const MUESTRA_PAGO: Record<Tema, string> = { sarchi: 'pintado', montana: 'pintado' }
+const MUESTRA_TURNO: Record<Tema, string> = { orbita: 'punto', sarchi: 'flecha', montana: 'punto' }
+const MUESTRA_PAGO: Record<Tema, string> = { orbita: 'pintado', sarchi: 'pintado', montana: 'pintado' }
 
 /** El dibujo de la rueda según el diseño en prueba (también lo usa la rueda de ejemplo de la portada). */
 export function DibujoRueda({ tema, m, centro, etiqueta }: { tema: Tema; m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
-  return tema === 'montana' ? (
+  return tema === 'montana' || tema === 'orbita' ? (
     <RuedaMontana m={m} centro={centro} etiqueta={etiqueta} />
   ) : (
     <RuedaSarchi m={m} centro={centro} etiqueta={etiqueta} />

@@ -30,6 +30,7 @@ const GRUPOS = [
 
 // La foto del cierre cuenta de dónde viene cada opción: el taller de Sarchí o la montaña.
 const FOTO_MARCA: Record<Tema, { foto: string; alt: string; lado: number }> = {
+  orbita: { foto: fotoFamilia, alt: 'Una abuela y su nieta miran un celular en la mesa de la cocina.', lado: 640 },
   sarchi: { foto: fotoArtesano, alt: 'Un artesano de Sarchí pinta los colores de una rueda de carreta.', lado: 880 },
   montana: { foto: fotoFinca, alt: 'Una joven revisa su celular en un cafetal, con las montañas detrás.', lado: 880 },
 }

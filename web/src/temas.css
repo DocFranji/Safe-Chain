@@ -208,7 +208,7 @@
    píldora; el amarillo solo para el punto del logo, a quién le toca y lo elegido. Títulos en Bricolage y
    números en Geist, de ancho fijo.
    ===================================================================================================== */
-:root[data-tema='montana'] .barra::after {
+:root:is([data-tema='montana'], [data-tema='orbita']) .barra::after {
   content: '';
   position: absolute;
   top: 100%;
@@ -218,110 +218,150 @@
   z-index: -1;
   background: var(--marca-detalle);
 }
-:root[data-tema='montana'] .marca {
+:root:is([data-tema='montana'], [data-tema='orbita']) .marca {
   letter-spacing: -0.02em;
 }
-:root[data-tema='montana'] .menu a {
+:root:is([data-tema='montana'], [data-tema='orbita']) .menu a {
   font-weight: 550;
 }
-:root[data-tema='montana'] .selector h1 {
+:root:is([data-tema='montana'], [data-tema='orbita']) .selector h1 {
   font-size: 42px;
   line-height: 1.04;
 }
-:root[data-tema='montana'] .panel h2 {
+:root:is([data-tema='montana'], [data-tema='orbita']) .panel h2 {
   font-size: 23px;
 }
-:root[data-tema='montana'] :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+:root:is([data-tema='montana'], [data-tema='orbita']) :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
   font-size: 20px;
 }
-:root[data-tema='montana']
+:root:is([data-tema='montana'], [data-tema='orbita'])
   :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
   border: 1px solid var(--linea);
   border-radius: var(--radio);
   background: var(--superficie);
   box-shadow: var(--sombra);
 }
-:root[data-tema='montana'] .opciones-historial {
+:root:is([data-tema='montana'], [data-tema='orbita']) .opciones-historial {
   padding: 12px 16px 16px;
 }
-:root[data-tema='montana'] .boton {
+:root:is([data-tema='montana'], [data-tema='orbita']) .boton {
   border-width: 1px;
   border-radius: 999px;
   padding-inline: 22px;
   font-weight: 600;
 }
-:root[data-tema='montana'] .boton.chico {
+:root:is([data-tema='montana'], [data-tema='orbita']) .boton.chico {
   padding-inline: 16px;
 }
-:root[data-tema='montana'] :is(.boton.secundario, .boton.chico) {
+:root:is([data-tema='montana'], [data-tema='orbita']) :is(.boton.secundario, .boton.chico) {
   background: var(--superficie);
   border-color: var(--borde);
 }
-:root[data-tema='montana'] .etiqueta {
+:root:is([data-tema='montana'], [data-tema='orbita']) .etiqueta {
   border: 0;
   padding: 3px 12px;
   background: var(--superficie-2);
   color: var(--tinta-2);
   font-weight: 600;
 }
-:root[data-tema='montana'] :is(.etiqueta.abierta, .etiqueta.por-repartir) {
+:root:is([data-tema='montana'], [data-tema='orbita']) :is(.etiqueta.abierta, .etiqueta.por-repartir) {
   background: var(--turno-suave);
   color: var(--tinta);
 }
-:root[data-tema='montana'] .etiqueta.en-curso {
+:root:is([data-tema='montana'], [data-tema='orbita']) .etiqueta.en-curso {
   background: var(--pago-suave);
   color: var(--pago-texto);
 }
-:root[data-tema='montana'] .etiqueta.cancelada {
+:root:is([data-tema='montana'], [data-tema='orbita']) .etiqueta.cancelada {
   background: var(--alerta-suave);
   color: var(--alerta-texto);
 }
-:root[data-tema='montana'] .lugar {
+:root:is([data-tema='montana'], [data-tema='orbita']) .lugar {
   border: 1.5px dashed var(--borde);
 }
-:root[data-tema='montana'] .lugar.lleno {
+:root:is([data-tema='montana'], [data-tema='orbita']) .lugar.lleno {
   border: 0;
   background: var(--acento);
 }
-:root[data-tema='montana'] .filtro {
+:root:is([data-tema='montana'], [data-tema='orbita']) .filtro {
   border: 1px solid var(--linea);
   border-radius: 999px;
   background: var(--superficie);
   color: var(--tinta-2);
 }
-:root[data-tema='montana'] .filtro.activo {
+:root:is([data-tema='montana'], [data-tema='orbita']) .filtro.activo {
   border-color: var(--marca);
   background: var(--marca);
   color: var(--sobre-marca);
 }
-:root[data-tema='montana'] :is(.modo, .moneda) {
+:root:is([data-tema='montana'], [data-tema='orbita']) :is(.modo, .moneda) {
   border: 1px solid var(--linea);
   border-radius: var(--radio-chico);
   background: var(--superficie);
 }
-:root[data-tema='montana'] :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
+:root:is([data-tema='montana'], [data-tema='orbita']) :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
   border-color: var(--acento);
   background: var(--pago-suave);
   box-shadow: 0 0 0 1px var(--acento) inset;
 }
-:root[data-tema='montana'] th {
+:root:is([data-tema='montana'], [data-tema='orbita']) th {
   border-bottom: 1px solid var(--linea);
   color: var(--tinta-2);
   font-weight: 600;
   text-transform: none;
 }
-:root[data-tema='montana'] td {
+:root:is([data-tema='montana'], [data-tema='orbita']) td {
   border-bottom-color: var(--linea);
 }
-:root[data-tema='montana'] .tarjeta-cobro {
+:root:is([data-tema='montana'], [data-tema='orbita']) .tarjeta-cobro {
   border: 1px solid var(--marca);
   background: var(--marca);
   color: var(--sobre-marca);
 }
-:root[data-tema='montana'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+:root:is([data-tema='montana'], [data-tema='orbita']) :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
   font-family: var(--texto);
   font-weight: 650;
   letter-spacing: -0.02em;
+}
+
+/* =====================================================================================================
+   C · ÓRBITA
+   Hereda de Montaña la estructura de la app (píldoras, piezas redondeadas, la rueda con el punto que gira) y
+   cambia el carácter: barra marina con una línea azul que brilla, piezas sin borde con sombras en capas (como las
+   plantillas de Framer) y Geist en peso medio para todo.
+   ===================================================================================================== */
+:root[data-tema='orbita'] .barra::after {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--marca-detalle) 30%, #8eabff 50%, var(--marca-detalle) 70%, transparent);
+  box-shadow: 0 0 18px 1px rgba(76, 125, 255, 0.55);
+}
+:root[data-tema='orbita'] .marca {
+  font-weight: 560;
+  letter-spacing: -0.03em;
+}
+:root[data-tema='orbita'] .menu a {
+  font-weight: 500;
+}
+:root[data-tema='orbita'] .selector h1 {
+  font-weight: 560;
+  letter-spacing: -0.035em;
+}
+:root[data-tema='orbita']
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border-color: transparent;
+}
+:root[data-tema='orbita'][data-modo='oscuro']
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial),
+:root[data-tema='orbita']:has(.app[data-pagina='demo'])
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border-color: var(--linea);
+}
+:root[data-tema='orbita'] .boton {
+  font-weight: 500;
+}
+:root[data-tema='orbita'] :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-weight: 560;
+  letter-spacing: -0.03em;
 }
 
 /* =====================================================================================================
@@ -587,7 +627,7 @@
   border-radius: 4px;
   background: var(--c-azul);
 }
-:root[data-tema='montana'] .muestra.pintado {
+:root:is([data-tema='montana'], [data-tema='orbita']) .muestra.pintado {
   border-radius: 4px;
   background: var(--acento);
 }

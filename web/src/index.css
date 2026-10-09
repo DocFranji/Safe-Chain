@@ -2,7 +2,8 @@
  * Colores, letras y movimiento de toda la app. Hay dos opciones de marca en prueba (src/lib/tema.ts, docs/diseno.md):
  *   [data-tema='sarchi']   A · la carreta de Sarchí, en serio: rojo carreta, tinta y blanco; el color pintado en la rueda.
  *   [data-tema='montana']  B · finanzas con carácter: verde montaña, blanco y un amarillo para lo que importa.
- * Las dos tienen modo oscuro ([data-modo='oscuro'], ver tema.ts).
+ *   [data-tema='orbita']   C · la estética de Framer (Vallure y otras): marino, azul eléctrico, blanco y la ronda que gira.
+ * Todas tienen modo oscuro ([data-modo='oscuro'], ver tema.ts).
  * Los nombres de las variables son los mismos en todos: el resto del CSS solo usa variables.
  */
 :root {
@@ -201,6 +202,92 @@
   --sombra: none;
   --sombra-alta: 0 18px 40px -22px rgba(0, 0, 0, 0.7);
   --foco: #7fd6ad;
+}
+
+/* ---------- C · Órbita ----------
+   La estética de las plantillas de Framer que eligió la persona (Vallure, Arewno, Payer, Cryptor): campo marino con
+   un brillo azul eléctrico, piezas blancas con sombras en capas muy suaves y una sola letra (Geist) en peso medio.
+   El azul es la marca y lo pagado; un ámbar cálido marca a quién le toca. */
+:root[data-tema='orbita'] {
+  --c-rojo: #d92d20;
+  --c-naranja: #e8772e;
+  --c-amarillo: #ffb547;
+  --c-azul: #1f4fff;
+  --c-verde: #12a150;
+  --c-tinta: #0b0d17;
+  --rueda-llanta: #ffffff;
+  --rueda-trazo: #0b0d17;
+
+  --papel: #f7f8fa;
+  --superficie: #ffffff;
+  --superficie-2: #f0f2f6;
+  --tinta: #0b0d17;
+  --tinta-2: #5d6170;
+  --linea: #e5e7ee;
+  --borde: #8e93a3;
+  --grosor: 1px;
+  --marca: #070c24;
+  --sobre-marca: #ffffff;
+  --marca-detalle: #4c7dff; /* el punto del logo y la línea bajo la barra */
+  --acento: #1f4fff;
+  --sobre-acento: #ffffff;
+  --acento-borde: #1f4fff;
+  --acento-texto: #1a44e0;
+  --turno: #ffb547;
+  --turno-suave: #fff3dc;
+  --sobre-turno: #0b0d17;
+  --pago: #1f4fff;
+  --pago-suave: #e9eeff;
+  --pago-texto: #1a3fc4;
+  --alerta: #d92d20;
+  --alerta-suave: #fdeceb;
+  --alerta-texto: #a8231a;
+  --cubo: #070c24;
+  --sobre-cubo: #ffffff;
+  --sobre-cubo-2: #aab4d8;
+  --brillo: rgba(31, 79, 255, 0.3);
+  --sombra: 0 0 0 1px rgba(11, 13, 23, 0.04), 0 1px 1px rgba(11, 13, 23, 0.04), 0 6px 12px -6px rgba(11, 13, 23, 0.08);
+  --sombra-alta: 0 0 0 1px rgba(11, 13, 23, 0.04), 0 12px 24px -12px rgba(11, 13, 23, 0.16), 0 32px 64px -32px rgba(7, 12, 36, 0.28);
+  --foco: #1f4fff;
+  --radio: 20px;
+  --radio-chico: 12px;
+  --texto: 'Geist Variable', system-ui, sans-serif;
+  --titulos: 'Geist Variable', system-ui, sans-serif;
+  --titulos-peso: 560;
+  --titulos-espacio: -0.03em;
+  --titulos-ancho: 100%;
+}
+:root[data-tema='orbita'][data-modo='oscuro'],
+:root[data-tema='orbita']:has(.app[data-pagina='demo']) {
+  color-scheme: dark;
+  --c-azul: #5b84ff;
+  --c-tinta: #eef0f7;
+  --rueda-llanta: #0d1120;
+  --rueda-trazo: #05070f;
+  --papel: #05070f;
+  --superficie: #0d1120;
+  --superficie-2: #151a2e;
+  --tinta: #eef0f7;
+  --tinta-2: #9aa1b8;
+  --linea: #1d2338;
+  --borde: #4d5570;
+  --marca: #070c24;
+  --acento: #5b84ff;
+  --sobre-acento: #05070f;
+  --acento-borde: #5b84ff;
+  --acento-texto: #8eabff;
+  --turno-suave: #3a2a0c;
+  --sobre-turno: #05070f;
+  --pago: #5b84ff;
+  --pago-suave: #141d3d;
+  --pago-texto: #a9bdff;
+  --alerta: #ff7a6b;
+  --alerta-suave: #3a1714;
+  --alerta-texto: #ffb4a8;
+  --cubo: #101a4a;
+  --sombra: none;
+  --sombra-alta: 0 18px 40px -22px rgba(0, 0, 0, 0.8);
+  --foco: #8eabff;
 }
 
 *,

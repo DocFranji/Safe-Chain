@@ -16,9 +16,10 @@ describe('elegirTema', () => {
     expect(esTema('sarchi')).toBe(true)
     expect(esTema('fintech')).toBe(false)
   })
-  it('hay dos opciones y cada una tiene nombre propio', () => {
-    expect(TEMAS.map((t) => t.id)).toEqual(['sarchi', 'montana'])
-    expect(new Set(TEMAS.map((t) => t.nombre)).size).toBe(2)
+  it('hay tres opciones y cada una tiene nombre propio', () => {
+    expect(TEMAS.map((t) => t.id)).toEqual(['orbita', 'sarchi', 'montana'])
+    expect(new Set(TEMAS.map((t) => t.nombre)).size).toBe(3)
+    expect(TEMA_POR_DEFECTO).toBe('orbita')
   })
 })
 
@@ -46,5 +47,6 @@ describe('letrasDe', () => {
     expect(letrasDe('sarchi')[0]).toContain('Archivo Variable')
     expect(letrasDe('montana').join()).toContain('Bricolage Grotesque Variable')
     expect(letrasDe('montana').join()).toContain('Geist Variable')
+    expect(letrasDe('orbita').join()).toContain('Geist Variable')
   })
 })
