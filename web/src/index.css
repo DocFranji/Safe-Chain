@@ -1,8 +1,10 @@
 /*
- * Colores, letras y movimiento de toda la app. Hay dos mundos en prueba (src/lib/tema.ts, docs/diseno.md):
- *   [data-tema='carreta']  la rueda pintada de la carreta de Sarchí: blanco, tinta negra, rojo, amarillo, cobalto y verde.
- *   [data-tema='fintech']  una app de finanzas moderna: gris muy claro, blanco, un verde de marca.
- * Los nombres de las variables son los mismos en los dos: el resto del CSS solo usa variables.
+ * Colores, letras y movimiento de toda la app. Hay dos opciones de marca en prueba (src/lib/tema.ts, docs/diseno.md):
+ *   [data-tema='sarchi']   A · la carreta de Sarchí, en serio: rojo carreta, tinta y blanco; el color pintado en la rueda.
+ *   [data-tema='montana']  B · finanzas con carácter: verde montaña, blanco y un amarillo para lo que importa.
+ *   [data-tema='orbita']   C · la estética de Framer (Vallure y otras): marino, azul eléctrico, blanco y la ronda que gira.
+ * Todas tienen modo oscuro ([data-modo='oscuro'], ver tema.ts).
+ * Los nombres de las variables son los mismos en todos: el resto del CSS solo usa variables.
  */
 :root {
   /* Movimiento (curvas fuertes: las de CSS por defecto se sienten flojas).
@@ -15,7 +17,6 @@
   --t-rapido: 200ms; /* hover, colores, avisos */
   --t-medio: 280ms; /* entrar una página o una tarjeta */
 
-  --texto: 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif;
   color-scheme: light;
   font-family: var(--texto);
   font-size: 17px;
@@ -26,89 +27,267 @@
   font-synthesis: none;
 }
 
-/* ---------- Carreta de Sarchí (también es el tema por defecto) ---------- */
+/* ---------- A · Sarchí (también es el tema por defecto) ----------
+   La carreta, en serio: el rojo de la carreta es el campo de la marca (barra y portada); sus cuatro colores
+   pintados viven solo en la rueda y el logo. La interfaz es tinta sobre blanco y una sola acción en tinta. */
 :root,
-:root[data-tema='carreta'] {
-  /* Los colores de la carreta, para la rueda y los adornos. */
-  --c-rojo: #c8261b;
-  --c-naranja: #ef6c1a;
-  --c-amarillo: #f6b800;
-  --c-azul: #1e46a8;
-  --c-verde: #1e8449;
-  --c-tinta: #1a1410;
+:root[data-tema='sarchi'] {
+  --c-rojo: #a31f1a;
+  --c-naranja: #c4621a;
+  --c-amarillo: #e0a10d;
+  --c-azul: #24427a;
+  --c-verde: #2c6e49;
+  --c-tinta: #17181c;
+  --rueda-llanta: #fefefd;
+  --rueda-trazo: #17181c;
 
-  --papel: #ffffff; /* fondo */
-  --superficie: #ffffff; /* paneles y tarjetas (los separa la línea de tinta) */
-  --superficie-2: #fff3cc; /* resaltado suave (amarillo carreta muy claro) */
-  --tinta: var(--c-tinta);
-  --tinta-2: #5c5048;
-  --linea: rgba(26, 20, 16, 0.14);
-  --borde: var(--c-tinta); /* las piezas se dibujan con contorno de tinta, como en la carreta */
-  --grosor: 2px;
-  --marca: var(--c-rojo); /* barra, portada, momentos grandes */
-  --sobre-marca: #ffffff;
-  --acento: var(--c-azul); /* acción principal */
-  --sobre-acento: #ffffff;
-  --turno: var(--c-amarillo);
-  --turno-suave: #fff1c2;
-  --sobre-turno: var(--c-tinta);
-  --pago: var(--c-verde);
-  --pago-suave: #e2f4e8;
-  --pago-texto: #14693a;
-  --alerta: #b8211a;
-  --alerta-suave: #fde4e1;
-  --alerta-texto: #8f1a14;
-  --brillo: rgba(30, 70, 168, 0.22);
-  --sombra: none;
-  --sombra-alta: 0 10px 24px -14px rgba(26, 20, 16, 0.45);
-  --foco: var(--c-azul);
-  --radio: 16px;
+  --papel: #f6f6f5;
+  --superficie: #fefefd;
+  --superficie-2: #efeeeb;
+  --tinta: #17181c;
+  --tinta-2: #51535b;
+  --linea: #e2e2df;
+  --borde: #8a8c93;
+  --grosor: 1px;
+  --marca: #a31f1a;
+  --sobre-marca: #fefefd;
+  --marca-detalle: #e8a400; /* el filete dorado de la carreta */
+  --acento: #17181c;
+  --sobre-acento: #fefefd;
+  --acento-borde: #17181c;
+  --acento-texto: #a31f1a;
+  --turno: #e8a400;
+  --turno-suave: #fbf0d3;
+  --sobre-turno: #17181c;
+  --pago: #2c6e49;
+  --pago-suave: #e3f0e8;
+  --pago-texto: #1f5636;
+  --alerta: #b42318;
+  --alerta-suave: #fce7e4;
+  --alerta-texto: #8f1d14;
+  --cubo: #fefefd;
+  --sobre-cubo: #17181c;
+  --sobre-cubo-2: #51535b;
+  --brillo: rgba(163, 31, 26, 0.25);
+  --sombra: 0 1px 2px rgba(23, 24, 28, 0.05);
+  --sombra-alta: 0 18px 40px -24px rgba(23, 24, 28, 0.35);
+  --foco: #17181c;
+  --radio: 14px;
   --radio-chico: 10px;
-  --titulos: 'Bungee', var(--texto);
-  --titulos-peso: 400;
-  --titulos-espacio: 0;
+  --texto: 'Archivo Variable', system-ui, sans-serif;
+  --titulos: 'Archivo Variable', system-ui, sans-serif;
+  --titulos-peso: 800;
+  --titulos-espacio: -0.01em;
+  --titulos-ancho: 116%; /* Archivo ancho: letra de rótulo pintado, pero seria */
+}
+/* El oscuro sirve para el modo oscuro y para el escenario de la demo (se proyecta: más contraste). */
+:root[data-tema='sarchi'][data-modo='oscuro'],
+:root[data-tema='sarchi']:has(.app[data-pagina='demo']) {
+  color-scheme: dark;
+  --c-rojo: #c8352b;
+  --c-amarillo: #e8a400;
+  --c-azul: #4a6fb0;
+  --c-verde: #3f9466;
+  --c-tinta: #f2f1ee;
+  --rueda-llanta: #1b1b1f;
+  --rueda-trazo: #0d0d0f;
+  --papel: #121214;
+  --superficie: #1b1b1f;
+  --superficie-2: #24242a;
+  --tinta: #f2f1ee;
+  --tinta-2: #a8a9b0;
+  --linea: #2c2c33;
+  --borde: #6c6e76;
+  --marca: #8f1b16;
+  --acento: #f2f1ee;
+  --sobre-acento: #121214;
+  --acento-borde: #f2f1ee;
+  --acento-texto: #f0675d;
+  --turno-suave: #3a2c0c;
+  --sobre-turno: #121214;
+  --pago: #4fb27a;
+  --pago-suave: #16301f;
+  --pago-texto: #8fd6ad;
+  --alerta: #f0675d;
+  --alerta-suave: #3a1714;
+  --alerta-texto: #ffb4a8;
+  --cubo: #1b1b1f;
+  --sobre-cubo: #f2f1ee;
+  --sobre-cubo-2: #a8a9b0;
+  --sombra: none;
+  --sombra-alta: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  --foco: #f2f1ee;
 }
 
-/* ---------- Fintech ---------- */
-:root[data-tema='fintech'] {
-  --texto: 'Geist Variable', system-ui, sans-serif;
-  --c-rojo: #d9480f;
-  --c-naranja: #f08c00;
-  --c-amarillo: #f59e0b;
-  --c-azul: #3b5bdb;
-  --c-verde: #0b7a5c;
-  --c-tinta: #0d1117;
+/* ---------- B · Montaña ----------
+   Una app de finanzas con carácter: verde montaña como campo de la marca, amarillo solo para lo que importa
+   (el punto del logo, a quién le toca, la cifra de la bolsa) y la voz de "cuentas claras, tandas largas". */
+:root[data-tema='montana'] {
+  --c-rojo: #c4320a;
+  --c-naranja: #d9771f;
+  --c-amarillo: #f2c230;
+  --c-azul: #2f5d8a;
+  --c-verde: #146c4e;
+  --c-tinta: #0f1a16;
+  --rueda-llanta: #fefefd;
+  --rueda-trazo: #0f1a16;
 
-  --papel: #f5f6f8;
-  --superficie: #ffffff;
-  --superficie-2: #f0f2f5;
-  --tinta: #0d1117;
-  --tinta-2: #5b6472;
-  --linea: #e3e6eb;
-  --borde: #c9ced6;
+  --papel: #f4f6f4;
+  --superficie: #fefefd;
+  --superficie-2: #e9eeeb;
+  --tinta: #0f1a16;
+  --tinta-2: #4a5752;
+  --linea: #dfe5e1;
+  --borde: #83908a;
   --grosor: 1px;
-  --marca: #0b7a5c;
-  --sobre-marca: #ffffff;
-  --acento: #0b7a5c;
-  --sobre-acento: #ffffff;
-  --turno: #f59e0b;
-  --turno-suave: #fef3c7;
-  --sobre-turno: #3b2300;
-  --pago: #0e9f6e;
-  --pago-suave: #e3f6ee;
-  --pago-texto: #0b6b4b;
-  --alerta: #d9480f;
-  --alerta-suave: #fdece3;
-  --alerta-texto: #a33508;
-  --brillo: rgba(11, 122, 92, 0.22);
-  --sombra: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.06);
-  --sombra-alta: 0 16px 36px -16px rgba(16, 24, 40, 0.22), 0 1px 3px rgba(16, 24, 40, 0.06);
-  --foco: #0b7a5c;
-  --radio: 16px;
+  --marca: #0e3b2c;
+  --sobre-marca: #fefefd;
+  --marca-detalle: #f2c230;
+  --acento: #146c4e;
+  --sobre-acento: #fefefd;
+  --acento-borde: #146c4e;
+  --acento-texto: #146c4e;
+  --turno: #f2c230;
+  --turno-suave: #fdf3cf;
+  --sobre-turno: #0f1a16;
+  --pago: #146c4e;
+  --pago-suave: #e1f0e8;
+  --pago-texto: #0f5a40;
+  --alerta: #c4320a;
+  --alerta-suave: #fde9e1;
+  --alerta-texto: #9c2706;
+  --cubo: #0e3b2c;
+  --sobre-cubo: #fefefd;
+  --sobre-cubo-2: #b7cec3;
+  --brillo: rgba(20, 108, 78, 0.28);
+  --sombra: 0 1px 2px rgba(15, 26, 22, 0.05), 0 1px 3px rgba(15, 26, 22, 0.05);
+  --sombra-alta: 0 18px 40px -22px rgba(14, 59, 44, 0.35);
+  --foco: #146c4e;
+  --radio: 18px;
   --radio-chico: 12px;
+  --texto: 'Geist Variable', system-ui, sans-serif;
+  --titulos: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --titulos-peso: 750;
+  --titulos-espacio: -0.025em;
+  --titulos-ancho: 100%;
+}
+:root[data-tema='montana'][data-modo='oscuro'],
+:root[data-tema='montana']:has(.app[data-pagina='demo']) {
+  color-scheme: dark;
+  --c-verde: #4fc28f;
+  --c-tinta: #eef3f0;
+  --rueda-llanta: #121d18;
+  --rueda-trazo: #0b1310;
+  --papel: #0b1310;
+  --superficie: #121d18;
+  --superficie-2: #1a2822;
+  --tinta: #eef3f0;
+  --tinta-2: #a2b1aa;
+  --linea: #24332c;
+  --borde: #5f6e67;
+  --marca: #0b2a20;
+  --acento: #4fc28f;
+  --sobre-acento: #0b1310;
+  --acento-borde: #4fc28f;
+  --acento-texto: #7fd6ad;
+  --turno-suave: #352c0c;
+  --sobre-turno: #0b1310;
+  --pago: #4fc28f;
+  --pago-suave: #15302a;
+  --pago-texto: #8fdcb8;
+  --alerta: #ff8a65;
+  --alerta-suave: #3a1a12;
+  --alerta-texto: #ffb59c;
+  --cubo: #10402f;
+  --sombra: none;
+  --sombra-alta: 0 18px 40px -22px rgba(0, 0, 0, 0.7);
+  --foco: #7fd6ad;
+}
+
+/* ---------- C · Órbita ----------
+   La estética de las plantillas de Framer que eligió la persona (Vallure, Arewno, Payer, Cryptor): campo marino con
+   un brillo azul eléctrico, piezas blancas con sombras en capas muy suaves y una sola letra (Geist) en peso medio.
+   El azul es la marca y lo pagado; un ámbar cálido marca a quién le toca. */
+:root[data-tema='orbita'] {
+  --c-rojo: #d92d20;
+  --c-naranja: #e8772e;
+  --c-amarillo: #ffb547;
+  --c-azul: #1f4fff;
+  --c-verde: #12a150;
+  --c-tinta: #0b0d17;
+  --rueda-llanta: #ffffff;
+  --rueda-trazo: #0b0d17;
+
+  --papel: #f7f8fa;
+  --superficie: #ffffff;
+  --superficie-2: #f0f2f6;
+  --tinta: #0b0d17;
+  --tinta-2: #5d6170;
+  --linea: #e5e7ee;
+  --borde: #8e93a3;
+  --grosor: 1px;
+  --marca: #070c24;
+  --sobre-marca: #ffffff;
+  --marca-detalle: #4c7dff; /* el punto del logo y la línea bajo la barra */
+  --acento: #1f4fff;
+  --sobre-acento: #ffffff;
+  --acento-borde: #1f4fff;
+  --acento-texto: #1a44e0;
+  --turno: #ffb547;
+  --turno-suave: #fff3dc;
+  --sobre-turno: #0b0d17;
+  --pago: #1f4fff;
+  --pago-suave: #e9eeff;
+  --pago-texto: #1a3fc4;
+  --alerta: #d92d20;
+  --alerta-suave: #fdeceb;
+  --alerta-texto: #a8231a;
+  --cubo: #070c24;
+  --sobre-cubo: #ffffff;
+  --sobre-cubo-2: #aab4d8;
+  --brillo: rgba(31, 79, 255, 0.3);
+  --sombra: 0 0 0 1px rgba(11, 13, 23, 0.04), 0 1px 1px rgba(11, 13, 23, 0.04), 0 6px 12px -6px rgba(11, 13, 23, 0.08);
+  --sombra-alta: 0 0 0 1px rgba(11, 13, 23, 0.04), 0 12px 24px -12px rgba(11, 13, 23, 0.16), 0 32px 64px -32px rgba(7, 12, 36, 0.28);
+  --foco: #1f4fff;
+  --radio: 20px;
+  --radio-chico: 12px;
+  --texto: 'Geist Variable', system-ui, sans-serif;
   --titulos: 'Geist Variable', system-ui, sans-serif;
-  --titulos-peso: 650;
-  --titulos-espacio: -0.02em;
+  --titulos-peso: 560;
+  --titulos-espacio: -0.03em;
+  --titulos-ancho: 100%;
+}
+:root[data-tema='orbita'][data-modo='oscuro'],
+:root[data-tema='orbita']:has(.app[data-pagina='demo']) {
+  color-scheme: dark;
+  --c-azul: #5b84ff;
+  --c-tinta: #eef0f7;
+  --rueda-llanta: #0d1120;
+  --rueda-trazo: #05070f;
+  --papel: #05070f;
+  --superficie: #0d1120;
+  --superficie-2: #151a2e;
+  --tinta: #eef0f7;
+  --tinta-2: #9aa1b8;
+  --linea: #1d2338;
+  --borde: #4d5570;
+  --marca: #070c24;
+  --acento: #5b84ff;
+  --sobre-acento: #05070f;
+  --acento-borde: #5b84ff;
+  --acento-texto: #8eabff;
+  --turno-suave: #3a2a0c;
+  --sobre-turno: #05070f;
+  --pago: #5b84ff;
+  --pago-suave: #141d3d;
+  --pago-texto: #a9bdff;
+  --alerta: #ff7a6b;
+  --alerta-suave: #3a1714;
+  --alerta-texto: #ffb4a8;
+  --cubo: #101a4a;
+  --sombra: none;
+  --sombra-alta: 0 18px 40px -22px rgba(0, 0, 0, 0.8);
+  --foco: #8eabff;
 }
 
 *,
@@ -136,6 +315,7 @@ h2,
 h3 {
   font-family: var(--titulos);
   font-weight: var(--titulos-peso);
+  font-stretch: var(--titulos-ancho, 100%);
   letter-spacing: var(--titulos-espacio);
 }
 
@@ -182,7 +362,7 @@ dd,
   justify-content: center;
   gap: 6px 12px;
   padding: 6px 12px;
-  background: var(--c-tinta);
+  background: #14110f; /* fija: la franja no es parte de ningún diseño */
   color: #ffffff;
   font-family: var(--texto);
   font-size: 13px;
@@ -213,5 +393,26 @@ dd,
 }
 .selector-tema button[aria-pressed='true'] {
   background: #ffffff;
-  color: var(--c-tinta);
+  color: #14110f;
+}
+.selector-tema .selector-tema-modo {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+/* En el celular, las cinco opciones caben en una fila que se desliza de lado. */
+@media (max-width: 600px) {
+  .selector-tema {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .selector-tema::-webkit-scrollbar {
+    display: none;
+  }
+  .selector-tema > * {
+    flex: none;
+  }
+  .selector-tema button {
+    white-space: nowrap;
+  }
 }

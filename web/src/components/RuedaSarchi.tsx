@@ -1,54 +1,47 @@
-// La rueda de la carreta de Sarchí: cada persona es un segmento pintado de la rueda.
+// La rueda de la opción "sarchi": la rueda pintada de la carreta de Sarchí.
+// - Cada persona es un segmento; se pinta entero cuando esa persona paga la ronda (mientras no paga, apenas teñido).
+// - Los segmentos pintados llevan un filete dorado, la línea fina que pintan los artesanos de Sarchí.
 // - La rueda gira una ronda a la vez: quien cobra queda siempre arriba, bajo la flecha.
-// - El segmento se pinta entero cuando esa persona paga la ronda; mientras no paga, queda apenas teñido.
-// - La marca de visto es "ya cobró". Los nombres y números giran con la rueda pero siempre quedan derechos.
-import type { CSSProperties } from 'react'
+// - Los colores de la carreta viven solo aquí (y en el logo): el resto de la interfaz es sobria.
+import type { CSSProperties, ReactNode } from 'react'
 import type { ModeloRueda } from '../lib/rueda'
+import { arcoCentrado, orbita, segmentoAnular } from '../lib/geometria'
 
 const R_CUBO = 76 // el cubo del centro, donde va la bolsa
 const R_TIEMPO = 81 // el aro del tiempo, alrededor del cubo
 const R_ADENTRO = 89 // borde interior de los segmentos
 const R_AFUERA = 150 // borde exterior de los segmentos
 const R_NUMERO = 120 // donde va el número de turno
-const R_NOMBRE = 194 // donde van los nombres, afuera de la rueda
+const R_NOMBRE = 196 // donde van los nombres, afuera de la rueda
 const CIRC_TIEMPO = 2 * Math.PI * R_TIEMPO
 const COLORES = ['var(--c-rojo)', 'var(--c-amarillo)', 'var(--c-azul)', 'var(--c-verde)']
 
-/** Un segmento apuntando hacia arriba, de ancho 360/n grados menos una ranura. */
-function segmento(n: number): string {
-  const medio = ((180 / n - 1.4) * Math.PI) / 180
-  const p = (r: number, a: number) => `${(r * Math.sin(a)).toFixed(2)} ${(-r * Math.cos(a)).toFixed(2)}`
-  return `M ${p(R_AFUERA, -medio)} A ${R_AFUERA} ${R_AFUERA} 0 0 1 ${p(R_AFUERA, medio)} L ${p(R_ADENTRO, medio)} A ${R_ADENTRO} ${R_ADENTRO} 0 0 0 ${p(R_ADENTRO, -medio)} Z`
-}
-
-/** Lleva algo en órbita al ángulo dado, sin girarlo: así los textos quedan derechos mientras la rueda gira. */
-function orbita(angulo: number, radio: number): CSSProperties {
-  return { transform: `rotate(${angulo}deg) translate(0px, ${-radio}px) rotate(${-angulo}deg)` }
-}
-
-export function RuedaCarreta({ m, centro, etiqueta }: { m: ModeloRueda; centro: React.ReactNode; etiqueta: string }) {
+export function RuedaSarchi({ m, centro, etiqueta }: { m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
   const paso = 360 / m.n
-  const forma = segmento(m.n)
+  const forma = segmentoAnular(m.n, R_ADENTRO, R_AFUERA, 1.4)
+  const filete = arcoCentrado(m.n, R_AFUERA - 9, 5)
   return (
-    <svg className={m.activa ? 'rueda-carreta activa' : 'rueda-carreta'} viewBox="-262 -222 524 444" role="img" aria-label={etiqueta}>
+    <svg className={m.activa ? 'rueda-carreta activa' : 'rueda-carreta'} viewBox="-262 -224 524 448" role="img" aria-label={etiqueta}>
       <circle className="rc-llanta" r={R_AFUERA + 9} />
       <g className="rc-giro" style={{ transform: `rotate(${m.giro}deg)` }}>
         {m.asientos.map((a) => {
-          const clases = ['nodo', a.libre && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
+          const clases = ['nodo', `color-${a.color}`, a.libre && 'libre', a.turno && 'turno', a.pago && 'pago', a.moroso && 'moroso', a.yo && 'yo']
             .filter(Boolean)
             .join(' ')
           return (
             <g key={a.i} transform={`rotate(${a.i * paso})`}>
               <g className={clases} style={{ '--i': a.i, '--color': COLORES[a.color] } as CSSProperties}>
                 <path className="rc-segmento" d={forma} />
+                <path className="rc-filete" d={filete} />
               </g>
             </g>
           )
         })}
       </g>
 
-      {/* El cubo: la bolsa en juego y el tiempo que le queda a la ronda. */}
+      {/* El cubo: la bolsa en juego, con su filete punteado, y el tiempo que le queda a la ronda. */}
       <circle className="rc-cubo" r={R_CUBO} />
+      <circle className="rc-cubo-filete" r={R_CUBO - 8} />
       {m.activa && (
         <circle
           className={m.vencida ? 'rueda-tiempo vencida' : 'rueda-tiempo'}

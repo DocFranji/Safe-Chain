@@ -94,7 +94,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <>
             <Dato
               etiqueta="Le toca cobrar"
-              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '—'}
+              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '-'}
             />
             <Dato etiqueta="Bolsa" valor={`${monto(bolsa)} ${SIMBOLO}`} />
             <Dato

@@ -1,49 +1,43 @@
-# Design
+---
+version: alpha
+name: Rounda (tres opciones en prueba)
+description: Índice de las opciones de marca en prueba de Rounda. Cada una tiene su DESIGN.md completo en docs/disenos; cuando el equipo elija, ese archivo pasa a ser este.
+omitted:
+  - section: colors
+    reason: "Cada opción define los suyos: docs/disenos/orbita.md, sarchi.md y montana.md."
+  - section: typography
+    reason: "Por opción, en los mismos archivos."
+  - section: rounded
+    reason: "Por opción, en los mismos archivos."
+  - section: spacing
+    reason: "Por opción, en los mismos archivos."
+  - section: components
+    reason: "Por opción, en los mismos archivos."
+---
 
-Dos mundos visuales en prueba para Rounda, elegibles con `?tema=carreta|fintech` (ver `docs/diseno.md` para los
-contratos de dirección y `PRODUCT.md` para la verdad del producto). Las variables tienen el mismo nombre en los dos;
-los valores viven en `web/src/index.css` y las piezas propias de cada mundo en `web/src/temas.css` y
-`web/src/landing/landing.css`.
+# Rounda: opciones de marca en prueba
 
-## Tokens
+## Overview
 
-| Variable | Carreta de Sarchí | Fintech | Uso |
-| --- | --- | --- | --- |
-| `--papel` | `#ffffff` | `#f5f6f8` | Fondo |
-| `--superficie` | `#ffffff` | `#ffffff` | Paneles y tarjetas |
-| `--superficie-2` | `#fff3cc` | `#f0f2f5` | Resaltado suave, hover |
-| `--tinta` | `#1a1410` | `#0d1117` | Texto principal |
-| `--tinta-2` | `#5c5048` | `#5b6472` | Texto secundario (≥ 6:1 sobre blanco) |
-| `--linea` | tinta al 14 % | `#e3e6eb` | Divisiones |
-| `--borde` | `#1a1410` | `#c9ced6` | Contorno de piezas y campos |
-| `--grosor` | `2px` | `1px` | Grosor de los contornos |
-| `--marca` | `#c8261b` (rojo carreta) | `#0b7a5c` | Barra, portada, cierre |
-| `--acento` | `#1e46a8` (cobalto) | `#0b7a5c` | Acción principal |
-| `--turno` | `#f6b800` | `#f59e0b` | A quien le toca cobrar, lo elegido |
-| `--pago` | `#1e8449` | `#0e9f6e` | Pagó, correcto |
-| `--alerta` | `#b8211a` | `#d9480f` | Vencido, mora, error |
-| `--radio` / `--radio-chico` | `16px` / `10px` | `16px` / `12px` | Esquinas |
-| `--sombra` | ninguna (contorno de tinta) | sombra fina de dos capas | Profundidad |
-| `--titulos` | Bungee (400) | Geist (650, −0.02em) | Títulos y cifras grandes |
-| `--texto` | Atkinson Hyperlegible Next | Geist | Texto |
+**Órbita (C)** es la opción por defecto: la persona no se quedó con Sarchí ni con Montaña y pidió la estética y las
+animaciones de las plantillas de Framer (Vallure como base; Arewno, Payer y Cryptor para los círculos), con
+movimiento de círculos y giros porque la marca es una ronda. Sarchí y Montaña siguen en la franja "Diseño en prueba"
+para comparar. Se cambian ahí o con `?tema=orbita|sarchi|montana` antes del `#` en la URL. Todas tienen modo oscuro
+(`?modo=oscuro` o el botón de la franja).
 
-Colores de la rueda de la carreta: `--c-rojo`, `--c-amarillo`, `--c-azul`, `--c-verde` (y `--c-naranja` para la
-gráfica). Ningún segmento comparte color con sus vecinos (`coloresSinRepetir` en `web/src/lib/rueda.ts`).
+| Opción | Campo de marca | La "cosa" de Rounda | Voz | DESIGN.md |
+| --- | --- | --- | --- | --- |
+| **C · Órbita** (`?tema=orbita`, por defecto) | Marino con brillo azul eléctrico | La ronda de personas: caras que giran en órbitas y pasan por el logo; la rueda en un celular | "La tanda de siempre. Nadie se va con la plata." | `docs/disenos/orbita.md` |
+| **A · Sarchí** (`?tema=sarchi`) | Rojo carreta con fleco dorado | La rueda pintada de la carreta, que gira; sus colores solo en la rueda y la marca | "La tanda de siempre. Nadie se va con la plata." | `docs/disenos/sarchi.md` |
+| **B · Montaña** (`?tema=montana`) | Verde montaña con línea amarilla | El punto del logo da la vuelta a la rueda y señala a quien cobra | "Cuentas claras, tandas largas." | `docs/disenos/montana.md` |
 
-## Movimiento
+En todas: el nombre **Rounda** y su logo (un aro con un punto que da vueltas) en blanco sobre la barra de color, la
+rueda con un círculo central donde está la bolsa, fotos de gente en círculo con una órbita alrededor (hechas con IA
+y avisadas en el pie), español llano sin jerga cripto, y cada página vestida según su función (`docs/diseno.md`).
 
-`--ease-out: cubic-bezier(0.23, 1, 0.32, 1)` para entrar y responder; `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`
-para moverse en pantalla. `--t-presion: 140ms`, `--t-rapido: 200ms`, `--t-medio: 280ms`. La rueda de la carreta gira
-en 900 ms y pinta un segmento en 500 ms. Detalle en `docs/diseno.md`.
+## Do's and Don'ts
 
-## Componentes con carácter propio
-
-- **La rueda** (`Rueda.tsx`, `RuedaCarreta.tsx`): en la carreta, un segmento por persona dentro de una llanta blanca,
-  la flecha arriba marca quién cobra y la rueda gira una ronda a la vez; en fintech, un anillo de tiempo con un
-  círculo por persona.
-- **La barra**: roja con fleco de triángulos amarillos (carreta) o blanca con línea (fintech), pegada arriba en
-  pantallas anchas.
-- **La historia**: línea de tiempo con un punto por evento, del color de lo que pasó.
-- **Botones**: ceden al apretar (`scale(0.97)`); en la carreta, con contorno de tinta.
-
-Fuentes servidas desde el sitio (`@fontsource`): Bungee, Geist y Atkinson Hyperlegible Next.
+- Do elegir una opción y copiar su archivo de `docs/disenos/` a este DESIGN.md; después, borrar la otra (pasos en
+  `docs/diseno.md`).
+- Do pasar `npx @google/design.md lint` sobre cada DESIGN.md antes de subirlo.
+- Don't mezclar piezas de distintas opciones en una misma pantalla.

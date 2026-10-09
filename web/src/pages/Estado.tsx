@@ -103,7 +103,7 @@ export function Estado({ billetera }: { billetera: Billetera }) {
                 <div>
                   <p className="chequeo-titulo">
                     {c.titulo}
-                    <span className="sr-solo"> — {c.nivel === 'ok' ? 'bien' : c.nivel === 'aviso' ? 'aviso' : 'problema'}</span>
+                    <span className="sr-solo">: {c.nivel === 'ok' ? 'bien' : c.nivel === 'aviso' ? 'aviso' : 'problema'}</span>
                   </p>
                   <p className="chequeo-detalle">{c.detalle}</p>
                   {c.solucion && <p className="chequeo-solucion">{c.solucion}</p>}
