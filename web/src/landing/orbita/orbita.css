@@ -36,7 +36,7 @@
 
 /* ---------- Letras ---------- */
 .lo-h1 {
-  max-width: 15ch;
+  max-width: 100%;
   font-size: clamp(42px, 6.2vw, 82px);
   font-weight: 500;
   line-height: 1.02;
@@ -1275,25 +1275,46 @@
   grid-template-rows: auto auto;
   gap: 16px;
 }
+/* La foto va en un círculo con su órbita y un punto que la recorre: la misma forma del logo. */
 .lo-cifras-foto {
   grid-column: 2;
   grid-row: 1 / span 2;
   position: relative;
+  place-self: center;
+  width: min(100%, 400px);
+  aspect-ratio: 1;
   margin: 0;
-  overflow: hidden;
-  border-radius: 24px;
+}
+.lo-cifras-foto::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--lo-linea-anillo);
+}
+.lo-cifras-foto::after {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 0, var(--lo-azul) 0 6px, transparent 7px);
+  animation: lo-girar 14s linear infinite;
 }
 .lo-cifras-foto img {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 360px;
+  border-radius: 50%;
   object-fit: cover;
+  clip-path: circle(48.5% at 50% 50%);
 }
 .lo-cifras-foto figcaption {
   position: absolute;
-  left: 14px;
-  bottom: 12px;
+  left: 50%;
+  bottom: 18px;
+  z-index: 1;
+  transform: translateX(-50%);
+  white-space: nowrap;
   padding: 4px 10px;
   border-radius: 99px;
   background: rgba(7, 12, 36, 0.55);

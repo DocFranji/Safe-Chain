@@ -1,4 +1,4 @@
-# Diseño de la web: dos opciones de marca en prueba
+# Diseño de la web: opciones de marca en prueba
 
 ## Cómo llegamos aquí
 
@@ -13,15 +13,42 @@
 4. **Gente y movimiento.** La persona pidió fotos de personas, como en las páginas de Mastercard o PayPal, y
    animaciones en las dos opciones. Las fotos van en círculo con una órbita alrededor (el aro y el punto del logo) y
    todo entra con un gesto propio de cada marca.
+5. **Órbita, al nivel de Framer.** No se terminó de quedar con Sarchí ni con Montaña y pidió la estética y las
+   animaciones de las plantillas de Framer, con movimiento de círculos y giros porque la marca es una ronda. Dio
+   Vallure como ejemplo y abrió Arewno, Payer y Cryptor. Órbita pasa a ser la opción por defecto; las otras dos siguen
+   para comparar.
 
-Se cambian con la franja "Diseño en prueba" o con `?tema=sarchi|montana` antes del `#`. Las dos tienen modo oscuro:
-sigue al teléfono, o se fija con `?modo=claro|oscuro` o el botón "Modo oscuro" de la franja.
+Se cambian con la franja "Diseño en prueba" o con `?tema=orbita|sarchi|montana` antes del `#`. Todas tienen modo
+oscuro: sigue al teléfono, o se fija con `?modo=claro|oscuro` o el botón "Modo oscuro" de la franja.
 
 **Cuando el equipo elija una:** se copia su archivo de `docs/disenos/` a `DESIGN.md`; se borran `web/src/lib/tema.ts`,
-`web/src/components/SelectorTema.tsx`, el bloque de la otra opción en `web/src/index.css`, `web/src/temas.css` y
-`web/src/landing/landing.css`, y su rueda (`RuedaSarchi.tsx` o `RuedaMontana.tsx`).
+`web/src/components/SelectorTema.tsx` y los bloques de las otras opciones en `web/src/index.css` y `web/src/temas.css`.
+Si queda Órbita, se borran además la portada clásica (`Landing.tsx` queda solo con `LandingOrbita`, más
+`landing.css`, `Gente.tsx` y `RuedaSarchi.tsx`). Si queda Sarchí o Montaña, se borra `web/src/landing/orbita/` y la
+rueda de la que no quedó.
 
-## Las dos opciones
+## C · Órbita: la ronda, al nivel de Framer (`web/src/landing/orbita/`)
+
+- **THESIS.** Una app de finanzas que se siente como las mejores plantillas de Framer, y una marca que se reconoce
+  porque todo gira: una tanda es una ronda de personas.
+- **De dónde sale cada idea** (estudiadas en vivo con Playwright, sin copiar código ni imágenes):
+
+  | Referencia | Qué se tomó |
+  | --- | --- |
+  | Vallure (la base) | Campo marino con brillo azul, títulos en peso medio que entran palabra por palabra de borroso a nítido, texto que se llena al bajar, bento con microanimaciones, planes, preguntas y cierre en degradado |
+  | Arewno | Barra en píldora flotante, celular con anillo de progreso, pasos con números grandes en tarjetas que se apilan al bajar, avisos que flotan |
+  | Payer | Anillos concéntricos con caras que giran; caras alrededor de un título; el celular que se endereza al bajar |
+  | Cryptor | Una fila de círculos que pasa por un centro que brilla; ondas que se abren alrededor de un ícono |
+
+- **FIRST VIEWPORT.** "La tanda de siempre. Nadie se va con la plata." en blanco y azul claro sobre el marino. Debajo,
+  un celular con la app: la rueda de ejemplo en vivo y la lista de quién pagó, sincronizadas. Alrededor, tres anillos
+  con caras que giran y tres avisos que cambian con la ronda ("Ana pagó", la bolsa que se llena, la garantía).
+- **Gesto propio:** la ronda de personas. Nueve caras recortadas de nuestras fotos (2 a 3 KB cada una) giran en
+  órbitas en la portada, en la gente y en el cierre, y pasan una por una por el logo en el haz.
+- **La app:** hereda la estructura de Montaña (píldoras, piezas redondeadas, la rueda con el punto que da la vuelta)
+  con los colores de Órbita, una barra marina con una línea azul que brilla y Geist en peso medio.
+
+## Las opciones anteriores
 
 ### A · Sarchí: la carreta, en serio
 
@@ -48,6 +75,24 @@ sigue al teléfono, o se fija con `?modo=claro|oscuro` o el botón "Modo oscuro"
 
 **Lo que corrigen las dos:** la barra superior lleva el color de la marca con el logo en blanco, y destaca desde
 lejos. El color tiene un trabajo (marca, turno, pagado, alerta) y no se reparte por toda la página.
+
+## Movimiento de Órbita
+
+| Dónde | Qué pasa | Para qué |
+| --- | --- | --- |
+| Portada, al cargar | La promesa entra palabra por palabra, de borrosa a nítida (parte un poco visible para no retrasar el LCP); insignia, subtítulo y botones después | Presentar la marca con el ritmo de Framer |
+| Portada, siempre | Tres anillos con caras giran (70, 100 y 140 s por vuelta, dos sentidos); los avisos flotan; la rueda avanza una ronda cada 3.9 s | La ronda de personas: la marca |
+| Portada, al bajar | El celular se endereza (animación ligada al scroll, donde el navegador la permite) | Profundidad, como Payer |
+| El haz | Las caras pasan por el logo (42 s); la cinta de usos corre al revés | A cada quien le toca su turno |
+| Qué es | Cada palabra pasa de gris a tinta según el scroll | Leer al ritmo de quien baja |
+| Pasos | Las tarjetas se apilan al bajar (sticky) | Mostrar que es una secuencia |
+| Seguridad | Las barras crecen; los recibos caen y se acomodan; las ondas se abren alrededor del logo con la ronda de caras; el anillo de rendimiento se llena y su punto lo recorre | Explicar cada regla con un gesto |
+| La gente | Dos anillos de caras giran alrededor del título; las cifras cuentan desde cero; un punto recorre la foto en círculo | La gente detrás de cada tanda |
+| Preguntas | Se abren con altura animada; el + gira y se vuelve × | Leer sin saltos |
+| Cierre | Anillos con caras detrás del título | Volver a la ronda al final |
+
+Los bucles (órbitas, haz, ondas) se pausan fuera de pantalla con `data-activo`. Con "reducir movimiento" nada se
+mueve ni se esconde.
 
 ## Cada página según su función (`web/src/paginas.css`)
 
@@ -100,8 +145,10 @@ archivo (cuadrado, 640 px, u 880 px en el cierre).
   en la red del entorno. En el archivo de Figma, la página "Dos opciones" tiene una lámina por opción (portada con la
   rueda como vector, colores como variables `Rounda / Sarchí` y `Rounda / Montaña`, letra, gente, cierre y
   movimiento), con las fotos subidas en sus círculos.
-- **Context7** (fuentes de Fontsource), **Playwright** (capturas y pruebas de navegador) y el protocolo de **Chrome
-  DevTools** (CLS y LCP de la portada).
+- **Context7** (fuentes de Fontsource), **Playwright** (capturas y pruebas de navegador; también para estudiar las
+  plantillas de Framer cuadro por cuadro) y el protocolo de **Chrome DevTools** (CLS y LCP de la portada).
+- **redesign-existing-projects** (skill del repo): grano sobre los degradados, sombras teñidas, asimetría en la
+  gente, estados de hover y presión, y trabajar sobre lo que ya hay sin romper la app.
 - **Understand-Anything (Egonex-AI):** registrado en `.claude/settings.json`; solo carga en sesiones que arrancan
   desde `main`.
 

@@ -183,7 +183,7 @@ function Heroe({ refHeroe }: { refHeroe: RefObject<HTMLElement | null> }) {
           </span>
           <span>
             <strong key={ultimo + paso} className="lo-flota-cambia">
-              {ultimo} pagó
+              {ultimo === 'Tú' ? 'Pagaste' : `${ultimo} pagó`}
             </strong>
             <small>100 TUSD · ronda {e.ronda + 1}</small>
           </span>
@@ -512,6 +512,7 @@ function Seguridad() {
 
 /* ---------- La gente: la ronda de caras alrededor de la promesa, y las cifras del producto ---------- */
 function LaGente() {
+  const google = useSesionGoogle()
   return (
     <section className="lo-seccion gris lo-gente">
       <div className="lo-gente-escena">
@@ -532,7 +533,7 @@ function LaGente() {
           <figcaption>Foto ilustrativa hecha con IA.</figcaption>
         </figure>
         <Dato valor={100} sufijo=" %" texto="de tu garantía vuelve al final si cumples" />
-        <Dato valor={0} texto="contraseñas que recordar: entras con Freighter o con Google" />
+        <Dato valor={0} texto={google ? 'contraseñas que recordar: entras con Google o con Freighter' : 'contraseñas que recordar: entras con Freighter'} />
       </div>
     </section>
   )
