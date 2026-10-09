@@ -29,13 +29,13 @@ a.insignia:focus-visible {
   --nivel-color: var(--tinta-2);
 }
 .nivel-bronce {
-  --nivel-color: #e0a36b;
+  --nivel-color: #a35f22; /* bronce, legible sobre blanco */
 }
 .nivel-plata {
-  --nivel-color: #c9d6dd;
+  --nivel-color: #5d6e7a; /* plata */
 }
 .nivel-oro {
-  --nivel-color: var(--turno);
+  --nivel-color: #8f6a00; /* oro */
 }
 
 .historial {
@@ -143,4 +143,24 @@ a.insignia:focus-visible {
 }
 .nota-historial {
   margin: 0.5rem 0;
+}
+
+/* Perfil (v4, N4) */
+.perfil > section {
+  margin-top: 1.5rem;
+}
+.perfil-apodo label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+}
+.perfil-apodo input[aria-invalid='true'] {
+  border-color: var(--alerta);
+}
+.perfil-deudas .lista-deudas {
+  padding-left: 0;
+  list-style: none;
+}
+.perfil-deudas .lista-deudas li {
+  margin-bottom: 1rem;
 }

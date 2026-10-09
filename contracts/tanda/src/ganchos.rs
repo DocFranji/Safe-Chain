@@ -7,6 +7,8 @@
 //! Reglas:
 //! - **Nunca hacen fallar la operación principal por un problema del historial**: las escrituras
 //!   usan `try_*` y descartan el error. Si no hay historial configurado, no hacen nada.
+//!   (`puede_unirse` bloquea a quien tiene una mora sin saldar en cualquier tanda, pero si el
+//!   historial no responde, deja pasar.)
 //!   (Única excepción: `puede_unirse` en una tanda que PIDIÓ puntaje mínimo; si el historial no
 //!   responde, no deja entrar.)
 //! - **Son baratas**: dentro de los bucles (`cerrar_ronda`, `finalizar`) solo anotan el hecho en un
@@ -94,6 +96,13 @@ pub(crate) fn puede_unirse(env: &Env, t: &Tanda, id: u32, miembro: &Address) -> 
     let clave = ClaveM2::Requisitos(id);
     if env.storage().persistent().has(&clave) {
         renovar_para_tanda(env, t, &clave);
+    }
+    // (v4, N2) Quien tiene una mora sin saldar en cualquier tanda no entra a otra hasta pagarla.
+    // Si el historial no responde, no se bloquea: un problema del historial no traba la tanda.
+    if let Some(h) = direccion_historial(env) {
+        if let Ok(Ok(true)) = HistorialClient::new(env, &h).try_tiene_mora(miembro) {
+            return Err(Error::DeudaPendiente);
+        }
     }
     let req = requisitos_de(env, id);
     if req.puntaje_minimo == 0 {

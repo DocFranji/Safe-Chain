@@ -63,7 +63,7 @@ export function Historial({ dir, billetera }: Props) {
           {estado.texto}
         </p>
       ) : (
-        <Ficha dir={quien} h={estado.historial} esMio={esMio} esGoogle={esMio && billetera.tipo === 'google'} />
+        <FichaHistorial dir={quien} h={estado.historial} esMio={esMio} esGoogle={esMio && billetera.tipo === 'google'} />
       )}
 
       <Buscar />
@@ -72,7 +72,18 @@ export function Historial({ dir, billetera }: Props) {
   )
 }
 
-function Ficha({ dir, h, esMio, esGoogle }: { dir: string; h: DatosHistorial; esMio: boolean; esGoogle: boolean }) {
+type PropsFicha = {
+  dir: string
+  h: DatosHistorial
+  esMio: boolean
+  esGoogle: boolean
+  /** Dentro del Perfil: el título es un h2 (la página ya tiene su h1). */
+  enPerfil?: boolean
+}
+
+/** La ficha del historial de una dirección. La usan esta página y el Perfil (N4). */
+export function FichaHistorial({ dir, h, esMio, esGoogle, enPerfil = false }: PropsFicha) {
+  const Titulo = enPerfil ? 'h2' : 'h1'
   const puntaje = puntajeDe(h)
   const nivel = nivelDePuntaje(puntaje)
   const sig = siguienteNivel(puntaje)
@@ -93,9 +104,9 @@ function Ficha({ dir, h, esMio, esGoogle }: { dir: string; h: DatosHistorial; es
           </div>
         </div>
         <div className="historial-resumen">
-          <h1 id="historial-titulo">
+          <Titulo id="historial-titulo">
             {nombre} <Insignia nivel={nivel} puntaje={puntaje} />
-          </h1>
+          </Titulo>
           <p className="historial-dir">{dir}</p>
           <p>
             <strong>{puntaje} puntos</strong> · nivel {nivel}
@@ -112,8 +123,9 @@ function Ficha({ dir, h, esMio, esGoogle }: { dir: string; h: DatosHistorial; es
 
       {tieneMoraPendiente(h) && (
         <p className="aviso error">
-          Tiene una deuda sin saldar en alguna tanda. Mientras no la pague no recibe beneficios, aunque su puntaje dé
-          un nivel.
+          {esMio
+            ? 'Tienes una deuda sin saldar en alguna tanda. Mientras no la pagues no puedes unirte a otra tanda ni recibir beneficios.'
+            : 'Tiene una deuda sin saldar en alguna tanda. Mientras no la pague no puede unirse a otra tanda ni recibir beneficios, aunque su puntaje dé un nivel.'}
         </p>
       )}
 

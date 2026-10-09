@@ -347,19 +347,23 @@ impl TandaContract {
     /// Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
     /// - Quien no pagó: su colateral cubre la cuota. Si no alcanza, queda moroso.
     /// - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
+    /// - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
+    ///   fechas no se mueven: la ronda siguiente vence cuando le tocaba.
     pub fn cerrar_ronda(env: Env, id: u32) -> Result<(), Error> {
         let mut t = cargar_tanda(&env, id)?;
         if t.estado != Estado::Activa {
             return Err(Error::EstadoInvalido);
         }
         let ahora = env.ledger().timestamp();
-        if ahora < t.inicio_ronda + t.periodo_seg {
-            return Err(Error::RondaNoVencida);
+        let vence = t.inicio_ronda + t.periodo_seg;
+        let miembros = cargar_miembros(&env, id);
+        let antes = ahora < vence;
+        if antes {
+            tiempos::revisar_cierre_anticipado(&env, &t, id, &miembros)?; // M1 v4
         }
 
         let yo = env.current_contract_address();
         let boveda = BovedaClient::new(&env, &boveda_de(&env, id, &t)?);
-        let miembros = cargar_miembros(&env, id);
         let ronda = t.ronda_actual;
         let mut bolsa: i128 = 0;
         // M1: lo que cada moroso no alcanzó a cubrir esta ronda (se le debe a quien cobra).
@@ -461,10 +465,14 @@ impl TandaContract {
             monto_pagado,
         }
         .publish(&env);
+        if antes {
+            EvCierreAnticipado { id, ronda, vence }.publish(&env); // M1 v4
+        }
 
         // M1: calendario anclado. La siguiente ronda vence un periodo después de la anterior, aunque
-        // el cierre llegue tarde; si llegó tardísimo, igual deja al menos min(periodo, 3 días) para
-        // pagar, así nadie queda "tarde" por culpa de un cierre atrasado (ver `tiempos.rs`).
+        // el cierre llegue tarde (o antes, v4); si llegó tardísimo, igual deja al menos
+        // min(periodo, 3 días) para pagar, así nadie queda "tarde" por culpa de un cierre atrasado
+        // (ver `tiempos.rs`).
         t.ronda_actual += 1;
         t.inicio_ronda = tiempos::inicio_siguiente(&t, ahora);
         if t.ronda_actual == t.n_miembros {
@@ -577,6 +585,14 @@ impl TandaContract {
             if k == 0 {
                 sin_repartir = pozo;
             } else {
+                // M1 v4: si se repartieron bolsas retenidas, anota a quiénes (para `pagar_deuda`).
+                if t.retenido > 0 {
+                    let mut elegidos: Vec<Address> = Vec::new(&env);
+                    for i in elegibles.iter() {
+                        elegidos.push_back(miembros.get(i).unwrap());
+                    }
+                    deudas::anotar_reparto(&env, id, &elegidos);
+                }
                 let parte = pozo / k;
                 let resto = pozo - parte * k;
                 for (j, i) in elegibles.iter().enumerate() {
@@ -608,6 +624,7 @@ impl TandaContract {
 
         t.estado = Estado::Finalizada;
         guardar_tanda(&env, id, &t);
+        deudas::al_finalizar(&env, &t, id, &datos); // M1 v4: si alguien debe, sus datos viven más
         EvFinalizada {
             id,
             rendimiento,

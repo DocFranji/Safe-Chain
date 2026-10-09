@@ -221,7 +221,11 @@ pub(crate) fn renovar_para_tanda<K: IntoVal<Env, Val>>(env: &Env, t: &Tanda, cla
 /// miembros, cada miembro, sus deudas, la bóveda de la tanda (su clave, y la instancia y el código
 /// del contrato de la bóveda) y la instancia de este contrato. La llama `guardar_tanda`.
 pub(crate) fn renovar_tanda(env: &Env, id: u32, t: &Tanda) {
-    let vida = vida_tanda(env, t);
+    renovar_tanda_con_vida(env, id, t, vida_tanda(env, t));
+}
+
+/// Como `renovar_tanda`, pero con una vida dada (v4: una tanda finalizada con deudas vive lo máximo).
+pub(crate) fn renovar_tanda_con_vida(env: &Env, id: u32, t: &Tanda, vida: u32) {
     let p = env.storage().persistent();
     renovar(env, &DataKey::Tanda(id), vida);
 

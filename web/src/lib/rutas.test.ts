@@ -55,3 +55,10 @@ describe('ruta del historial (M2)', () => {
     expect(parsearRuta(`#/historial/${G.toLowerCase()}`)).toEqual({ tipo: 'desconocida' })
   })
 })
+
+describe('ruta del perfil (M2, N4)', () => {
+  it('reconoce #/perfil', () => {
+    expect(parsearRuta('#/perfil')).toEqual({ tipo: 'perfil' })
+    expect(parsearRuta('#/perfil/')).toEqual({ tipo: 'perfil' })
+  })
+})

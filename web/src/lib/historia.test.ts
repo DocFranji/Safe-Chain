@@ -102,7 +102,7 @@ describe('narrar: la historia de la demo', () => {
 
   it('no se rompe si faltan datos', () => {
     const [h] = narrar([ev({ name: 'EvCubierto', data: { id: 1 } })], f)
-    expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió —')
+    expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió -')
   })
 })
 
@@ -243,6 +243,31 @@ describe('narrar: pagar deudas (M1)', () => {
     expect(abono).toMatchObject({ tipo: 'info', titulo: '100 TUSD se sumaron a la bolsa retenida de Carla' })
     expect(rec).toMatchObject({ tipo: 'ok', titulo: 'Carla recuperó su bolsa: 190 TUSD' })
     expect(rec.detalle).toBe('Se descontaron 10 TUSD de multas · 100 TUSD quedan como su garantía para las cuotas que le faltan')
+  })
+})
+
+describe('narrar: cerrar antes y pagar después de terminar (M1 v4)', () => {
+  it('cuenta que todos pagaron y la ronda se cerró antes', () => {
+    const [h] = narrar([ev({ name: 'EvCierreAnticipado', data: { id: 1, ronda: 1, vence: 1_000n } })], f)
+    expect(h).toMatchObject({ tipo: 'clave', titulo: 'Todos pagaron: la ronda 2 se cerró antes' })
+    expect(h.detalle).toContain('Las fechas no cambian')
+  })
+
+  it('pago después de terminar: directo a quien cobró de menos o su parte del reparto', () => {
+    const [directo, reparto] = narrar(
+      [
+        ev({ name: 'EvAbonoFinal', data: { id: 1, deudor: 'GANA', hacia: 'GCARLA', monto: 100n * U, reparto: false } }),
+        ev({ name: 'EvAbonoFinal', data: { id: 1, deudor: 'GCARLA', hacia: 'GBETO', monto: 50n * U, reparto: true } }),
+      ],
+      f,
+    )
+    expect(directo).toMatchObject({
+      tipo: 'clave',
+      titulo: 'Carla recibió los 100 TUSD que le faltaban',
+      detalle: 'Lo pagó Ana, con la tanda ya terminada',
+    })
+    expect(reparto).toMatchObject({ tipo: 'ok', titulo: 'Beto recibió 50 TUSD' })
+    expect(reparto.detalle).toContain('Su parte de lo que debía Carla')
   })
 })
 

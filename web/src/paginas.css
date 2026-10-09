@@ -1,0 +1,193 @@
+/*
+ * Cada página de la app se viste según su función (App.tsx pone data-pagina en .app con el tipo de ruta).
+ * Sirve igual para las dos opciones de marca: todo sale de las variables de index.css.
+ *   tandas    comparar y elegir: la bolsa y los lugares libres se leen de un vistazo.
+ *   tanda     pagar y cobrar: la acción principal grande; en el celular, el panel va antes de la rueda.
+ *   crear     un formulario tranquilo: campos amplios y la vista previa siempre a la vista.
+ *   demo      un escenario para proyectar: oscuro, letra grande y la rueda al centro (ver index.css).
+ *   historial y perfil   para leer: una columna, el nivel como un sello y la historia con aire.
+ *   estado    un diagnóstico: compacto, con los datos técnicos en letra de ancho fijo.
+ */
+
+/* ---------- Encabezado de cada página: título y su acción, con aire debajo de la barra ---------- */
+.app[data-pagina] .selector {
+  margin-top: 40px;
+}
+.app[data-pagina] .migas + .selector {
+  margin-top: 8px;
+}
+.app[data-pagina] .migas {
+  margin-top: 28px;
+  font-size: 15px;
+}
+.app[data-pagina] .migas a {
+  color: var(--acento-texto);
+  font-weight: 600;
+  text-decoration: none;
+}
+.app[data-pagina] .migas a:hover {
+  text-decoration: underline;
+}
+
+/* =====================================================================================================
+   TANDAS: comparar y elegir
+   ===================================================================================================== */
+.app[data-pagina='lobby'] .lobby-intro {
+  max-width: 58ch;
+  font-size: 17px;
+}
+.app[data-pagina='lobby'] .tarjetas {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 18px;
+}
+.app[data-pagina='lobby'] .tarjeta {
+  gap: 8px;
+  padding: 22px;
+}
+/* Lo que decide: cuánto es la bolsa. */
+.app[data-pagina='lobby'] .tarjeta-bolsa strong {
+  font-size: 30px;
+  line-height: 1.1;
+}
+.app[data-pagina='lobby'] .lugares {
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+.app[data-pagina='lobby'] .lugar {
+  width: 16px;
+  height: 16px;
+}
+/* Una tanda abierta se puede elegir: su línea de entrada se lee primero. */
+.app[data-pagina='lobby'] .tarjeta:has(.etiqueta.abierta) .tarjeta-detalle {
+  color: var(--tinta);
+  font-weight: 700;
+}
+
+/* =====================================================================================================
+   TANDA: pagar y cobrar
+   ===================================================================================================== */
+.app[data-pagina='tanda'] .escenario {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 36px;
+}
+.app[data-pagina='tanda'] .panel {
+  padding: 26px;
+}
+/* La acción del momento (pagar, cobrar, unirse) es la pieza más grande del panel. */
+.app[data-pagina='tanda'] .acciones .boton.principal {
+  width: 100%;
+  min-height: 56px;
+  font-size: 18px;
+}
+.app[data-pagina='tanda'] .dato dd {
+  font-size: 21px;
+}
+@media (max-width: 780px) {
+  /* En el celular se viene a pagar: el panel va primero y la rueda, más chica, debajo. */
+  .app[data-pagina='tanda'] .escenario {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .app[data-pagina='tanda'] .escenario > .columna {
+    order: -1;
+  }
+  .app[data-pagina='tanda'] .escenario .rueda > svg {
+    max-width: 420px;
+  }
+}
+
+/* =====================================================================================================
+   CREAR: un formulario tranquilo
+   ===================================================================================================== */
+.app[data-pagina='crear'] .selector h1 {
+  font-size: 34px;
+}
+.app[data-pagina='crear'] .crear-columnas {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr);
+  gap: 28px;
+}
+.app[data-pagina='crear'] .formulario {
+  padding: 28px;
+}
+.app[data-pagina='crear'] .campo > label {
+  font-weight: 600;
+}
+.app[data-pagina='crear'] :is(.campo input:not([type='range']):not([type='checkbox']), .campo select) {
+  min-height: 52px;
+  font-size: 17px;
+}
+/* La vista previa acompaña mientras se llena el formulario. */
+@media (min-width: 781px) {
+  .app[data-pagina='crear'] .vista-previa {
+    position: sticky;
+    top: 96px;
+  }
+}
+@media (max-width: 780px) {
+  .app[data-pagina='crear'] .crear-columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================================================================
+   DEMO: un escenario para proyectar (los colores oscuros de la marca los pone index.css)
+   ===================================================================================================== */
+.app[data-pagina='demo']::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60% 50% at 30% 20%, color-mix(in srgb, var(--marca) 45%, transparent), transparent 70%),
+    var(--papel);
+  pointer-events: none;
+}
+.app[data-pagina='demo'] {
+  max-width: 1240px;
+}
+/* "Tanda 2" no se parte: si no cabe, las etiquetas bajan. */
+.app[data-pagina='demo'] .demo-cabeza {
+  flex-wrap: wrap;
+}
+.app[data-pagina='demo'] .demo-cabeza h1 {
+  font-size: clamp(40px, 6vw, 72px);
+  font-stretch: var(--titulos-ancho, 100%);
+  white-space: nowrap;
+}
+.app[data-pagina='demo'] .demo .rueda svg {
+  max-width: 620px;
+}
+.app[data-pagina='demo'] :is(.demo-ahora, .demo-persona) {
+  border-color: var(--linea);
+  background: var(--superficie);
+}
+
+/* =====================================================================================================
+   HISTORIAL Y PERFIL: para leer
+   ===================================================================================================== */
+.app:is([data-pagina='historial'], [data-pagina='perfil']) .historial {
+  max-width: 44rem;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.app:is([data-pagina='historial'], [data-pagina='perfil']) .historial-resumen h1 {
+  font-stretch: var(--titulos-ancho, 100%);
+}
+.app:is([data-pagina='historial'], [data-pagina='perfil']) .historia-item {
+  padding-block: 4px;
+}
+
+/* =====================================================================================================
+   ESTADO: un diagnóstico
+   ===================================================================================================== */
+.app[data-pagina='estado'] .chequeos {
+  gap: 8px;
+}
+.app[data-pagina='estado'] .chequeo {
+  padding: 12px 16px;
+}
+.app[data-pagina='estado'] :is(.chequeo-detalle, .chequeo-solucion) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}

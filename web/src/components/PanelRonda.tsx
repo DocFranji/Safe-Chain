@@ -9,6 +9,7 @@ import { BotonesEntrar } from './BotonesEntrar'
 import { AccionesTurnos } from './AccionesTurnos'
 import { PagarDeuda } from './PagarDeuda'
 import { CerrarRonda } from './CerrarRonda'
+import { puedeCerrarAntes } from '../lib/cobro'
 import { NotaHistorial } from './NotaHistorial'
 import { useGarantiaConHistorial } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
@@ -47,6 +48,8 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   const colateralSiguiente = historial.garantia ?? colateralNormal
   const restante = vence - ahora
   const vencida = estado === 'Activa' && restante <= 0
+  // M1 v4: si todos pagaron, la ronda se puede cerrar antes (menos en la subasta).
+  const antes = puedeCerrarAntes(tanda, pagaron.length, modo, ahora)
   const beneficiario = estado === 'Activa' ? miembros.find((m) => m.posicion === tanda.ronda_actual) : undefined
   const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
   const multa = (tanda.cuota * BigInt(tanda.penalidad_bps)) / 10_000n
@@ -91,7 +94,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <>
             <Dato
               etiqueta="Le toca cobrar"
-              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '—'}
+              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '-'}
             />
             <Dato etiqueta="Bolsa" valor={`${monto(bolsa)} ${SIMBOLO}`} />
             <Dato
@@ -164,7 +167,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
 
             <PagarDeuda id={id} datos={datos} yo={yo} saldo={saldo} alCambiar={alCambiar} />
 
-            {estado === 'Activa' && vencida && (
+            {estado === 'Activa' && (vencida || antes) && (
               <CerrarRonda
                 miembros={miembros}
                 pagaron={pagaron}
@@ -172,12 +175,20 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 beneficiario={beneficiario}
                 yo={yo}
                 ocupado={ocupado}
+                antes={antes}
+                siguienteVence={vence + Number(tanda.periodo_seg)}
+                ahora={ahora}
                 cerrar={(textoListo) => ejecutar((c) => c.cerrar_ronda({ id }), textoListo)}
               />
             )}
 
-            {estado === 'Activa' && !vencida && pagaron.length === tanda.n_miembros && (
-              <p className="explica">Todos pagaron. La bolsa se entrega al cerrar la ronda, cuando termine el plazo.</p>
+            {estado === 'Activa' && !vencida && !antes && pagaron.length === tanda.n_miembros && (
+              <p className="explica">
+                Todos pagaron.{' '}
+                {modo === 'Subasta'
+                  ? 'En la subasta la bolsa se entrega al cerrar la ronda, cuando termine el plazo: hasta entonces se puede ofertar.'
+                  : 'Ya se adelantaron varias rondas, así que esta se puede cerrar cuando falten menos de 4 meses para la próxima fecha límite.'}
+              </p>
             )}
 
             {estado === 'PorLiquidar' && (

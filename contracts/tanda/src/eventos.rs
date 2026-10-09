@@ -306,3 +306,32 @@ pub struct EvBovedaToken {
     pub token: Address,
     pub boveda: Option<Address>,
 }
+
+// ---------------------------------------------------------------------------
+// --- M1 (v4): cerrar la ronda antes ---
+// ---------------------------------------------------------------------------
+
+/// Todos pagaron y la ronda `ronda` se cerró antes de su fecha límite (`vence`). Las fechas no se
+/// mueven: la ronda siguiente se puede pagar desde ya y vence un periodo después de `vence`.
+#[contractevent(topics = ["antes"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvCierreAnticipado {
+    #[topic]
+    pub id: u32,
+    pub ronda: u32,
+    pub vence: u64,
+}
+
+/// Un pago de deuda hecho después de finalizar la tanda llegó directo a `hacia` (sin pasar por el
+/// contrato). `reparto`: `false` si `hacia` cobró de menos por esa deuda; `true` si es su parte, en
+/// partes iguales, de lo que se debía a bolsas retenidas que se repartieron al finalizar.
+#[contractevent(topics = ["abono_fin"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvAbonoFinal {
+    #[topic]
+    pub id: u32,
+    pub deudor: Address,
+    pub hacia: Address,
+    pub monto: i128,
+    pub reparto: bool,
+}

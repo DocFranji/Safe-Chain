@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Historial } from 'historial'
-import { desglose, descuentoDe, esDireccion, nivelDePuntaje, puntajeDe, siguienteNivel, sinHistorial } from './historial'
+import { desglose, descuentoDe, esDireccion, nivelDePuntaje, problemaApodo, puntajeDe, siguienteNivel, sinHistorial } from './historial'
 
 const vacio: Historial = {
   cuotas_a_tiempo: 0,
@@ -68,5 +68,22 @@ describe('esDireccion', () => {
     expect(esDireccion('GB2NSL6')).toBe(false)
     expect(esDireccion('G' + 'A'.repeat(55))).toBe(false) // forma correcta, código de verificación no
     expect(esDireccion('hola')).toBe(false)
+  })
+})
+
+describe('problemaApodo (mismas reglas que el contrato)', () => {
+  it('acepta nombres comunes con tildes y ñ', () => {
+    for (const a of ['Ana', 'Jo', 'Doña Ñeca', 'José_23', 'a.b-c', 'Mamá Rosa', 'x'.repeat(24)]) {
+      expect(problemaApodo(a), a).toBeNull()
+    }
+  })
+  it('explica qué está mal', () => {
+    expect(problemaApodo('A')).toMatch(/al menos 2/)
+    expect(problemaApodo('x'.repeat(25))).toMatch(/máximo 24/)
+    expect(problemaApodo(' Ana')).toMatch(/espacios del inicio/)
+    expect(problemaApodo('Ana  Bo')).toMatch(/dos espacios/)
+    expect(problemaApodo('ana@x')).toMatch(/solo letras/)
+    expect(problemaApodo('аna')).toMatch(/solo letras/) // "а" cirílica
+    expect(problemaApodo('😀😀')).toMatch(/solo letras/)
   })
 })

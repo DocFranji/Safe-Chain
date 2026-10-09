@@ -254,3 +254,129 @@ Cada mejora va en su propio PR hacia `integracion`. Ninguna cambia el contrato: 
 - **Por qué sirve:** como el contrato ancla el calendario, las fechas no se corren aunque una ronda se cierre tarde.
 - **Dónde:** botón en `Calendario.tsx`, solo para quien participa y en tandas con rondas de un día o más. Todo se arma en el navegador: no hay servidor ni llaves.
 - **Pruebas:** `calendarioIcs.test.ts` (fechas ancladas, títulos, escape y plegado de líneas de 75 bytes con tildes, UID estable, calendario vacío) y un escenario de navegador que baja el archivo y revisa su contenido.
+
+## 8. Plan v4 (miércoles 7 de octubre): N3 y N2b
+
+Decisiones del equipo en `agentes/PLAN-V4.md` (rama `mision/orquestador`). Propuesta de interfaz en el tablero
+(issue #4, comentario de arranque de M1 v4).
+
+### N3. Cerrar la ronda antes si todos pagaron
+
+**Regla** (`tiempos::revisar_cierre_anticipado`, la llama `cerrar_ronda` solo si `ahora < vence`):
+
+| Situación antes de la fecha límite | Resultado |
+| --- | --- |
+| Todos pagaron la ronda en curso | Se cierra: quien cobra recibe ya. Evento `antes` (`EvCierreAnticipado { id, ronda, vence }`) |
+| Falta alguien por pagar | Error 9 `RondaNoVencida` (como siempre) |
+| La tanda es de subasta (abierta o sellada) | Error 60 `SubastaNoCierraAntes`: las ofertas están abiertas hasta que vence |
+| La fecha límite siguiente quedaría a más de 120 días | Error 61 `CierreMuyAdelantado` |
+
+**Las fechas no se mueven.** No se guarda nada nuevo: la fórmula anclada de `tiempos::inicio_siguiente` ya da
+`vence_siguiente = vence_anterior + periodo` cuando el cierre llega antes. `inicio_ronda` sigue significando
+"fecha límite − periodo" y, tras un cierre anticipado, queda **en el futuro**: la ronda siguiente ya está abierta
+(se puede pagar desde ya, sin atraso) y vence cuando le tocaba.
+
+Revisé todos los usos de `inicio_ronda`:
+
+| Uso | Con `inicio_ronda` en el futuro |
+| --- | --- |
+| Pago tarde (`pagar_cuota`) | Sin cambio: solo compara con `inicio_ronda + periodo` |
+| `get_ronda`, calendario `.ics` y la web (`vence`) | Sin cambio: usan la fecha límite |
+| TTL (`vida_tanda`, `vida_ronda`) | Sin cambio: `saturating_*`, solo vive un poco más |
+| Mitad de ronda y ventana de ofertas (subasta sellada) | No aplica: en la subasta no hay cierre anticipado |
+| "Tu bolsa está lista" en el lobby (`bolsaListaParaCobrar`) | Sin cambio: solo cuando vence (la tarjeta no conoce los pagos). En la página de la tanda sí sale el botón anticipado |
+
+**Por qué el tope de 120 días.** Las invariantes al azar lo encontraron. Con rondas mensuales, si todos pagan
+varias rondas seguidas y se cierran en el momento, cada cierre aleja la fecha límite un mes más. Con 7 cierres
+seguidos la siguiente quedaba a ~200 días, más que la vida máxima de un dato en la red (~180 días), y los datos se
+archivaban antes de que alguien tuviera que tocarlos. Con el tope:
+
+- quedan al menos 60 días de margen entre la vida de los datos y la fecha límite, como con una ronda normal;
+- con rondas mensuales se pueden adelantar unas 3 rondas;
+- con la ronda más larga (90 días), solo se puede cerrar antes en sus últimos 30 días;
+- la demo de 1 minuto no se ve afectada.
+
+**Web.**
+- `CerrarRonda` muestra "Todos pagaron: cobra tu bolsa ya" a quien cobra y "Todos pagaron: cerrar ya y pagarle a
+  Carla" a los demás, con la fecha de la próxima ronda (que no cambia).
+- La regla está duplicada en `web/src/lib/cobro.ts` (`puedeCerrarAntes`), con sus pruebas.
+- En la subasta, o si ya se adelantaron demasiadas rondas, explica por qué no se puede cerrar todavía.
+
+### N2b. Pagar la deuda después de que la tanda termina
+
+`pagar_deuda` (misma firma) acepta también `Estado::Finalizada`. Después de finalizar, el contrato ya no guarda
+dinero de esa tanda: **el pago va directo de quien paga a quien le corresponde**, sin pasar por el contrato ni por la
+bóveda (`deudas::pagar_tras_finalizar`). Se recorre del faltante más viejo al más nuevo:
+
+| A quién se le debe ese faltante | A dónde va el pago |
+| --- | --- |
+| A alguien que **sí cobró** su bolsa (recibió de menos) | A esa persona |
+| A alguien cuya bolsa **se retuvo** por mora y se repartió al finalizar | En partes iguales a **quienes recibieron ese reparto** |
+| A **su propia ronda** (su bolsa se retuvo y se repartió) | Igual: a quienes recibieron el reparto |
+| Nadie recibió el reparto (todos terminaron en mora) | A quien cobró de menos (en el caso propio no se mueve dinero) |
+
+**Caso especial: su propia ronda.** Mientras la tanda corre, pagar ese faltante completa su propia bolsa
+retenida, y al saldar la recupera. Al finalizar, esa bolsa (sin su cuota) se repartió entre quienes cumplieron:
+ellos son quienes perdieron ese dinero, así que el pago les llega a ellos. **No se cancela al finalizar**, por dos
+razones:
+
+- `Miembro.deuda` sigue siendo exactamente lo que se debe. Es lo que muestran el Perfil de M2 y la web.
+- Cancelarlo dejaría a alguien con `deuda = 0` y sin `DeudaSaldada` en el historial: quedaría bloqueado para siempre
+  por N2a.
+
+**Quiénes recibieron el reparto** se anota al finalizar, en `ClaveM1::Repartidos(id)`. Es **una sola escritura** y
+solo si hubo bolsa retenida.
+
+**Saldar después de finalizar:**
+- No devuelve la bolsa retenida, porque ya se repartió.
+- Sí deja a la persona al día (`moroso = false`).
+- Llama `ganchos::al_pagar_deuda(.., 0)` una sola vez, así que el historial anota `DeudaSaldada` y la persona se
+  desbloquea (N2a de M2).
+
+**Presupuesto.** Se junta lo de cada persona y se le paga una vez (`Map`): a lo sumo 11 transferencias directas
+más 11 del reparto, aunque la deuda tenga faltantes de 10 rondas. Evento por cada transferencia: `abono_fin`
+(`EvAbonoFinal { id, deudor, hacia, monto, reparto }`).
+
+**Vida de los datos.**
+- Si al finalizar alguien queda debiendo, todo lo de la tanda (tanda, lista, miembros, deudas, reparto) se renueva
+  al máximo de la red, ~180 días (`deudas::al_finalizar`).
+- Cada pago posterior lo vuelve a renovar.
+- Si aun así algo se archiva (nadie paga en 6 meses), la web lo restaura sola al firmar (`restore: true` en
+  `contrato.ts`).
+
+**Web.**
+- `PagarDeuda` aparece también en tandas terminadas.
+- Dice a quién le llega cada parte ("Tu propia bolsa: se repartió al final, así que va a quienes la recibieron").
+- No promete recuperar la bolsa y explica que la deuda impide unirse a otras tandas.
+- El Perfil de M2 llama `pagar_deuda(id, yo, yo, deuda)` y enlaza a `#/tanda/N` para el detalle.
+
+### Pruebas v4
+
+- `test_tiempos.rs`:
+  - `todos_pagaron_se_cierra_antes_y_las_fechas_no_se_mueven`
+  - `no_se_cierra_antes_si_falta_alguien_por_pagar`
+  - `tras_un_cierre_anticipado_la_ronda_siguiente_vence_en_su_fecha`
+  - `cierre_anticipado_en_cada_modo_menos_subasta`
+  - `los_cierres_anticipados_tienen_un_tope_de_120_dias`
+  - peor caso con 12, nativo y WASM
+- `test_deudas.rs`:
+  - `pagar_deuda_en_cada_estado`
+  - `despues_de_finalizar_el_pago_va_directo_a_quien_cobro_de_menos`: en partes, por un familiar, pagar de más y sin deuda
+  - `..._su_propia_ronda_va_a_quienes_recibieron_el_reparto`: con redondeo
+  - `..._sin_reparto_va_a_quien_cobro_de_menos`
+  - `saldar_despues_de_finalizar_anota_deuda_saldada_en_el_historial`
+  - `la_deuda_se_puede_pagar_meses_despues_de_finalizar`: 300 días, sin datos archivados
+  - peor caso con 12, nativo y WASM
+- `test_invariantes.rs`:
+  - cierres anticipados (también los que deben fallar) y pagos de deuda después de finalizar, con el reparto
+    calculado aparte;
+  - se revisa que no toquen el dinero del contrato y que `Repartidos` sea el esperado.
+
+Peor caso medido (WASM, límites de mainnet: 100 M instrucciones, 50 escrituras, 16 KiB de eventos):
+
+| Operación | Instrucciones | Lecturas | Escrituras |
+| --- | --- | --- | --- |
+| `cerrar_ronda` antes (12, todos pagaron) | 4,3 M | 50 | 4 |
+| `cerrar_ronda` antes que falla (11 de 12) | 1,3 M | 17 | 0 |
+| `finalizar` con deudas (renueva al máximo, anota el reparto) | 15,2 M | 49 | 29 |
+| `pagar_deuda` después de finalizar (10 faltantes, reparto entre 11) | 9,8 M | 47 | 15 |

@@ -3,7 +3,7 @@
 // justo después de crear la tanda, antes de que entre nadie. Si no hay historial, no se muestra.
 import { useDireccionHistorial, useHistorialCacheado } from '../hooks/useHistorial'
 import { NIVELES, hayRequisitos, nivelDePuntaje, puntajeDe, type OpcionesDeHistorial } from '../lib/historial'
-import { RUTA_MI_HISTORIAL } from '../lib/rutas'
+import { RUTA_PERFIL } from '../lib/rutas'
 import './historial.css'
 
 type Props = {
@@ -76,7 +76,7 @@ function Opciones({ valor, alCambiar, yo, unirmeYo }: Props) {
       {noAlcanzo && (
         <p className="aviso nota">
           Tu historial tiene {miPuntaje} puntos: con este requisito no podrías unirte. Baja el nivel o desmarca «Unirme
-          yo también». <a href={RUTA_MI_HISTORIAL}>Ver mi historial</a>
+          yo también». <a href={RUTA_PERFIL}>Ver mi historial</a>
         </p>
       )}
       {hayRequisitos(valor) && (
