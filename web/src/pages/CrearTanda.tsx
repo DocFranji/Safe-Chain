@@ -20,10 +20,11 @@ import {
   type ParametrosTanda,
 } from '../lib/colateral'
 import { aSegundos, parseMonto, type UnidadPeriodo } from '../lib/entradas'
-import { duracion, fechaLarga, monto } from '../lib/formato'
+import { duracion, fechaLarga } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { RUTA_LOBBY, irA, rutaTanda } from '../lib/rutas'
 import { OpcionesMoneda } from '../components/OpcionesMoneda'
-import { MonedaContexto, useSaldoEn, useSimbolo } from '../hooks/useMoneda'
+import { MonedaContexto, useSaldoEn } from '../hooks/useMoneda'
 import { TUSD, type Moneda } from '../lib/monedas'
 import {
   OPCIONES_CLASICAS,
@@ -47,25 +48,25 @@ type Formulario = {
 const INICIAL: Formulario = { cuota: '100', n: 3, periodo: '1', unidad: 'minutos', multa: 10, cobertura: 100 }
 
 const PRESETS: { nombre: string; detalle: string; valores: Formulario }[] = [
-  { nombre: 'Demo rápida', detalle: '3 personas · 1 min por ronda', valores: INICIAL },
+  { nombre: 'Demo rápida', detalle: '3 personas · 1 min por turno', valores: INICIAL },
   {
     nombre: 'Semanal × 4',
-    detalle: '4 personas · una ronda por semana (1 mes en total)',
+    detalle: '4 personas · un turno por semana (1 mes en total)',
     valores: { cuota: '25', n: 4, periodo: '1', unidad: 'semanas', multa: 5, cobertura: 100 },
   },
   {
     nombre: 'Quincenal × 6',
-    detalle: '6 personas · una ronda cada 15 días (3 meses en total)',
+    detalle: '6 personas · un turno cada 15 días (3 meses en total)',
     valores: { cuota: '50', n: 6, periodo: '15', unidad: 'dias', multa: 5, cobertura: 100 },
   },
   {
     nombre: 'Mensual × 6',
-    detalle: '6 personas · una ronda por mes (6 meses en total)',
+    detalle: '6 personas · un turno por mes (6 meses en total)',
     valores: { cuota: '50', n: 6, periodo: '1', unidad: 'meses', multa: 5, cobertura: 100 },
   },
   {
     nombre: 'Mensual × 12',
-    detalle: '12 personas · una ronda por mes (1 año en total)',
+    detalle: '12 personas · un turno por mes (1 año en total)',
     valores: { cuota: '50', n: 12, periodo: '1', unidad: 'meses', multa: 5, cobertura: 100 },
   },
 ]
@@ -213,7 +214,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
             <OpcionesMoneda valor={moneda} alCambiar={setMoneda} />
 
             <div className="campo">
-              <label htmlFor="cuota">Cuota por ronda</label>
+              <label htmlFor="cuota">Cuota por turno</label>
               <div className="con-sufijo">
                 <input
                   id="cuota"
@@ -226,7 +227,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 <span>{SIMBOLO}</span>
               </div>
               <p id="cuota-ayuda" className={errores.cuota ? 'ayuda error' : 'ayuda'}>
-                {errores.cuota ?? 'Lo que paga cada persona en cada ronda.'}
+                {errores.cuota ?? 'Lo que paga cada persona en cada turno.'}
               </p>
             </div>
 
@@ -243,12 +244,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 onChange={(e) => cambiar('n', Number(e.target.value))}
               />
               <p className="ayuda">
-                Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}. Hay una ronda por persona.
+                Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}. Hay un turno por persona.
               </p>
             </div>
 
             <div className="campo">
-              <label htmlFor="periodo">Duración de cada ronda</label>
+              <label htmlFor="periodo">Duración de cada turno</label>
               <div className="fila-campo">
                 <input
                   id="periodo"
@@ -272,7 +273,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               </div>
               <p id="periodo-ayuda" className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
                 {errores.periodoSeg ??
-                  `Quien paga después de este plazo cuenta como atrasado. Hasta 3 meses por ronda${
+                  `Quien paga después de este plazo cuenta como atrasado. Hasta 3 meses por turno${
                     f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''
                   }.`}
               </p>
@@ -291,11 +292,11 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 onChange={(e) => cambiar('multa', Number(e.target.value))}
               />
               <p className="ayuda">
-                Se descuenta de la garantía al final y se reparte entre quienes nunca se atrasaron.
+                Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron.
                 {cuota !== null && f.multa > 0 && (
                   <>
                     {' '}
-                    Con tu cuota son {monto((cuota * BigInt(f.multa)) / 100n)} {SIMBOLO} por atraso.
+                    Con tu cuota son {dinero((cuota * BigInt(f.multa)) / 100n)} por atraso.
                   </>
                 )}
               </p>
@@ -303,7 +304,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
 
             <div className="campo">
               <label htmlFor="cobertura">
-                Garantía: <strong>{f.cobertura} %</strong> de lo que aún se debe
+                Depósito: <strong>{f.cobertura} %</strong> de lo que aún se debe
               </label>
               <input
                 id="cobertura"
@@ -315,7 +316,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 onChange={(e) => cambiar('cobertura', Number(e.target.value))}
               />
               <p className="ayuda">
-                Quien cobra antes deja más garantía. Con 100 % nadie gana nada huyendo; con menos es más barato entrar, pero
+                Quien cobra antes deja más depósito. Con 100 % nadie gana nada huyendo; con menos es más barato entrar, pero
                 el grupo asume algo de riesgo.
               </p>
             </div>
@@ -330,12 +331,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 {params && unirmeYo && (
                   <span className="ayuda">
                     {' '}
-                    (dejarás {monto(garantiaPropia)} {SIMBOLO} de garantía
+                    (dejarás {dinero(garantiaPropia)} de depósito
                     {turnos.modo === 'Sorteo'
                       ? '; tu turno se sortea al llenarse'
                       : turnos.modo === 'Subasta'
                         ? '; tu turno se decide en las subastas'
-                        : ` y cobrarás en la ronda ${turnoPropio + 1}`}
+                        : ` y cobrarás en el turno ${turnoPropio + 1}`}
                     )
                   </span>
                 )}
@@ -361,14 +362,14 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               )}
               {faltaSaldo > 0n && (
                 <p className="aviso nota">
-                  Para unirte como primera persona necesitas {monto(garantiaPropia)} {SIMBOLO} y te faltan {monto(faltaSaldo)} {SIMBOLO}.
+                  Para unirte como primera persona necesitas {dinero(garantiaPropia)} y te faltan {dinero(faltaSaldo)}.
                   Pide más con el botón de arriba o desmarca "Unirme yo también".
                 </p>
               )}
               <p className="explica">
                 Cualquier persona con el link podrá unirse.{' '}
                 {turnos.modo === 'Llegada'
-                  ? 'El orden de llegada decide el turno: quien entra primero cobra primero y deja más garantía.'
+                  ? 'El orden de llegada decide el turno: quien entra primero cobra primero y deja más depósito.'
                   : 'El turno lo decide el mecanismo que elegiste arriba, no el orden de llegada.'}
               </p>
             </div>
@@ -397,9 +398,9 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               <>
                 <dl className="datos">
                   <div className="dato">
-                    <dt>Bolsa por ronda</dt>
+                    <dt>Pozo por turno</dt>
                     <dd>
-                      {monto(bolsa(params))} {SIMBOLO}
+                      {dinero(bolsa(params))}
                     </dd>
                   </div>
                   <div className="dato">
@@ -409,12 +410,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 </dl>
                 {fechaFin && (
                   <p className="explica">
-                    Las fechas de pago quedan fijas desde que se completa el grupo. Si se llena hoy, la última ronda vence
+                    Las fechas de pago quedan fijas desde que se completa el grupo. Si se llena hoy, el último turno vence
                     el {fechaFin}.
                   </p>
                 )}
 
-                <h3>Garantía de cada turno</h3>
+                <h3>Depósito de cada turno</h3>
                 <div className="tabla-scroll">
                   <table>
                     <thead>
@@ -422,7 +423,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                         <th scope="col">Turno</th>
                         <th scope="col">Cobra</th>
                         <th scope="col" className="num">
-                          Garantía ({SIMBOLO})
+                          Depósito
                         </th>
                       </tr>
                     </thead>
@@ -430,16 +431,16 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                       {tablaColateral(params).map((c, i) => (
                         <tr key={i}>
                           <td className="turno">{i + 1}</td>
-                          <td>Ronda {i + 1}</td>
-                          <td className="num">{monto(c)}</td>
+                          <td>Turno {i + 1}</td>
+                          <td className="num">{dinero(c)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <p className="explica">
-                  La garantía se guarda en una bóveda que genera rendimiento y se devuelve al final. Si alguien desaparece,
-                  su garantía paga por él.
+                  El depósito gana intereses y se devuelve al final. Si alguien desaparece,
+                  su depósito paga por él.
                 </p>
 
                 <RiesgoGrupo params={params} />
@@ -456,19 +457,18 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
 }
 
 function RiesgoGrupo({ params }: { params: ParametrosTanda }) {
-  const SIMBOLO = useSimbolo()
   const riesgo = riesgoMaximo(params)
   if (riesgo === 0n) {
     return (
       <p className="aviso listo">
-        Con esta garantía, si alguien cobra y desaparece, su garantía cubre todo lo que aún debe: el grupo no pierde nada.
+        Con este depósito, si alguien cobra y desaparece, su depósito cubre todo lo que aún debe: el grupo no pierde nada.
       </p>
     )
   }
   return (
     <p className="aviso nota">
-      Con esta garantía, si quien cobra primero desaparece, el grupo podría perder hasta {monto(riesgo)} {SIMBOLO}. Sube la
-      garantía a 100 % para eliminar ese riesgo.
+      Con este depósito, si quien cobra primero desaparece, el grupo podría perder hasta {dinero(riesgo)}. Sube
+      el depósito a 100 % para eliminar ese riesgo.
     </p>
   )
 }

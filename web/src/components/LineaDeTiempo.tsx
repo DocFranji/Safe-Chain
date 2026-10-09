@@ -1,10 +1,9 @@
-// La historia de la tanda en frases: quién se unió, quién pagó, a quién le cubrió la garantía...
-// Los momentos "clave" (la garantía cubriendo a quien no pagó) se destacan.
+// La historia de la tanda en frases: quién se unió, quién pagó, a quién le cubrió el depósito...
+// Los momentos "clave" (el depósito cubriendo a quien no pagó) se destacan.
 import type { EventoTanda } from '../lib/historia'
 import { narrar } from '../lib/historia'
-import { monto } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
-import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   /** null = todavía leyendo. */
@@ -23,7 +22,7 @@ function hora(iso: string): string {
 }
 
 export function LineaDeTiempo({ eventos, error, recientePrimero = true, limite }: Props) {
-  const formato = { nombre: nombreDe, monto, simbolo: useSimbolo() }
+  const formato = { nombre: nombreDe, dinero }
   if (eventos === null) {
     return <p className="explica">{error ? 'No pudimos leer la historia ahora mismo.' : 'Leyendo la historia desde la red…'}</p>
   }
@@ -32,7 +31,7 @@ export function LineaDeTiempo({ eventos, error, recientePrimero = true, limite }
       <p className="explica">
         {error
           ? 'No pudimos leer la historia ahora mismo.'
-          : 'Todavía no hay movimientos, o la red ya no conserva el historial de esta tanda (solo guarda los eventos unos días).'}
+          : 'Todavía no hay movimientos, o la red ya no guarda el detalle de esta tanda (solo lo guarda unos días).'}
       </p>
     )
   }

@@ -16,7 +16,6 @@ const datos = (o: Partial<DatosCalendario> = {}): DatosCalendario => ({
   periodoSeg: MES,
   vence: VENCE,
   cuota: 100n * U,
-  simbolo: 'TUSD',
   cobra: ['Ana', 'Beto', 'Carla', 'Tú'],
   miRonda: 3,
   enlace: 'https://rounda.test/#/tanda/6',
@@ -30,21 +29,21 @@ describe('eventosDePago', () => {
       [2, VENCE],
       [3, VENCE + MES],
     ])
-    expect(e[0].titulo).toBe('Tanda 6: paga tu cuota de 100 TUSD (ronda 3 de 4)')
-    expect(e[0].descripcion).toMatch(/Esta ronda cobra Carla\./)
+    expect(e[0].titulo).toBe('Tanda 6: paga tu cuota de $100 (turno 3 de 4)')
+    expect(e[0].descripcion).toMatch(/Este turno cobra Carla\./)
     expect(e[0].descripcion).toMatch(/https:\/\/rounda\.test\/#\/tanda\/6/)
   })
 
   it('en la ronda en que cobro, el título lo dice y explica cómo cobrar', () => {
     const e = eventosDePago(datos(), VENCE - DIA)[1]
-    expect(e.titulo).toBe('Tanda 6: pagas tu cuota y cobras tu bolsa (ronda 4 de 4)')
-    expect(e.descripcion).toMatch(/Tu bolsa está lista: cóbrala/)
+    expect(e.titulo).toBe('Tanda 6: pagas tu cuota y cobras tu pozo (turno 4 de 4)')
+    expect(e.descripcion).toMatch(/Tu pozo está listo: cóbralo/)
   })
 
   it('no incluye la ronda que ya venció; si no se sabe quién cobra, no lo inventa', () => {
     const e = eventosDePago(datos({ cobra: ['Ana', 'Beto', 'Carla', null], miRonda: null }), VENCE + 60)
     expect(e.map((x) => x.ronda)).toEqual([3])
-    expect(e[0].descripcion).not.toMatch(/Esta ronda cobra/)
+    expect(e[0].descripcion).not.toMatch(/Este turno cobra/)
   })
 })
 

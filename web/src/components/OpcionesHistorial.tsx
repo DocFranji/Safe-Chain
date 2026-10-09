@@ -37,7 +37,7 @@ function Opciones({ valor, alCambiar, yo, unirmeYo }: Props) {
           onChange={(e) => alCambiar({ ...valor, descuento: e.target.checked })}
         />
         <span>
-          Dar descuento de garantía por buen historial
+          Dar descuento de depósito por buen historial
           <span className="ayuda">
             {' '}
             (Bronce 10 %, Plata 25 %, Oro 50 % menos; nunca menos de una cuota). Quien cumple deja menos dinero

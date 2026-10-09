@@ -3,8 +3,7 @@
 // Mientras haya una deuda abierta no se puede unir a otra tanda (N2a).
 import { useEffect, useState } from 'react'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
-import { monto } from '../lib/formato'
-import { monedaDe } from '../lib/monedas'
+import { dinero } from '../lib/glosario'
 import { leerMisDeudas, type MiDeuda } from '../lib/misDeudas'
 import { rutaTanda } from '../lib/rutas'
 
@@ -61,14 +60,13 @@ export function MisDeudas({ yo }: { yo: string }) {
           </p>
           <ul className="lista-deudas">
             {deudas.map((d) => {
-              const simbolo = monedaDe(d.tanda.token).simbolo
               const terminada = d.tanda.estado.tag === 'Finalizada'
               return (
                 <li key={d.id}>
                   <p>
                     <a href={rutaTanda(d.id)}>Tanda {d.id}</a> {terminada ? '(terminada)' : '(en curso)'}: debes{' '}
                     <strong>
-                      {monto(d.deuda)} {simbolo}
+                      {dinero(d.deuda)}
                     </strong>
                     {' · '}
                     <a href={rutaTanda(d.id)}>Ver detalle</a> (a quién le llega)
@@ -79,7 +77,7 @@ export function MisDeudas({ yo }: { yo: string }) {
                     disabled={aviso?.tipo === 'esperando'}
                     onClick={() => void pagar(d)}
                   >
-                    Pagar {monto(d.deuda)} {simbolo}
+                    Pagar {dinero(d.deuda)}
                   </button>
                   {aviso?.id === d.id && (
                     <p className={`aviso ${aviso.tipo}`} role="status" aria-live="polite">

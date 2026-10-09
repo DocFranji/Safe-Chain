@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import type { DatosTanda } from '../hooks/useTanda'
 import { aceleradorBoveda, valorBoveda } from '../lib/rpc'
-import { monto } from '../lib/formato'
+import { dinero, dineroFino } from '../lib/glosario'
 import { infoBlend, type InfoBlend } from '../lib/blend'
-import { monedaDe, montoFino } from '../lib/monedas'
+import { monedaDe } from '../lib/monedas'
 import { LiquidezBlend } from './LiquidezBlend'
 import { BOVEDA_SIMULADA, EXPLORADOR } from '../config'
 
@@ -69,37 +69,37 @@ export function Rendimiento({ datos }: { datos: DatosTanda }) {
 
   return (
     <section className="panel rendimiento" aria-labelledby="rend-titulo">
-      <h2 id="rend-titulo">Rendimiento de la garantía</h2>
+      <h2 id="rend-titulo">Intereses de los depósitos</h2>
       {rendimiento !== null ? (
         <dl className="datos">
           <div className="dato">
             <dt>Ganado hasta ahora</dt>
             <dd>
               {rendimiento >= 0n ? '+' : ''}
-              {enBlend ? montoFino(rendimiento) : monto(rendimiento)} {simbolo}
+              {enBlend ? dineroFino(rendimiento) : dinero(rendimiento)}
             </dd>
           </div>
           <div className="dato">
-            <dt>Garantía en la bóveda</dt>
+            <dt>Depósitos guardados</dt>
             <dd>
-              {monto(garantia)} {simbolo}
+              {dinero(garantia)}
             </dd>
           </div>
           {porcentaje !== null && (
             <div className="dato">
-              <dt>Sobre la garantía</dt>
+              <dt>Sobre los depósitos</dt>
               <dd>{porcentaje.toLocaleString('es-CR', { maximumFractionDigits: 2 })} %</dd>
             </div>
           )}
         </dl>
       ) : (
-        <p className="explica">{fallo ? 'No pudimos leer la bóveda ahora mismo.' : 'Leyendo la bóveda…'}</p>
+        <p className="explica">{fallo ? 'No pudimos leer los intereses ahora mismo.' : 'Calculando los intereses…'}</p>
       )}
       <p className="explica">
-        Mientras espera, la garantía genera intereses. Al final se reparte entre quienes la dejaron, en proporción a lo que
-        aportó cada uno.
+        Mientras esperan, los depósitos de seguridad ganan intereses. Al final se reparten entre quienes los dejaron, en
+        proporción a lo que aportó cada uno.
         {enBlend
-          ? ' Esta garantía está depositada en Blend, el protocolo de préstamos de Stellar: el rendimiento es real. En minutos es muy poco, pero es de verdad.'
+          ? ' Estos depósitos están en Blend, un servicio de préstamos: los intereses son reales. En minutos es muy poco, pero es de verdad.'
           : BOVEDA_SIMULADA && textoBoveda(acelerador)}
       </p>
       {enBlend && (
@@ -107,7 +107,7 @@ export function Rendimiento({ datos }: { datos: DatosTanda }) {
           <LiquidezBlend pool={enBlend.pool} token={enBlend.token} simbolo={simbolo} necesario={garantia} />
           <p className="explica">
             <a href={`${EXPLORADOR}/contract/${boveda}`} target="_blank" rel="noreferrer">
-              Ver la garantía en Blend (stellar.expert)
+              Ver los depósitos en Blend (stellar.expert)
             </a>
           </p>
         </>
@@ -118,8 +118,8 @@ export function Rendimiento({ datos }: { datos: DatosTanda }) {
 
 /** Qué tan "real" es el rendimiento de esta bóveda simulada. */
 function textoBoveda(acelerador: number | null): string {
-  if (acelerador === null) return ' En esta versión de pruebas la bóveda es simulada.'
-  if (acelerador <= 1) return ' En esta versión de pruebas la bóveda es simulada, pero rinde al ritmo de la vida real (interés anual).'
+  if (acelerador === null) return ' Como es dinero de práctica, los intereses son simulados.'
+  if (acelerador <= 1) return ' Como es dinero de práctica, los intereses son simulados, al ritmo de la vida real (5 % al año).'
   const dias = (acelerador * 60) / 86_400
-  return ` Esta es una tanda de prueba: su bóveda simulada corre más rápido para que el rendimiento se note en minutos (1 minuto equivale a ${dias.toLocaleString('es-CR', { maximumFractionDigits: 1 })} días de intereses).`
+  return ` Esta es una tanda de prueba: sus intereses simulados corren más rápido para que se noten en minutos (1 minuto equivale a ${dias.toLocaleString('es-CR', { maximumFractionDigits: 1 })} días de intereses).`
 }

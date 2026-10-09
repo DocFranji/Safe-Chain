@@ -93,7 +93,7 @@ export default function App() {
       </main>
 
       <footer className="pie">
-        Funciona en la red de pruebas de Stellar (testnet), con TUSD de prueba.{' '}
+        Rounda está en modo de práctica: los dólares son de mentira y no tienen valor real.{' '}
         <a href={RUTA_ESTADO}>Estado del sistema</a>
         {' · '}
         {TANDA_ID && (

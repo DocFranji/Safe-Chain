@@ -5,8 +5,7 @@ import type { ParametrosTanda } from '../lib/colateral'
 import { MAX_DESCUENTO_BPS, MAX_PRIMA_BPS, MODOS, eligeTurno, vistaPrevia, type Modo, type OpcionesForm } from '../lib/turnos'
 import { NIVELES, nivelDePuntaje } from '../lib/historial'
 import { useDireccionHistorial } from '../hooks/useHistorial'
-import { monto } from '../lib/formato'
-import { useSimbolo } from '../hooks/useMoneda'
+import { dinero } from '../lib/glosario'
 
 type Props = {
   /** Parámetros ya válidos de la tanda (null mientras el formulario tenga errores). */
@@ -47,7 +46,7 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
       {valor.modo === 'PrecioPorTurno' && (
         <div className="campo">
           <label htmlFor="prima">
-            El primer turno paga: <strong>{valor.primaPct} %</strong> de la bolsa
+            El primer turno paga: <strong>{valor.primaPct} %</strong> del pozo
           </label>
           <input
             id="prima"
@@ -64,7 +63,7 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
       {valor.modo === 'Subasta' && (
         <div className="campo">
           <label htmlFor="descuento">
-            Descuento máximo por ronda: <strong>{valor.descuentoPct} %</strong> de la bolsa
+            Descuento máximo por turno: <strong>{valor.descuentoPct} %</strong> del pozo
           </label>
           <input
             id="descuento"
@@ -85,7 +84,7 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
               Ofertas selladas
               <span className="ayuda">
                 {' '}
-                (nadie ve las ofertas de los demás: en la primera mitad de cada ronda cada quien sella la suya y en la
+                (nadie ve las ofertas de los demás: en la primera mitad de cada turno cada quien sella la suya y en la
                 segunda la revela. Gana la mayor. Se revela desde el mismo navegador con el que se selló)
               </span>
             </span>
@@ -144,7 +143,7 @@ function PrimerosConHistorial({ params, valor, alCambiar }: Omit<Props, 'error'>
           Los primeros turnos, solo para quien tenga buen historial
           <span className="ayuda">
             {' '}
-            (quien cobra primero recibe la bolsa antes de terminar de pagar: es como un préstamo del grupo)
+            (quien cobra primero recibe el pozo antes de terminar de pagar: es como un préstamo del grupo)
           </span>
         </span>
       </label>
@@ -188,7 +187,6 @@ function PrimerosConHistorial({ params, valor, alCambiar }: Omit<Props, 'error'>
 }
 
 function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: OpcionesForm }) {
-  const SIMBOLO = useSimbolo()
   const filas = vistaPrevia(params, valor)
   const conPrima = valor.modo === 'PrecioPorTurno'
   const conApartado = filas.some((f) => f.apartado > 0n)
@@ -214,7 +212,7 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
                 </th>
               )}
               <th scope="col" className="num">
-                Recibe ({SIMBOLO})
+                Recibe
               </th>
             </tr>
           </thead>
@@ -225,12 +223,12 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
                   {f.turno + 1}
                   {f.pideHistorial && <span className="nivel-turno">{nivelDePuntaje(valor.puntajePrimeros)}</span>}
                 </td>
-                <td className="num">{monto(f.alUnirse)}</td>
-                {conApartado && <td className="num">{f.apartado > 0n ? monto(f.apartado) : '-'}</td>}
+                <td className="num">{dinero(f.alUnirse)}</td>
+                {conApartado && <td className="num">{f.apartado > 0n ? dinero(f.apartado) : '-'}</td>}
                 {conPrima && (
-                  <td className="num">{f.prima > 0n ? `paga ${monto(f.prima)}` : f.prima < 0n ? `gana ${monto(-f.prima)}` : '-'}</td>
+                  <td className="num">{f.prima > 0n ? `paga ${dinero(f.prima)}` : f.prima < 0n ? `gana ${dinero(-f.prima)}` : '-'}</td>
                 )}
-                <td className="num">{monto(f.recibe)}</td>
+                <td className="num">{dinero(f.recibe)}</td>
               </tr>
             ))}
           </tbody>
@@ -238,11 +236,11 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
       </div>
       <p className="explica">
         {valor.modo === 'Sorteo' || valor.modo === 'Subasta'
-          ? 'Como el turno no se conoce al unirse, todos dejan una cuota. A quien cobra se le aparta de su bolsa el resto de su garantía: la recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado.'
+          ? 'Como el turno no se conoce al unirse, todos dejan una cuota. A quien cobra se le aparta de su pozo el resto de su depósito: lo recupera al final con intereses. Es el mismo depósito de siempre, sin pedir todo por adelantado.'
           : valor.modo === 'PrecioPorTurno'
-            ? 'La prima se descuenta de la bolsa de quien cobra antes y se suma a la de quien cobra al final. Suman cero: el contrato no se queda con nada.'
-            : 'Cada quien elige su turno al unirse y deja la garantía de ese turno.'}
-        {valor.modo === 'Subasta' && ' Quien gana una ronda recibe además menos por su descuento, que se reparte entre los demás.'}
+            ? 'La prima se descuenta del pozo de quien cobra antes y se suma a la de quien cobra al final. Suman cero: Rounda no se queda con nada.'
+            : 'Cada quien elige su turno al unirse y deja el depósito de ese turno.'}
+        {valor.modo === 'Subasta' && ' Quien gana un turno recibe además menos por su descuento, que se reparte entre los demás.'}
       </p>
     </div>
   )

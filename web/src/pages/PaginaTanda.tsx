@@ -39,7 +39,7 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
       </div>
 
       {error && !datos && <Mensaje titulo="No pudimos leer esta tanda">{error}</Mensaje>}
-      {cargando && !datos && !error && <p className="cargando">Leyendo la tanda desde la red de Stellar…</p>}
+      {cargando && !datos && !error && <p className="cargando">Cargando la tanda…</p>}
 
       {datos && (
         <>

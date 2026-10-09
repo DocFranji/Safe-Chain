@@ -1,13 +1,14 @@
 // Barra bajo el encabezado con el estado de la cuenta conectada.
-// Guía a una cuenta nueva paso a paso (activar -> aceptar TUSD -> pedir TUSD) y,
-// cuando ya está lista, solo muestra el saldo y el botón para pedir más TUSD de prueba.
+// Guía a una cuenta nueva paso a paso (preparar la cuenta -> activar los dólares de práctica -> recibirlos) y,
+// cuando ya está lista, solo muestra el saldo y el botón para recibir más dólares de práctica.
+// (Por dentro: Friendbot, la trustline de TUSD y el faucet. Esas palabras no se muestran.)
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import type { Cuenta } from '../hooks/useCuenta'
 import { ErrorAmigable, aceptarTusd, activarConFriendbot, pedirFaucet } from '../lib/cuenta'
 import { traducirError } from '../lib/contrato'
-import { monto } from '../lib/formato'
-import { FAUCET_URL, SIMBOLO } from '../config'
+import { dinero } from '../lib/glosario'
+import { FAUCET_URL } from '../config'
 import { CuentaUsdc } from './CuentaUsdc'
 
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
@@ -45,17 +46,15 @@ export function BarraCuenta({ billetera, cuenta }: { billetera: Billetera; cuent
     cuerpo = (
       <>
         <div>
-          <strong>Activa tu cuenta de pruebas</strong>
-          <p className="explica">
-            Tu billetera todavía no existe en la red de pruebas. Friendbot le regala XLM gratis para pagar las comisiones.
-          </p>
+          <strong>Prepara tu cuenta de práctica</strong>
+          <p className="explica">Es gratis y toma unos segundos.</p>
         </div>
         <button
           className="boton principal"
           disabled={ocupado}
-          onClick={() => correr('Activando tu cuenta…', () => activarConFriendbot(direccion), 'Listo: tu cuenta ya existe.')}
+          onClick={() => correr('Preparando tu cuenta…', () => activarConFriendbot(direccion), 'Listo: tu cuenta está preparada.')}
         >
-          Activar con Friendbot
+          Preparar mi cuenta
         </button>
       </>
     )
@@ -63,18 +62,17 @@ export function BarraCuenta({ billetera, cuenta }: { billetera: Billetera; cuent
     cuerpo = (
       <>
         <div>
-          <strong>Acepta {SIMBOLO} para poder usarlo</strong>
+          <strong>Un último paso: activa tus dólares de práctica</strong>
           <p className="explica">
-            Una cuenta nueva debe aceptar {SIMBOLO} antes de poder recibirlo.{' '}
-            {conGoogle ? 'Se firma con tu cuenta de Google' : 'Freighter te pedirá confirmar'}; no cuesta nada.
+            {conGoogle ? 'Se confirma con tu cuenta de Google' : 'Freighter te pedirá confirmar'}; no cuesta nada.
           </p>
         </div>
         <button
           className="boton principal"
           disabled={ocupado}
-          onClick={() => correr(conGoogle ? 'Firmando…' : 'Confirma en Freighter…', () => aceptarTusd(direccion), `Listo: tu cuenta ya acepta ${SIMBOLO}.`)}
+          onClick={() => correr(conGoogle ? 'Confirmando…' : 'Confirma en Freighter…', () => aceptarTusd(direccion), 'Listo: ya puedes recibir dólares de práctica.')}
         >
-          Aceptar {SIMBOLO}
+          Activar dólares de práctica
         </button>
       </>
     )
@@ -82,19 +80,17 @@ export function BarraCuenta({ billetera, cuenta }: { billetera: Billetera; cuent
     cuerpo = (
       <>
         <p>
-          Tu saldo:{' '}
-          <strong className="saldo">
-            {saldo === null ? '…' : monto(saldo)} {SIMBOLO}
-          </strong>{' '}
-          <span className="sub">(dinero de prueba)</span>
+          Tienes:{' '}
+          <strong className="saldo">{saldo === null ? '…' : dinero(saldo)}</strong>{' '}
+          <span className="sub">(dólares de práctica)</span>
         </p>
         {FAUCET_URL && (
           <button
             className="boton chico"
             disabled={ocupado}
-            onClick={() => correr('Pidiendo TUSD de prueba…', () => pedirFaucet(direccion), `Listo: recibiste ${SIMBOLO} de prueba.`)}
+            onClick={() => correr('Pidiendo dólares de práctica…', () => pedirFaucet(direccion), 'Listo: recibiste dólares de práctica.')}
           >
-            Pedir {SIMBOLO} de prueba
+            Recibir más dólares de práctica
           </button>
         )}
       </>

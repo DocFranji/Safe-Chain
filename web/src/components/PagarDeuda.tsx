@@ -8,9 +8,8 @@ import type { DatosTanda } from '../hooks/useTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import { bolsaQueRecupera, destinoTrasTerminar, errorMontoDeuda, garantiaPendiente } from '../lib/deudas'
 import { parseMonto } from '../lib/entradas'
-import { monto } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
-import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   id: number
@@ -25,7 +24,6 @@ type Props = {
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
 
 export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
-  const SIMBOLO = useSimbolo()
   const [aviso, setAviso] = useState<Aviso>(null)
   const [parcial, setParcial] = useState('')
   const { tanda, miembros, deudas } = datos
@@ -78,7 +76,7 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
                 ? terminada
                   ? 'Listo: saldaste tu deuda. Vuelves a estar al día y puedes unirte a otras tandas.'
                   : 'Listo: saldaste tu deuda. Vuelves a estar al día.'
-                : `Listo: pagaste ${monto(cuanto)} ${SIMBOLO} de tu deuda.`,
+                : `Listo: pagaste ${dinero(cuanto)} de tu deuda.`,
             )
           }
         />
@@ -89,7 +87,7 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
           <summary>Pagar la deuda de otra persona</summary>
           <p className="explica">
             Cualquiera puede pagar la deuda de otra persona, por ejemplo un familiar. El dinero sale de tu cuenta y le
-            llega a quien cobró de menos{terminada ? ' (o, si esa bolsa se repartió al final, a quienes la recibieron)' : ''}.
+            llega a quien cobró de menos{terminada ? ' (o, si ese pozo se repartió al final, a quienes lo recibieron)' : ''}.
           </p>
           <ul className="lista-deudas">
             {otros.map((m) => (
@@ -97,7 +95,7 @@ export function PagarDeuda({ id, datos, yo, saldo, alCambiar }: Props) {
                 <span>
                   {nombreDe(m.direccion)} debe{' '}
                   <strong>
-                    {monto(m.deuda)} {SIMBOLO}
+                    {dinero(m.deuda)}
                   </strong>
                 </span>
                 <button
@@ -159,7 +157,6 @@ function MiDeuda({
   setParcial,
   pagar,
 }: MiDeudaProps) {
-  const SIMBOLO = useSimbolo()
   // Con la tanda terminada, la bolsa retenida ya se repartió: no se recupera.
   const recupera = terminada ? null : bolsaQueRecupera(d, yo, multas, garantia)
   const aQuien = (acreedor: string) =>
@@ -167,10 +164,10 @@ function MiDeuda({
       ? destinoTrasTerminar(acreedor, yo, cobro) === 'directo'
         ? nombreDe(acreedor)
         : acreedor === yo
-          ? 'Tu propia bolsa: se repartió al final, así que va a quienes la recibieron'
-          : `La bolsa de ${nombreDe(acreedor)} se repartió al final: va a quienes la recibieron`
+          ? 'Tu propio pozo: se repartió al final, así que va a quienes lo recibieron'
+          : `El pozo de ${nombreDe(acreedor)} se repartió al final: va a quienes lo recibieron`
       : acreedor === yo
-        ? 'Tu propia bolsa, que está retenida'
+        ? 'Tu propio pozo, que está guardado'
         : nombreDe(acreedor)
   const montoParcial = parseMonto(parcial)
   const errorParcial = parcial.trim() === '' ? null : errorMontoDeuda(montoParcial, deuda)
@@ -179,12 +176,12 @@ function MiDeuda({
   return (
     <>
       <h3 id="deuda-titulo">
-        Tienes una deuda de {monto(deuda)} {SIMBOLO}
+        Tienes una deuda de {dinero(deuda)}
       </h3>
       <p className="explica">
         {terminada
           ? 'La tanda ya terminó, pero tu deuda sigue pendiente y no puedes unirte a otras tandas hasta pagarla. Si pagas, el dinero va directo a quien cobró de menos por tu atraso:'
-          : 'Tu garantía ya no alcanzó a cubrir tus cuotas. Si pagas, el dinero le llega a quien cobró de menos por tu atraso:'}
+          : 'Tu depósito de seguridad ya no alcanzó a cubrir tus cuotas. Si pagas, el dinero le llega a quien cobró de menos por tu atraso:'}
       </p>
       {d && d.faltantes.length > 0 && (
         <ul className="lista-deudas">
@@ -192,10 +189,10 @@ function MiDeuda({
             <li key={`${f.ronda}-${f.acreedor}`}>
               <span>
                 {aQuien(f.acreedor)}
-                <span className="sub"> · ronda {f.ronda + 1}</span>
+                <span className="sub"> · turno {f.ronda + 1}</span>
               </span>
               <strong>
-                {monto(f.monto)} {SIMBOLO}
+                {dinero(f.monto)}
               </strong>
             </li>
           ))}
@@ -205,16 +202,16 @@ function MiDeuda({
         {terminada
           ? 'Al saldarla vuelves a estar al día y puedes unirte a otras tandas.'
           : 'Al saldarla vuelves a estar al día y puedes pagar tus cuotas otra vez.'}
-        {cobraEnRonda !== null && ` Cobras tu bolsa en la ronda ${cobraEnRonda}, como estaba previsto.`}
-        {recupera && ` Recuperas tu bolsa retenida: ${monto(recupera.neto)} ${SIMBOLO}${descuentos(recupera, SIMBOLO)}.`}
+        {cobraEnRonda !== null && ` Cobras tu pozo en el turno ${cobraEnRonda}, como estaba previsto.`}
+        {recupera && ` Recuperas tu pozo guardado: ${dinero(recupera.neto)}${descuentos(recupera)}.`}
       </p>
 
       <button className="boton principal" disabled={ocupado || falta > 0n} onClick={() => pagar(deuda)}>
-        Pagar mi deuda ({monto(deuda)} {SIMBOLO})
+        Pagar mi deuda ({dinero(deuda)})
       </button>
       {falta > 0n && (
         <p className="aviso nota">
-          Te faltan {monto(falta)} {SIMBOLO} para pagarla completa. Puedes pagar una parte.
+          Te faltan {dinero(falta)} para pagarla completa. Puedes pagar una parte.
         </p>
       )}
 
@@ -231,10 +228,10 @@ function MiDeuda({
               aria-invalid={errorParcial ? true : undefined}
               aria-describedby="monto-deuda-ayuda"
             />
-            <span>{SIMBOLO}</span>
+            <span>dólares</span>
           </div>
           <p id="monto-deuda-ayuda" className={errorParcial ? 'ayuda error' : 'ayuda'}>
-            {errorParcial ?? 'Sigues en mora hasta pagar todo, pero lo que pagues ya le llega a quien cobró de menos.'}
+            {errorParcial ?? 'Sigues con un pago pendiente hasta pagar todo, pero lo que pagues ya le llega a quien cobró de menos.'}
           </p>
         </div>
         <button
@@ -244,18 +241,18 @@ function MiDeuda({
           }
           onClick={() => montoParcial !== null && pagar(montoParcial)}
         >
-          Pagar {montoParcial !== null && errorParcial === null ? `${monto(montoParcial)} ${SIMBOLO}` : 'este monto'}
+          Pagar {montoParcial !== null && errorParcial === null ? `${dinero(montoParcial)}` : 'este monto'}
         </button>
       </details>
     </>
   )
 }
 
-/** " (se descuentan 10 TUSD de multas y 100 TUSD quedan como tu garantía...)" o "". */
-function descuentos(r: { multas: bigint; garantia: bigint }, SIMBOLO: string): string {
+/** " (se descuentan $10 de multas y $100 quedan como tu depósito...)" o "". */
+function descuentos(r: { multas: bigint; garantia: bigint }): string {
   const partes = [
-    r.multas > 0n ? `se descuentan ${monto(r.multas)} ${SIMBOLO} de multas` : null,
-    r.garantia > 0n ? `${monto(r.garantia)} ${SIMBOLO} quedan como tu garantía para las cuotas que aún debes` : null,
+    r.multas > 0n ? `se descuentan ${dinero(r.multas)} de multas` : null,
+    r.garantia > 0n ? `${dinero(r.garantia)} quedan como tu depósito para las cuotas que aún debes` : null,
   ].filter(Boolean)
   return partes.length ? ` (${partes.join(' y ')})` : ''
 }

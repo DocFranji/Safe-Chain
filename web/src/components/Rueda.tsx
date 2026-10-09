@@ -5,11 +5,11 @@
 // El modelo (quién está dónde, quién pagó, cuánto gira) es común: src/lib/rueda.ts.
 import type { ReactNode } from 'react'
 import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
-import { monto, duracion } from '../lib/formato'
+import { duracion } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
 import { armarRueda, type ModeloRueda } from '../lib/rueda'
 import { useTema, type Tema } from '../lib/tema'
-import { useSimbolo } from '../hooks/useMoneda'
 import { RuedaSarchi } from './RuedaSarchi'
 import { RuedaMontana } from './RuedaMontana'
 
@@ -29,10 +29,10 @@ export function Rueda({ datos, ahora, yo }: Props) {
       {estado !== 'Abierta' && (
         <figcaption className="leyenda">
           <span>
-            <i className={`muestra ${MUESTRA_TURNO[tema]}`} /> Cobra esta ronda
+            <i className={`muestra ${MUESTRA_TURNO[tema]}`} /> Cobra este turno
           </span>
           <span>
-            <i className={`muestra ${MUESTRA_PAGO[tema]}`} /> Pagó esta ronda
+            <i className={`muestra ${MUESTRA_PAGO[tema]}`} /> Pagó este turno
           </span>
           <span>
             <i className="muestra cobro">
@@ -77,7 +77,6 @@ function Centro({
   beneficiario: MiembroConDireccion | null
   restante: number
 }) {
-  const SIMBOLO = useSimbolo()
   const { tanda, miembros } = datos
   const n = tanda.n_miembros
   const bolsa = tanda.cuota * BigInt(n)
@@ -92,9 +91,9 @@ function Centro({
       break
     case 'Activa':
       lineas = [
-        { texto: monto(bolsa), clase: 'centro-grande' },
+        { texto: dinero(bolsa), clase: 'centro-grande' },
         {
-          texto: beneficiario ? `${SIMBOLO} para ${nombreDe(beneficiario.direccion)}` : `${SIMBOLO} en juego`,
+          texto: beneficiario ? `para ${nombreDe(beneficiario.direccion)}` : 'en el pozo',
           clase: 'centro-sub',
         },
         {
@@ -105,7 +104,7 @@ function Centro({
       break
     case 'PorLiquidar':
       lineas = [
-        { texto: 'Rondas listas', clase: 'centro-medio' },
+        { texto: 'Turnos listos', clase: 'centro-medio' },
         { texto: 'Falta repartir', clase: 'centro-sub' },
         { texto: 'el dinero final', clase: 'centro-sub' },
       ]
@@ -138,7 +137,7 @@ function resumen(datos: DatosTanda, restante: number): string {
   const { tanda, miembros, pagaron } = datos
   const base = `Tanda de ${tanda.n_miembros} personas, ${miembros.length} unidas.`
   if (tanda.estado.tag !== 'Activa') return base
-  return `${base} Ronda ${tanda.ronda_actual + 1}. Pagaron ${pagaron.length}. ${
+  return `${base} Turno ${tanda.ronda_actual + 1}. Pagaron ${pagaron.length}. ${
     restante > 0 ? `Quedan ${duracion(restante)}.` : 'El plazo venció.'
   }`
 }

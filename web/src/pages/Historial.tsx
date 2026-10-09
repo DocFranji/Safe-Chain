@@ -21,10 +21,11 @@ import {
   tieneMoraPendiente,
   type Historial as DatosHistorial,
 } from '../lib/historial'
-import { fechaLarga, monto } from '../lib/formato'
+import { fechaLarga } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { RUTA_LOBBY, irA, rutaHistorial } from '../lib/rutas'
-import { EXPLORADOR, SIMBOLO } from '../config'
+import { EXPLORADOR } from '../config'
 import '../components/historial.css'
 
 type Props = { dir: string | null; billetera: Billetera }
@@ -110,7 +111,7 @@ export function FichaHistorial({ dir, h, esMio, esGoogle, enPerfil = false }: Pr
           <p className="historial-dir">{dir}</p>
           <p>
             <strong>{puntaje} puntos</strong> · nivel {nivel}
-            {descuento > 0 && <> · {descuento} % menos de garantía en las tandas que lo ofrecen</>}
+            {descuento > 0 && <> · {descuento} % menos de depósito en las tandas que lo ofrecen</>}
           </p>
           <div className="historial-barra" aria-hidden="true">
             <span style={{ width: `${Math.max(0, Math.min(100, avance))}%` }} />
@@ -143,7 +144,7 @@ export function FichaHistorial({ dir, h, esMio, esGoogle, enPerfil = false }: Pr
             ))}
           </ul>
           <p className="explica">
-            Ha pagado {monto(h.monto_pagado)} {SIMBOLO} en cuotas. Primera actividad:{' '}
+            Ha pagado {dinero(h.monto_pagado)} en cuotas. Primera actividad:{' '}
             {fechaLarga(Number(h.primera_actividad))} · última: {fechaLarga(Number(h.ultima_actividad))}.
           </p>
           <p className="explica">
@@ -223,12 +224,12 @@ function ComoSeCalcula() {
       </table>
       <p className="explica">
         Puntaje = puntos ganados − puntos perdidos (nunca menos de 0). Niveles:{' '}
-        {NIVELES.map((n, i) => `${n.nombre} desde ${n.desde}${n.descuento ? ` (${n.descuento} % menos de garantía)` : ''}${i < NIVELES.length - 1 ? ', ' : '.'}`)}
+        {NIVELES.map((n, i) => `${n.nombre} desde ${n.desde}${n.descuento ? ` (${n.descuento} % menos de depósito)` : ''}${i < NIVELES.length - 1 ? ', ' : '.'}`)}
       </p>
       <p className="explica">
-        Para que nadie infle su puntaje: solo suman las tandas con cuota de {CUOTA_MINIMA_TUSD} {SIMBOLO} o más, cada
+        Para que nadie infle su puntaje: solo suman las tandas con cuota de ${CUOTA_MINIMA_TUSD} o más, cada
         persona gana como mucho {TOPE_POR_TANDA} puntos por tanda, y el puntaje cero no da beneficios (abrir una
-        billetera nueva no limpia nada). La garantía con descuento nunca baja de una cuota.
+        billetera nueva no limpia nada). El depósito con descuento nunca baja de una cuota.
       </p>
     </details>
   )

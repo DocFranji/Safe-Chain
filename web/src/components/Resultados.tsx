@@ -3,10 +3,9 @@
 import type { DatosTanda } from '../hooks/useTanda'
 import type { EventoTanda } from '../lib/historia'
 import { resultadosDesdeEventos } from '../lib/rpc'
-import { monto } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { EXPLORADOR, TANDA_ID } from '../config'
-import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   datos: DatosTanda
@@ -17,7 +16,6 @@ type Props = {
 }
 
 export function Resultados({ datos, yo, eventos, error }: Props) {
-  const SIMBOLO = useSimbolo()
   const r = eventos === null ? null : resultadosDesdeEventos(eventos)
   const recibio = new Map<string, bigint>()
   if (r) for (const p of r.pagos) recibio.set(p.miembro, p.monto)
@@ -30,7 +28,7 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
       {eventos === null && error && <p className="aviso error">No pudimos leer los resultados ahora mismo. Se reintentará solo.</p>}
       {eventos !== null && r === null && (
         <p className="explica">
-          Ya no encontramos el detalle de los pagos finales: la red de Stellar solo conserva los eventos durante unos días.
+          Ya no encontramos el detalle de los pagos finales: la red solo guarda el detalle durante unos días.
           Puedes revisarlos en el{' '}
           <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
             explorador
@@ -44,10 +42,10 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
           <dl className="datos resumen-final">
             {r.rendimiento !== null && (
               <div className="dato">
-                <dt>Rendimiento generado</dt>
+                <dt>Intereses ganados</dt>
                 <dd>
                   {r.rendimiento >= 0n ? '+' : ''}
-                  {monto(r.rendimiento)} {SIMBOLO}
+                  {dinero(r.rendimiento)}
                 </dd>
               </div>
             )}
@@ -55,15 +53,15 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
               <div className="dato">
                 <dt>Multas repartidas</dt>
                 <dd>
-                  {monto(r.fondoPremios)} {SIMBOLO}
+                  {dinero(r.fondoPremios)}
                 </dd>
               </div>
             )}
             {r.retenido !== null && r.retenido > 0n && (
               <div className="dato">
-                <dt>Bolsas retenidas</dt>
+                <dt>Pozos guardados</dt>
                 <dd>
-                  {monto(r.retenido)} {SIMBOLO}
+                  {dinero(r.retenido)}
                 </dd>
               </div>
             )}
@@ -76,10 +74,10 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                   <th scope="col">Turno</th>
                   <th scope="col">Persona</th>
                   <th scope="col" className="num">
-                    Dejó de garantía ({SIMBOLO})
+                    Depósito
                   </th>
                   <th scope="col" className="num">
-                    Recibió al final ({SIMBOLO})
+                    Recibió al final
                   </th>
                   <th scope="col">Cómo le fue</th>
                 </tr>
@@ -96,9 +94,9 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                         {m.direccion === yo && <span className="marca-yo">tú</span>}
                         {NOMBRES[m.direccion] && <span className="dir">{direccionCorta(m.direccion)}</span>}
                       </td>
-                      <td className="num">{monto(m.colateral_inicial)}</td>
-                      <td className="num">{hayPagos ? monto(final) : '-'}</td>
-                      <td>{hayPagos ? comoLeFue(m, final, SIMBOLO) : '-'}</td>
+                      <td className="num">{dinero(m.colateral_inicial)}</td>
+                      <td className="num">{hayPagos ? dinero(final) : '-'}</td>
+                      <td>{hayPagos ? comoLeFue(m, final) : '-'}</td>
                     </tr>
                   )
                 })}
@@ -106,8 +104,8 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
             </table>
           </div>
           <p className="explica">
-            "Recibió al final" es lo que el contrato le devolvió al repartir: su garantía que sobró, su parte del rendimiento
-            y, si nunca se atrasó, su parte de las multas. Las bolsas de cada ronda se entregaron antes, al cerrar cada una.
+            "Recibió al final" es lo que se le devolvió al terminar: lo que sobró de su depósito, su parte de los intereses
+            y, si nunca se atrasó, su parte de las multas. El pozo de cada turno se entregó antes.
           </p>
         </>
       )}
@@ -115,9 +113,9 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
   )
 }
 
-function comoLeFue(m: DatosTanda['miembros'][number], final: bigint, SIMBOLO: string): string {
-  if (m.moroso) return `Quedó debiendo ${monto(m.deuda)} ${SIMBOLO}`
-  if (m.colateral_inicial > 0n && final === 0n) return 'Su garantía cubrió sus cuotas'
+function comoLeFue(m: DatosTanda['miembros'][number], final: bigint): string {
+  if (m.moroso) return `Quedó debiendo ${dinero(m.deuda)}`
+  if (m.colateral_inicial > 0n && final === 0n) return 'Su depósito cubrió sus cuotas'
   if (m.atrasos === 0) return 'Siempre pagó a tiempo'
   return m.atrasos === 1 ? '1 atraso' : `${m.atrasos} atrasos`
 }

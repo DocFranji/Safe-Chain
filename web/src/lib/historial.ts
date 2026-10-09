@@ -30,7 +30,7 @@ export const REGLAS_PUNTOS: { hecho: string; puntos: number }[] = [
   { hecho: 'Terminar una tanda sin atrasos', puntos: 50 },
   { hecho: 'Terminar una tanda con atrasos', puntos: 25 },
   { hecho: 'Saldar una deuda', puntos: 60 },
-  { hecho: 'No pagar y que la garantía cubra la cuota', puntos: -15 },
+  { hecho: 'No pagar y que el depósito cubra la cuota', puntos: -15 },
   { hecho: 'Quedar debiendo (moroso)', puntos: -100 },
 ]
 
@@ -85,9 +85,9 @@ export function desglose(h: Historial): string[] {
     [h.cuotas_tarde, 'cuota pagada tarde', 'cuotas pagadas tarde'],
     [h.tandas_cumplidas, 'tanda terminada sin atrasos', 'tandas terminadas sin atrasos'],
     [h.tandas_con_atrasos, 'tanda terminada con atrasos', 'tandas terminadas con atrasos'],
-    [h.cobros, 'bolsa recibida', 'bolsas recibidas'],
-    [h.cuotas_cubiertas, 'cuota cubierta por su garantía', 'cuotas cubiertas por su garantía'],
-    [h.veces_moroso, 'vez en mora', 'veces en mora'],
+    [h.cobros, 'pozo recibido', 'pozos recibidos'],
+    [h.cuotas_cubiertas, 'cuota cubierta por su depósito', 'cuotas cubiertas por su depósito'],
+    [h.veces_moroso, 'vez con un pago pendiente', 'veces con un pago pendiente'],
     [h.deudas_saldadas, 'deuda saldada', 'deudas saldadas'],
   ]
   return lineas.filter(([n]) => n > 0).map(([n, uno, varios]) => plural(n, uno, varios))

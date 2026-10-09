@@ -52,7 +52,7 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
         </a>
       </div>
       <p className="explica lobby-intro">
-        Ahorra en grupo sin confiar en nadie: el contrato guarda el dinero, y si alguien no paga, su garantía cubre su cuota.
+        Ahorra en grupo sin miedo a que alguien desaparezca: Rounda guarda el dinero, y si alguien no paga, su depósito de seguridad cubre su cuota.
         Elige una tanda abierta para unirte o crea la tuya.
       </p>
       <ComoProbar billetera={billetera} cuenta={cuenta} />
@@ -62,7 +62,7 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
           {error}
         </p>
       )}
-      {!listo && <p className="cargando">Leyendo las tandas desde la red de Stellar…</p>}
+      {!listo && <p className="cargando">Cargando las tandas…</p>}
 
       {listo && total === 0 && (
         <div className="vacio">
@@ -91,7 +91,7 @@ export function Lobby({ billetera, cuenta }: { billetera: Billetera; cuenta: Cue
           </div>
 
           {filtro === 'mias' && !yo && (
-            <p className="explica">Entra o conecta tu billetera (arriba a la derecha) para ver las tandas en las que participas.</p>
+            <p className="explica">Entra (arriba a la derecha) para ver las tandas en las que participas.</p>
           )}
 
           {visibles.length === 0 ? (

@@ -26,7 +26,7 @@ export function Invitar({ id, libres }: Props) {
       <h2 id="invitar-titulo">Invita a tu grupo</h2>
       <p className="explica">
         {libres === 1 ? 'Falta 1 persona.' : `Faltan ${libres} personas.`} Cuando entre la última, la tanda arranca sola. Quien
-        abra el link verá cuánta garantía debe dejar antes de unirse.
+        abra el enlace verá cuánto debe dejar de depósito antes de unirse.
       </p>
       <div className="link-fila">
         <input ref={campo} readOnly value={link} aria-label="Link de invitación" onFocus={(e) => e.currentTarget.select()} />
