@@ -17,6 +17,7 @@ import { duracion, porcentaje } from '../lib/formato'
 import { dinero } from '../lib/glosario'
 import { nombreConocido, nombreDe } from '../lib/nombres'
 import { cadaCuanto, lineaTanda } from '../lib/resumen'
+import { siguienteAccion } from '../lib/siguiente'
 import { SIN_TURNO, eligeTurno, type Modo } from '../lib/turnos'
 import { comoConseguir, useMoneda } from '../hooks/useMoneda'
 
@@ -60,13 +61,36 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   // Si ya sabemos que no alcanza el saldo, no pedimos firmar algo que va a fallar.
   const faltaParaUnirse = saldo !== null && colateralSiguiente !== null && saldo < colateralSiguiente ? colateralSiguiente - saldo : 0n
   const faltaParaPagar = saldo !== null && saldo < tanda.cuota ? tanda.cuota - saldo : 0n
+  // UX: arriba de todo, un mensaje con lo que le toca hacer a quien mira ("Te toca pagar $20"...).
+  const siguiente = siguienteAccion({
+    estado,
+    yo,
+    n: tanda.n_miembros,
+    unidos: miembros.length,
+    cuota: tanda.cuota,
+    multa,
+    turno: tanda.ronda_actual,
+    pagaron: pagaron.length,
+    mio,
+    yaPague,
+    cobra: beneficiario ? nombreDe(beneficiario.direccion) : null,
+    soyQuienCobra: beneficiario !== undefined && beneficiario.direccion === yo,
+    cobraGuardado: beneficiario?.moroso === true,
+    entregable: vencida || antes,
+    vence,
+    ahora,
+  })
+  const debePagar = estado === 'Activa' && mio !== null && !yaPague && !mio.moroso
 
   async function ejecutar(
     construir: (c: Client) => Promise<contract.AssembledTransaction<unknown>>,
     textoListo: string,
   ) {
     if (!yo) return
-    setAviso({ tipo: 'esperando', texto: 'Confirma en Freighter y espera unos segundos mientras la red lo registra…' })
+    setAviso({
+      tipo: 'esperando',
+      texto: billetera.tipo === 'google' ? 'Un momento: esto toma unos segundos…' : 'Confirma en Freighter y espera unos segundos…',
+    })
     try {
       const tx = await construir(clienteFirma(yo))
       await enviar(tx)
@@ -95,39 +119,14 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           </p>
         </div>
       ) : (
-        <h2 id="panel-titulo">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</h2>
+        <div className={`siguiente siguiente-${siguiente.tono}`}>
+          {estado === 'Activa' && <p className="siguiente-etapa">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</p>}
+          <h2 id="panel-titulo">{siguiente.titulo}</h2>
+          {siguiente.detalle && <p className="siguiente-detalle">{siguiente.detalle}</p>}
+          {mio && estado === 'Activa' && !mio.moroso && <p className="mi-situacion">{miTurno(mio, tanda.ronda_actual)}</p>}
+        </div>
       )}
 
-      <dl className="datos">
-        {estado === 'Abierta' && !invitado && (
-          <>
-            <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
-            {colateralSiguiente !== null && (
-              <Dato
-                etiqueta="Depósito para unirse"
-                valor={eligeTurno(modo) ? 'Según el turno' : `${dinero(colateralSiguiente)}`}
-              />
-            )}
-          </>
-        )}
-        {estado === 'Activa' && (
-          <>
-            <Dato
-              etiqueta="Le toca cobrar"
-              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '-'}
-            />
-            <Dato etiqueta="Pozo" valor={dinero(bolsa)} />
-            <Dato
-              etiqueta={vencida ? 'Venció hace' : 'Vence en'}
-              valor={duracion(Math.abs(restante))}
-              alerta={vencida}
-            />
-            <Dato etiqueta="Ya pagaron" valor={`${pagaron.length} de ${tanda.n_miembros}`} />
-          </>
-        )}
-      </dl>
-
-      {mio && <p className="mi-situacion">{miSituacion(estado, mio, yaPague, tanda.ronda_actual)}</p>}
 
       <div className="acciones">
         {!yo ? (
@@ -166,10 +165,10 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
               <NotaHistorial yo={yo} requisitos={historial.requisitos} normal={colateralNormal ?? 0n} conDescuento={null} />
             )}
 
-            {estado === 'Activa' && mio && !yaPague && !mio.moroso && (
+            {debePagar && (
               <>
                 <button
-                  className="boton principal"
+                  className="boton principal grande"
                   disabled={ocupado || faltaParaPagar > 0n}
                   onClick={() => ejecutar((c) => c.pagar_cuota({ id, miembro: yo }), 'Listo: pagaste tu cuota de este turno.')}
                 >
@@ -198,6 +197,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 antes={antes}
                 siguienteVence={vence + Number(tanda.periodo_seg)}
                 ahora={ahora}
+                principal={!debePagar && !mio?.moroso}
                 cerrar={(textoListo) => ejecutar((c) => c.cerrar_ronda({ id }), textoListo)}
               />
             )}
@@ -216,9 +216,9 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 <button
                   className="boton principal"
                   disabled={ocupado}
-                  onClick={() => ejecutar((c) => c.finalizar({ id }), 'Listo: se repartió el dinero final.')}
+                  onClick={() => ejecutar((c) => c.finalizar({ id }), 'Listo: se repartió lo que quedaba.')}
                 >
-                  Repartir el dinero final
+                  Repartir lo que queda
                 </button>
                 <p className="explica">
                   Devuelve a cada persona su depósito con los intereses, y reparte las multas entre quienes siempre
@@ -274,6 +274,35 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           </>
         )}
       </div>
+
+      <dl className="datos datos-turno">
+        {estado === 'Abierta' && !invitado && (
+          <>
+            <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
+            {colateralSiguiente !== null && (
+              <Dato
+                etiqueta="Depósito para unirse"
+                valor={eligeTurno(modo) ? 'Según el turno' : `${dinero(colateralSiguiente)}`}
+              />
+            )}
+          </>
+        )}
+        {estado === 'Activa' && (
+          <>
+            <Dato
+              etiqueta="Le toca cobrar"
+              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '-'}
+            />
+            <Dato etiqueta="Pozo" valor={dinero(bolsa)} />
+            <Dato
+              etiqueta={vencida ? 'Venció hace' : 'Vence en'}
+              valor={duracion(Math.abs(restante))}
+              alerta={vencida}
+            />
+            <Dato etiqueta="Ya pagaron" valor={`${pagaron.length} de ${tanda.n_miembros}`} />
+          </>
+        )}
+      </dl>
 
       <AccionesTurnos id={id} datos={datos} billetera={billetera} saldo={saldo} ahora={ahora} alCambiar={alCambiar} />
 
@@ -333,20 +362,10 @@ function tituloPanel(estado: string, ronda: number, n: number): string {
   }
 }
 
-function miSituacion(
-  estado: string,
-  m: { posicion: number; cobro: boolean; moroso: boolean; deuda: bigint },
-  yaPague: boolean,
-  ronda: number,
-): string {
-  if (m.moroso) return `Tienes un pago pendiente de ${dinero(m.deuda)} en esta tanda.`
-  const turno = m.posicion === SIN_TURNO
-    ? 'Tu turno todavía no está decidido.'
-    : m.cobro
-    ? 'Ya cobraste tu pozo.'
-    : estado === 'Activa' && m.posicion === ronda
-      ? 'En este turno cobras tú.'
-      : `Cobras en el turno ${m.posicion + 1}.`
-  if (estado !== 'Activa') return turno
-  return `${turno} ${yaPague ? 'Ya pagaste este turno.' : 'Te falta pagar este turno.'}`
+/** Cuándo cobra quien mira (lo de pagar ya lo dice la siguiente acción). */
+function miTurno(m: { posicion: number; cobro: boolean }, turno: number): string {
+  if (m.posicion === SIN_TURNO) return 'Tu turno todavía no está decidido.'
+  if (m.cobro) return 'Ya cobraste tu pozo.'
+  if (m.posicion === turno) return 'En este turno cobras tú.'
+  return `Cobras en el turno ${m.posicion + 1}.`
 }

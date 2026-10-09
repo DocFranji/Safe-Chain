@@ -24,6 +24,8 @@ type Props = {
   ahora?: number
   /** Firma `cerrar_ronda` y, al terminar, muestra `textoListo`. */
   cerrar: (textoListo: string) => void
+  /** (UX) true si entregar el pozo es lo principal para quien mira (ya pagó o no participa). */
+  principal?: boolean
 }
 
 /** "Ana", "Ana y Beto", "Ana, Beto y Carla". */
@@ -43,6 +45,7 @@ export function CerrarRonda({
   siguienteVence,
   ahora,
   cerrar,
+  principal = false,
 }: Props) {
   const soyYo = beneficiario !== undefined && beneficiario.direccion === yo
   const nombre = beneficiario ? nombreDe(beneficiario.direccion) : null
@@ -68,7 +71,7 @@ export function CerrarRonda({
     return (
       <>
         <button
-          className={soyYo ? 'boton principal' : 'boton secundario'}
+          className={soyYo || principal ? 'boton principal' : 'boton secundario'}
           disabled={ocupado}
           onClick={() =>
             cerrar(
@@ -109,7 +112,7 @@ export function CerrarRonda({
   return (
     <>
       <button
-        className="boton secundario"
+        className={principal && !retenida ? 'boton principal' : 'boton secundario'}
         disabled={ocupado}
         onClick={() =>
           cerrar(

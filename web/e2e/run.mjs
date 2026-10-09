@@ -1518,6 +1518,43 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.close()
 }
 
+// ---------------------------------------------------------------- UX: la siguiente acción, arriba del panel
+{
+  const BETO_DIR = 'GBPDH2E2EX5D7DO76YRIX477LPJWNPB7MJZRTEDJWBKZMS5KTLLRU2LO'
+  const casos = [
+    ['te toca pagar', nuevoEstado(), CARLA, '#/tanda/2', /^Te toca pagar \$100$/, 'pagar'],
+    ['ya pagué y espero', nuevoEstado(), BETO_DIR, '#/tanda/2', /^Ya pagaste\. Esperando a 2 personas$/, 'esperar'],
+    ['te toca cobrar', conMiBolsaLista(nuevoEstado()), ME, '#/tanda/6', /^Te toca cobrar \$300$/, 'cobrar'],
+    ['falta entregarle el pozo a otra persona', conMiBolsaLista(nuevoEstado()), ANA, '#/tanda/6', /^El turno terminó: falta entregarle el pozo a /, 'entregar'],
+    ['debo', conTandaMorosa(nuevoEstado()), ME, '#/tanda/6', /^Debes \$100$/, 'deuda'],
+    ['creé la tanda pero no estoy en ella', nuevoEstado(), ME, '#/tanda/3', /^Únete a esta tanda$/, 'entrar'],
+  ]
+  for (const [que, est, direccion, hash, titulo, tono] of casos) {
+    const { page, errores } = await nuevaPagina(browser, { est, direccion, viewport: { width: 375, height: 800 } })
+    await page.goto(BASE + hash)
+    await page.waitForSelector('.siguiente h2', { timeout: 15000 }).catch(() => {})
+    const h2 = ((await page.locator('.siguiente h2').innerText().catch(() => '')) ?? '').replace(/[\u00a0\u202f]/g, ' ')
+    check(`Siguiente acción (${que}): "${h2}"`, titulo.test(h2) && (await page.locator(`.siguiente-${tono}`).count()) === 1, h2)
+    check(`Siguiente acción (${que}): sin errores de consola`, errores.length === 0, errores.join(' | '))
+    if (tono === 'pagar') {
+      const b = page.getByRole('button', { name: 'Pagar mi cuota de $100' })
+      check('Siguiente acción: "Pagar mi cuota" es el botón grande, justo debajo', /principal grande/.test((await b.getAttribute('class')) ?? ''))
+      check('Siguiente acción: los datos del turno van después del botón', await page.evaluate(() => {
+        const b = [...document.querySelectorAll('.panel button')].find((x) => /Pagar mi cuota/.test(x.textContent ?? ''))
+        const d = document.querySelector('.datos-turno')
+        return !!b && !!d && !!(b.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING)
+      }))
+      await shot(page, 'ux-siguiente-pagar-375')
+    }
+    if (tono === 'entregar') {
+      const b = page.getByRole('button', { name: /^Entregarle el pozo a/ })
+      check('Siguiente acción: "Entregarle el pozo a…" es el botón principal para quien ya pagó', (await b.count()) === 1 && /principal/.test((await b.getAttribute('class')) ?? ''))
+    }
+    if (tono === 'cobrar') await shot(page, 'ux-siguiente-cobrar-375')
+    await page.close()
+  }
+}
+
 // ---------------------------------------------------------------- UX: glosario (web/src/lib/glosario.ts)
 // El camino principal (lobby, unirse, pagar, cobrar, ver el final) no muestra jerga: es la lista JERGA del
 // glosario. "Opciones avanzadas", #/estado y el pie quedan fuera. Los montos se ven como $100.

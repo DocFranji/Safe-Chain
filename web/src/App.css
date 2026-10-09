@@ -2198,3 +2198,40 @@ fieldset.campo {
 .cuenta-usdc-mas[open] > .explica {
   margin: 8px 0;
 }
+
+/* UX: la siguiente acción, arriba del panel de la tanda ("Te toca pagar $20"). */
+.siguiente {
+  margin-bottom: 16px;
+}
+.siguiente-etapa {
+  margin-bottom: 4px;
+  color: var(--tinta-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+.siguiente h2 {
+  font-size: 26px;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+.siguiente-detalle {
+  margin-top: 6px;
+  font-size: 17px;
+}
+.siguiente .mi-situacion {
+  margin-top: 6px;
+  color: var(--tinta-2);
+}
+.siguiente-tarde h2,
+.siguiente-deuda h2 {
+  color: var(--alerta-texto);
+}
+.siguiente-cobrar h2 {
+  color: var(--pago-texto);
+}
+/* Los datos del turno van después del botón: son el detalle, no la acción. */
+.datos-turno {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--linea);
+}
