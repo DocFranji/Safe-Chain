@@ -97,8 +97,8 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                         {NOMBRES[m.direccion] && <span className="dir">{direccionCorta(m.direccion)}</span>}
                       </td>
                       <td className="num">{monto(m.colateral_inicial)}</td>
-                      <td className="num">{hayPagos ? monto(final) : '—'}</td>
-                      <td>{hayPagos ? comoLeFue(m, final, SIMBOLO) : '—'}</td>
+                      <td className="num">{hayPagos ? monto(final) : '-'}</td>
+                      <td>{hayPagos ? comoLeFue(m, final, SIMBOLO) : '-'}</td>
                     </tr>
                   )
                 })}

@@ -5,7 +5,8 @@ import { useEffect, type RefObject } from 'react'
 export function useRevelar(raiz: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = raiz.current
-    if (!el) return
+    // Con "reducir movimiento" todo queda a la vista desde el principio: nada se esconde para luego aparecer.
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const io = new IntersectionObserver(
       (entradas) =>
         entradas.forEach((e) => {

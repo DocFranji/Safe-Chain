@@ -6,31 +6,29 @@
 }
 
 .barra {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--linea);
+  padding: 14px 0;
+  color: var(--barra-tinta);
+}
+/* El fondo de la barra va de lado a lado de la pantalla (cada tema le da su color en temas.css). */
+.barra::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  z-index: -1;
+  background: var(--barra-fondo);
+  border-bottom: var(--barra-linea);
 }
 @media (min-width: 601px) {
-  /* Pegada arriba: al bajar por una tanda larga, el menú y la billetera siguen a mano. El vidrio va en un
-     pseudo-elemento de lado a lado de la pantalla y aparece al empezar a bajar (movimiento/barra-vidrio). */
+  /* Pegada arriba: al bajar por una tanda larga, el menú y la billetera siguen a mano. */
   .barra {
     position: sticky;
     top: 0;
-    z-index: 20;
-    padding: 14px 0;
-  }
-  .barra::before {
-    content: '';
-    position: absolute;
-    inset: 0 calc(50% - 50vw);
-    z-index: -1;
-    background: color-mix(in srgb, var(--papel) 88%, transparent);
-    box-shadow: 0 12px 30px -22px rgba(0, 0, 0, 0.9);
-    backdrop-filter: blur(16px) saturate(150%);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
   }
 }
 
@@ -40,8 +38,8 @@
   gap: 10px;
   font-family: var(--titulos);
   font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-weight: var(--titulos-peso);
+  letter-spacing: var(--titulos-espacio);
   text-decoration: none;
 }
 
@@ -50,7 +48,7 @@
   position: relative;
   width: 24px;
   height: 24px;
-  border: 3px solid var(--tinta);
+  border: 3px solid currentColor;
   border-radius: 50%;
 }
 .logo-orbita {
@@ -67,7 +65,7 @@
   height: 9px;
   margin-left: -4.5px;
   border-radius: 50%;
-  background: var(--acento);
+  background: var(--logo-punto);
 }
 @keyframes logo-girar {
   to {
@@ -92,7 +90,7 @@
   border-radius: 99px;
   font-weight: 600;
   text-decoration: none;
-  color: var(--tinta-2);
+  color: var(--menu-tinta);
   transition:
     background-color var(--t-rapido) ease,
     color var(--t-rapido) ease,
@@ -103,14 +101,14 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .menu a:hover {
-    background: var(--superficie-2);
-    color: var(--tinta);
+    background: var(--menu-hover);
+    color: var(--barra-tinta);
   }
 }
 .menu a[aria-current='page'],
 .menu a[aria-current='page']:hover {
-  background: var(--tinta);
-  color: var(--superficie);
+  background: var(--menu-activo);
+  color: var(--menu-activo-tinta);
 }
 
 @media (max-width: 600px) {
@@ -149,9 +147,9 @@
 
 .selector h1 {
   font-size: 40px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
   line-height: 1.1;
-  letter-spacing: -0.015em;
+  letter-spacing: var(--titulos-espacio);
 }
 
 .selector-botones {
@@ -194,13 +192,71 @@
 
 .mensaje h2 {
   font-size: 26px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
   margin-bottom: 8px;
 }
 
 .cargando {
   color: var(--tinta-2);
   margin: 48px 0;
+}
+
+/* ---------- Botón de claro u oscuro (BotonModo.tsx): un círculo mitad lleno que da media vuelta ---------- */
+.barra-lado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.boton-modo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--t-presion) var(--ease-out),
+    background-color var(--t-rapido) ease;
+}
+.boton-modo:active {
+  transform: scale(0.94);
+}
+.boton-modo:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.boton-modo svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 500ms var(--ease-in-out);
+}
+.boton-modo circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.boton-modo path {
+  fill: currentColor;
+}
+.boton-modo[aria-pressed='true'] svg {
+  transform: rotate(180deg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .boton-modo:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boton-modo svg {
+    transition: none;
+  }
 }
 
 /* ---------- Billetera (arriba a la derecha) ---------- */
@@ -239,10 +295,10 @@
   margin: 0;
 }
 
-.rueda svg {
+.rueda > svg {
   display: block;
   width: 100%;
-  max-width: 460px;
+  max-width: 500px;
   margin: 0 auto;
   font-family: inherit;
 }
@@ -304,11 +360,12 @@
 .nodo-cobro circle {
   fill: var(--pago);
 }
-.nodo-cobro text {
-  text-anchor: middle;
-  font-size: 12px;
-  font-weight: 800;
-  fill: var(--sobre-acento);
+.nodo-cobro path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .nodo-nombre {
@@ -377,22 +434,41 @@
 }
 .muestra.turno {
   background: var(--turno);
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
 }
 .muestra.pago {
   border: 3px solid var(--pago);
 }
 .muestra.cobro {
   background: var(--pago);
-  color: var(--sobre-acento);
-  font-size: 10px;
-  font-weight: 800;
+}
+.muestra svg {
+  width: 12px;
+  height: 12px;
+}
+.muestra svg path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Carreta: la flecha de "cobra esta ronda" y un segmento pintado. */
+.muestra.flecha {
+  border-radius: 0;
+  background: var(--c-tinta);
+  clip-path: polygon(0 10%, 100% 10%, 50% 95%);
+}
+.muestra.pintado {
+  border: 2px solid var(--c-tinta);
+  border-radius: 4px;
+  background: var(--c-azul);
 }
 
 /* ---------- Panel de la ronda ---------- */
 .panel {
-  background: linear-gradient(180deg, var(--superficie-2), var(--superficie) 160px);
-  border: 1px solid var(--linea);
+  background: var(--superficie);
+  border: var(--grosor) solid var(--linea);
   border-radius: var(--radio);
   padding: 24px;
   box-shadow: var(--sombra);
@@ -400,8 +476,8 @@
 
 .panel h2 {
   font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-weight: var(--titulos-peso);
+  letter-spacing: var(--titulos-espacio);
   margin-bottom: 16px;
 }
 
@@ -431,7 +507,8 @@
 .mi-situacion {
   margin-top: 18px;
   padding: 10px 14px;
-  border-left: 4px solid var(--turno);
+  border: var(--grosor) solid var(--turno);
+  border-radius: var(--radio-chico);
   background: var(--turno-suave);
   font-weight: 600;
 }
@@ -492,7 +569,7 @@
   justify-content: center;
   min-height: 48px;
   padding: 12px 18px;
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
   border-radius: var(--radio-chico);
   font: inherit;
   font-weight: 700;
@@ -513,12 +590,10 @@
 }
 
 .boton.principal {
-  background: linear-gradient(180deg, #62f0a9, var(--acento) 70%);
-  border-color: var(--acento);
+  background: var(--acento);
+  border-color: var(--boton-principal-borde, var(--acento));
   color: var(--sobre-acento);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 10px 26px -14px var(--brillo);
+  box-shadow: var(--boton-principal-sombra, none);
 }
 
 .boton.secundario,
@@ -528,10 +603,8 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .boton.principal:hover:not(:disabled) {
-    filter: brightness(1.06);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.45),
-      0 14px 32px -12px var(--brillo);
+    filter: brightness(1.08);
+    box-shadow: 0 10px 22px -12px var(--brillo);
   }
   .boton.secundario:hover:not(:disabled),
   .boton.chico:hover:not(:disabled) {
@@ -560,7 +633,7 @@
 
 .miembros h2 {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
   margin-bottom: 12px;
 }
 
@@ -607,7 +680,7 @@ tbody tr td {
 }
 @media (hover: hover) and (pointer: fine) {
   tbody tr:hover td {
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--fila-hover, var(--superficie-2));
   }
 }
 .fila-yo td,
@@ -707,7 +780,7 @@ td .dir {
   display: inline-block;
   padding: 2px 10px;
   border-radius: 99px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   background: var(--papel);
   font-size: 13px;
   font-weight: 700;
@@ -760,7 +833,7 @@ td .dir {
 .filtro {
   min-height: 38px;
   padding: 6px 16px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 99px;
   background: var(--superficie);
   color: var(--tinta);
@@ -805,11 +878,10 @@ td .dir {
   gap: 6px;
   height: 100%;
   padding: 20px;
-  border: 1px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: var(--radio);
   background:
-    radial-gradient(120% 80% at 100% 0%, rgba(62, 224, 143, 0.07), transparent 60%),
-    linear-gradient(180deg, var(--superficie-2), var(--superficie) 140px);
+    var(--superficie);
   box-shadow: var(--sombra);
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
@@ -825,7 +897,7 @@ td .dir {
 @media (hover: hover) and (pointer: fine) {
   .tarjeta:hover {
     transform: translateY(-3px);
-    border-color: rgba(62, 224, 143, 0.45);
+    border-color: var(--tarjeta-borde-hover, var(--acento));
     box-shadow: var(--sombra-alta);
   }
   .tarjeta:hover:active {
@@ -841,7 +913,7 @@ td .dir {
 }
 .tarjeta-cabeza h2 {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 
 .tarjeta-bolsa {
@@ -867,9 +939,9 @@ td .dir {
   border: 2px dashed var(--tinta-2);
 }
 .lugar.lleno {
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
   background: var(--turno);
-  box-shadow: 0 0 10px -2px rgba(242, 193, 78, 0.6);
+  box-shadow: none;
 }
 
 .tarjeta-datos {
@@ -898,7 +970,7 @@ td .dir {
 }
 .vacio h2 {
   font-size: 26px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 
 .sin-resultados {
@@ -956,7 +1028,7 @@ td .dir {
   width: 100%;
   min-height: 48px;
   padding: 8px 12px;
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
   border-radius: var(--radio-chico);
   background: var(--papel);
   color: var(--tinta);
@@ -971,7 +1043,7 @@ td .dir {
 .campo input:not([type='range']):not([type='checkbox']):focus,
 .campo select:focus {
   border-color: var(--acento);
-  box-shadow: 0 0 0 4px rgba(62, 224, 143, 0.16);
+  box-shadow: 0 0 0 4px var(--brillo);
   outline: none;
 }
 .campo input[aria-invalid='true'] {
@@ -1025,7 +1097,7 @@ td .dir {
 .vista-previa h3 {
   margin: 22px 0 6px;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 .vista-previa .explica,
 .vista-previa .aviso {
@@ -1041,7 +1113,7 @@ td .dir {
 .invitar h2,
 .rendimiento h2 {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
   margin-bottom: 8px;
 }
 
@@ -1054,7 +1126,7 @@ td .dir {
   flex: 1;
   min-width: 0;
   padding: 6px 10px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 10px;
   background: var(--papel);
   color: var(--tinta);
@@ -1102,9 +1174,9 @@ td .dir {
 .barra-cuenta {
   margin-top: 14px;
   padding: 12px 16px;
-  border: 1px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--superficie-2), var(--superficie));
+  background: var(--superficie);
   box-shadow: var(--sombra);
 }
 .barra-cuenta-fila {
@@ -1135,22 +1207,45 @@ td .dir {
 }
 
 /* ---------- Línea de tiempo (historia de la tanda) ---------- */
+/* Una línea de tiempo de verdad: una línea vertical y un punto por evento, del color de lo que pasó. */
 .historia {
+  position: relative;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 26px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+}
+.historia::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--linea);
 }
 .historia-item {
+  position: relative;
   display: grid;
   grid-template-columns: 5.4em 1fr;
   gap: 10px;
   padding: 10px 14px;
-  border-left: 4px solid var(--linea);
-  background: linear-gradient(90deg, var(--superficie-2), var(--superficie) 60%);
-  border-radius: 0 12px 12px 0;
+  border-radius: var(--radio-chico);
+  --punto: var(--superficie);
+}
+.historia-item::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: -24px;
+  width: 14px;
+  height: 14px;
+  border: var(--grosor) solid var(--borde);
+  border-radius: 50%;
+  background: var(--punto);
 }
 .historia-item time {
   padding-top: 2px;
@@ -1167,13 +1262,13 @@ td .dir {
 }
 .historia-item.pago,
 .historia-item.ok {
-  border-left-color: var(--pago);
+  --punto: var(--pago);
 }
 .historia-item.alerta {
-  border-left-color: var(--alerta);
+  --punto: var(--alerta);
 }
 .historia-item.clave {
-  border-left-color: var(--turno);
+  --punto: var(--turno);
   background: var(--turno-suave);
 }
 .historia-item.clave .historia-titulo {
@@ -1196,19 +1291,28 @@ td .dir {
 }
 .demo-cabeza h1 {
   font-size: clamp(36px, 6vw, 64px);
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
   line-height: 1.05;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--titulos-espacio);
+}
+.demo-estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 .demo-etiqueta {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 3px 12px;
+  border: var(--grosor) solid var(--alerta);
+  border-radius: 99px;
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--alerta);
+  color: var(--alerta-texto);
+  background: var(--alerta-suave);
 }
 .punto-vivo {
   width: 12px;
@@ -1238,11 +1342,10 @@ td .dir {
 }
 .demo-ahora {
   padding: 20px 24px;
-  border: 1px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: var(--radio);
   background:
-    radial-gradient(90% 120% at 0% 0%, rgba(242, 193, 78, 0.08), transparent 60%),
-    linear-gradient(180deg, var(--superficie-2), var(--superficie));
+    var(--superficie);
   box-shadow: var(--sombra);
 }
 .demo-grande {
@@ -1278,7 +1381,7 @@ td .dir {
 }
 .demo-persona {
   padding: 12px 16px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 14px;
   background: var(--superficie);
 }
@@ -1291,7 +1394,7 @@ td .dir {
 .demo-persona.turno {
   border-color: var(--turno);
   background: var(--turno-suave);
-  box-shadow: 0 0 28px -10px rgba(242, 193, 78, 0.55);
+  box-shadow: none;
 }
 .demo-persona.moroso {
   border-color: var(--alerta);
@@ -1311,7 +1414,7 @@ td .dir {
   place-items: center;
   width: 32px;
   height: 32px;
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
   border-radius: 50%;
   font-weight: 800;
 }
@@ -1348,7 +1451,7 @@ td .dir {
 .demo-garantia-barra i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #2fbf78, var(--pago));
+  background: var(--pago);
   transition: width 0.6s var(--ease-in-out);
 }
 .demo-persona.moroso .demo-garantia-barra i {
@@ -1367,7 +1470,7 @@ td .dir {
 .demo-abajo h2 {
   margin-bottom: 12px;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 .demo .historia-item {
   font-size: 1.05em;
@@ -1404,7 +1507,7 @@ td .dir {
 .como-probar {
   margin: 0 0 28px;
   padding: 22px 24px;
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
   border-radius: 18px;
   background: var(--superficie);
 }
@@ -1418,7 +1521,7 @@ td .dir {
 .como-cabeza h2 {
   margin-bottom: 6px;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 .como-cabeza .explica {
   max-width: 62ch;
@@ -1435,7 +1538,7 @@ td .dir {
   display: flex;
   gap: 12px;
   padding: 12px 14px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 14px;
   background: var(--papel);
 }
@@ -1453,7 +1556,7 @@ td .dir {
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 2px solid var(--borde);
+  border: var(--grosor) solid var(--borde);
   border-radius: 50%;
   font-weight: 800;
 }
@@ -1508,9 +1611,9 @@ td .dir {
   display: flex;
   gap: 14px;
   padding: 14px 16px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--superficie-2), var(--superficie));
+  background: var(--superficie);
 }
 .chequeo.ok {
   border-color: var(--pago);
@@ -1556,7 +1659,7 @@ td .dir {
 .enlaces-demo h2 {
   margin-bottom: 14px;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 .enlaces-demo .datos {
   grid-template-columns: 1fr;
@@ -1590,7 +1693,7 @@ td .dir {
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 12px;
   background: var(--papel);
   cursor: pointer;
@@ -1654,7 +1757,7 @@ td .dir {
 .turnos-acciones h3 {
   margin: 0;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: var(--titulos-peso);
 }
 .rejilla-turnos {
   display: grid;
@@ -1727,7 +1830,7 @@ td .dir {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 12px;
 }
 .propuesta.recibida {
@@ -1852,7 +1955,7 @@ td .dir {
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  border: 1.5px solid var(--linea);
+  border: var(--grosor) solid var(--linea);
   border-radius: 12px;
   background: var(--papel);
   cursor: pointer;

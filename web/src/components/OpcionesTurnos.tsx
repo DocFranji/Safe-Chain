@@ -226,9 +226,9 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
                   {f.pideHistorial && <span className="nivel-turno">{nivelDePuntaje(valor.puntajePrimeros)}</span>}
                 </td>
                 <td className="num">{monto(f.alUnirse)}</td>
-                {conApartado && <td className="num">{f.apartado > 0n ? monto(f.apartado) : '—'}</td>}
+                {conApartado && <td className="num">{f.apartado > 0n ? monto(f.apartado) : '-'}</td>}
                 {conPrima && (
-                  <td className="num">{f.prima > 0n ? `paga ${monto(f.prima)}` : f.prima < 0n ? `gana ${monto(-f.prima)}` : '—'}</td>
+                  <td className="num">{f.prima > 0n ? `paga ${monto(f.prima)}` : f.prima < 0n ? `gana ${monto(-f.prima)}` : '-'}</td>
                 )}
                 <td className="num">{monto(f.recibe)}</td>
               </tr>

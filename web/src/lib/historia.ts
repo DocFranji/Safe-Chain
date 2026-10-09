@@ -36,10 +36,10 @@ export function ordenar(eventos: EventoTanda[]): EventoTanda[] {
 
 /** De cronológico a frases. Un evento al que le falten datos se cuenta con lo que haya. */
 export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
-  const dinero = (v: bigint | undefined) => (v === undefined ? '—' : `${f.monto(v)} ${f.simbolo}`)
+  const dinero = (v: bigint | undefined) => (v === undefined ? '-' : `${f.monto(v)} ${f.simbolo}`)
   const quien = (d: string | undefined) => (d === undefined ? 'Alguien' : f.nombre(d))
   const ronda = (r: number | undefined) => (r === undefined ? '' : `Ronda ${r + 1}`)
-  const pct = (bps: number | undefined) => (bps === undefined ? '—' : `${bps / 100} %`)
+  const pct = (bps: number | undefined) => (bps === undefined ? '-' : `${bps / 100} %`)
 
   return ordenar(eventos).map((e): EntradaHistoria => {
     const base = { id: e.id, cerradoEn: e.cerradoEn }
@@ -296,6 +296,28 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
           detalle: partes.length ? partes.join(' · ').replace(/^./, (l) => l.toUpperCase()) : undefined,
         }
       }
+      // --- M1 (v4): cerrar antes y pagar deudas después de terminar ---
+      case 'EvCierreAnticipado':
+        return {
+          ...base,
+          tipo: 'clave',
+          titulo: `Todos pagaron: la ${ronda(ev.data.ronda).toLowerCase() || 'ronda'} se cerró antes`,
+          detalle: 'Las fechas no cambian: la ronda siguiente ya se puede pagar y vence cuando le tocaba',
+        }
+      case 'EvAbonoFinal':
+        return ev.data.reparto
+          ? {
+              ...base,
+              tipo: 'ok',
+              titulo: `${quien(ev.data.hacia)} recibió ${dinero(ev.data.monto)}`,
+              detalle: `Su parte de lo que debía ${quien(ev.data.deudor)} a una bolsa que se repartió al final`,
+            }
+          : {
+              ...base,
+              tipo: 'clave',
+              titulo: `${quien(ev.data.hacia)} recibió los ${dinero(ev.data.monto)} que le faltaban`,
+              detalle: `Lo pagó ${quien(ev.data.deudor)}, con la tanda ya terminada`,
+            }
       case 'EvBovedaRapida':
         return { ...base, tipo: 'info', titulo: 'Se cambió la bóveda de las tandas de prueba' }
       // --- M2: historial crediticio ---

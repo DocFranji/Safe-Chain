@@ -120,6 +120,11 @@ pub enum Error {
     // --- M4: bóveda por token (50–59; el adaptador de Blend usa 50–53 con sus propios nombres) ---
     TokenSinBoveda = 55,    // no hay bóveda para el token de esta tanda
     BovedaDeOtroToken = 56, // la bóveda que se quiere registrar guarda otro token
+    // --- M1 (v4): cerrar la ronda antes (60–64) ---
+    SubastaNoCierraAntes = 60, // en la subasta la ronda no se puede cerrar antes de que venza
+    CierreMuyAdelantado = 61,  // la fecha límite siguiente quedaría a más de 120 días
+    // --- M2 v4: bloqueo por deuda (65–69) ---
+    DeudaPendiente = 65, // tiene una mora sin saldar en alguna tanda: no puede unirse a otra
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +163,9 @@ pub enum ClaveM1 {
     BovedaDe(u32),
     /// Deuda del miembro en la tanda `id` (solo existe si alguna vez debió algo).
     DeudaDe(u32, Address),
+    /// (v4) Quiénes recibieron en partes iguales las bolsas retenidas al finalizar la tanda `id`. Solo
+    /// existe si hubo bolsa retenida: a ellos les llega lo que se pague después de esas rondas.
+    Repartidos(u32),
 }
 
 // ---------------------------------------------------------------------------

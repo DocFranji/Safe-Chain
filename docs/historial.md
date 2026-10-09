@@ -248,3 +248,38 @@ Si `puntaje_minimo > 0` y `puntaje(miembro) < puntaje_minimo` → `Error::Puntaj
 - Pendiente (extra): insignias en las tarjetas del lobby y línea de tiempo del historial (necesita indexador).
 
 - **Vida de los requisitos** (hallazgo 3 de `docs/seguridad.md`, arreglado): `ClaveM2::Requisitos(id)` se renueva con la vida de la tanda en `al_fin_operacion` (cada cierre de ronda) y en `puede_unirse`. Sin escrituras extra en el peor caso (43 de 50); +1–2 lecturas (máx. 74 de 100).
+
+## 10. Plan v4 (miércoles 7 de octubre): bloqueo de morosos (N2a) y perfil (N4)
+
+### N2a · Quien debe no se une a otra tanda
+- `ganchos::puede_unirse` pregunta al historial `tiene_mora(dir)` (`veces_moroso > deudas_saldadas`) y rechaza con **65 `DeudaPendiente`**. Vale para `unirse` y `unirse_en_turno`, que pasan los dos por `unirse_en`.
+- **Cero escrituras extra** en `cerrar_ronda`: el dato ya llega al historial en ese cierre. Al unirse se suma una lectura entre contratos.
+- **Si el historial no responde, no se bloquea** (§6.2 del protocolo). Si responde, el bloqueo vale aunque la tanda no pida requisitos.
+- **El contador cuadra:**
+  - `Moroso` se anota una vez por caída en mora (`if !m.moroso` en `cerrar_ronda`; seguir moroso varias rondas no suma);
+  - `DeudaSaldada` se anota una vez al llegar a cero (`pagar_deuda` pone `moroso = false` y llama `al_pagar_deuda(.., 0)`);
+  - hay pruebas de dos caídas y dos pagos.
+- **Limitación conocida:** si el historial falla justo cuando alguien salda (o la tanda deja de estar autorizada como emisor), el `DeudaSaldada` no queda anotado y esa persona sigue bloqueada aunque pagó. Es poco probable; el arreglo sería que el admin del historial pudiera anotar un `DeudaSaldada` verificando la deuda en la tanda (trabajo futuro).
+- **Web:** el aviso aparece antes de firmar (en `NotaHistorial`, en todas las formas de unirse) con el enlace a "Perfil → Mis deudas". El error 65 tiene su mensaje en `contrato.ts`.
+
+### N4 · Apodo, perfil y cerrar sesión
+- **Contrato `historial`:**
+  - `poner_apodo(quien, apodo)` (firma `quien`), `quitar_apodo(quien)` y `apodo(quien) -> Option<String>`;
+  - error 5 `ApodoInvalido` y evento `apodo`;
+  - el apodo no toca el puntaje.
+- **Reglas del apodo** (en el contrato y en la web, `problemaApodo`):
+  - de 2 a 24 caracteres;
+  - letras latinas (incluidas las tildes, la ü y la ñ), números, espacio, `.`, `-` y `_`;
+  - sin espacios al inicio, al final ni dobles.
+  - No se aceptan letras de otros alfabetos que se ven iguales (la "а" cirílica).
+- **`nombreDe()`:** "Apodo · GADM…TVPD" → `VITE_NOMBRES` → dirección corta. El apodo **siempre** va con la dirección corta, porque cualquiera elige el que quiera. Se lee una vez por dirección y queda en caché; la app se vuelve a dibujar cuando llega.
+- **`#/perfil`** (en el menú, "Perfil" reemplaza a "Mi historial"; `#/historial` y `#/historial/<dir>` siguen):
+  - el apodo (con una firma);
+  - la dirección y cómo entró;
+  - "Mis deudas": las tandas recientes (hasta 100) donde se debe algo, también las terminadas, con el botón "Pagar", que llama `pagar_deuda` de M1;
+  - la ficha del historial;
+  - "Cerrar sesión".
+- **Cerrar sesión:**
+  - Sale de Google.
+  - Con Freighter, que no tiene función para desconectar un sitio, la web deja una marca en `localStorage` (`rounda.salio`). Mientras esté, no se reconecta al cargar ni con el vigilante, hasta que la persona pulse "Conectar billetera".
+  - El Perfil explica que el permiso se quita del todo desde Freighter.

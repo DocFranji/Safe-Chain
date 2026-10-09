@@ -1,5 +1,7 @@
 import './App.css'
 import './movimiento.css'
+import './temas.css'
+import './paginas.css'
 import { useBilletera, type Billetera } from './hooks/useBilletera'
 import { useRuta } from './hooks/useRuta'
 import { useCuenta } from './hooks/useCuenta'
@@ -9,24 +11,34 @@ import { PaginaTanda } from './pages/PaginaTanda'
 import { Demo } from './pages/Demo'
 import { Estado } from './pages/Estado'
 import { Historial } from './pages/Historial'
+import { Perfil } from './pages/Perfil'
 import { Landing } from './landing/Landing'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { BotonesEntrar } from './components/BotonesEntrar'
-import { direccionCorta, nombreDe, NOMBRES } from './lib/nombres'
-import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_MI_HISTORIAL } from './lib/rutas'
+import { BotonModo } from './components/BotonModo'
+import { direccionCorta, nombreDe, NOMBRES, suscribirApodos, usarLectorDeApodos, versionApodos } from './lib/nombres'
+import { leerApodo } from './lib/historial'
+import { useSyncExternalStore } from 'react'
+import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_PERFIL } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
+
+// Los apodos públicos (M2, N4) se leen del contrato de historial, una vez por dirección.
+usarLectorDeApodos(leerApodo)
 
 export default function App() {
   const billetera = useBilletera()
+  // Cuando llega un apodo, la app se vuelve a dibujar para mostrarlo en lugar de la dirección.
+  useSyncExternalStore(suscribirApodos, versionApodos)
   const ruta = useRuta()
   const cuenta = useCuenta(billetera.direccion, billetera.redCorrecta)
 
   // La landing trae su propio encabezado y pie: no se le pone el de la app.
   if (ruta.tipo === 'inicio') return <Landing />
 
+  // Cada página se viste según su función (paginas.css): elegir, pagar y cobrar, crear, proyectar, leer, revisar.
   return (
-    <div className="app">
+    <div className="app" data-pagina={ruta.tipo}>
       <header className="barra">
         <a className="marca" href={RUTA_INICIO}>
           <span className="logo" aria-hidden="true">
@@ -45,12 +57,16 @@ export default function App() {
             Demo en vivo
           </a>
           {billetera.direccion && (
-            <a href={RUTA_MI_HISTORIAL} aria-current={ruta.tipo === 'historial' ? 'page' : undefined}>
-              Mi historial
+            <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' ? 'page' : undefined}>
+              Perfil
             </a>
           )}
         </nav>
-        <BotonBilletera billetera={billetera} />
+        <div className="barra-lado">
+          {/* La demo siempre va en oscuro (se proyecta): ahí el botón no haría nada. */}
+          {ruta.tipo !== 'demo' && <BotonModo />}
+          <BotonBilletera billetera={billetera} />
+        </div>
       </header>
 
       {ruta.tipo !== 'demo' && <BarraCuenta billetera={billetera} cuenta={cuenta} />}
@@ -72,6 +88,8 @@ export default function App() {
           <Estado billetera={billetera} />
         ) : ruta.tipo === 'historial' ? (
           <Historial key={ruta.dir ?? 'mio'} dir={ruta.dir} billetera={billetera} />
+        ) : ruta.tipo === 'perfil' ? (
+          <Perfil billetera={billetera} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>

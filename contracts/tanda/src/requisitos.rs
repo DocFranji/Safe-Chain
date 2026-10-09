@@ -28,6 +28,7 @@ pub trait HistorialIface {
     );
     fn puntaje(env: Env, dir: Address) -> u32;
     fn beneficio_colateral_bps(env: Env, dir: Address) -> u32;
+    fn tiene_mora(env: Env, dir: Address) -> bool;
 }
 
 /// Dirección del historial, si el admin lo configuró.

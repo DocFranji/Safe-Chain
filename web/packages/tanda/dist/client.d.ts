@@ -60,6 +60,8 @@ export interface Client {
      * Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
      * - Quien no pagó: su colateral cubre la cuota. Si no alcanza, queda moroso.
      * - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
+     * - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
+     * fechas no se mueven: la ronda siguiente vence cuando le tocaba.
      */
     cerrar_ronda(args: {
         id: number;
@@ -238,7 +240,8 @@ export interface Client {
      * Paga (toda o una parte) la deuda de `miembro` en la tanda `id`. Puede pagarla otra persona
      * (`pagador`, que es quien firma y de quien sale el dinero). Devuelve la deuda que queda.
      *
-     * Solo mientras la tanda está `Activa` o `PorLiquidar`. No se puede pagar de más.
+     * Mientras la tanda está `Activa` o `PorLiquidar`, y también después de `Finalizada` (v4: el
+     * dinero va directo a quien recibió de menos). No se puede pagar de más.
      */
     pagar_deuda(args: {
         id: number;
@@ -488,6 +491,12 @@ export declare class Client extends ContractClient {
         id?: number;
     }): string[];
     /**
+     * Build a topics filter row for the "EvAbonoFinal" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evAbonoFinalEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
      * Build a topics filter row for the "EvFinalizada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evFinalizadaEventFilter(topicValues?: {
@@ -525,6 +534,12 @@ export declare class Client extends ContractClient {
      * Build a topics filter row for the "EvBolsaRecuperada" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evBolsaRecuperadaEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvCierreAnticipado" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evCierreAnticipadoEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**

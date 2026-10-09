@@ -1,0 +1,354 @@
+/*
+ * Lo propio de la marca (diseño Órbita, DESIGN.md) sobre la base de App.css y paginas.css: la barra marina con el
+ * logo en blanco y una línea azul que brilla, piezas redondeadas con sombras en capas, botones en píldora y la rueda
+ * con el punto del logo que señala a quien cobra. Los colores están en index.css.
+ */
+
+/* =====================================================================================================
+   LA BARRA: lleva el color de la marca y el logo va en blanco, para que destaque.
+   ===================================================================================================== */
+:root {
+  --barra-fondo: var(--marca);
+  --barra-linea: 0;
+  --barra-tinta: var(--sobre-marca);
+  --menu-tinta: rgba(255, 255, 255, 0.82);
+  --menu-hover: rgba(255, 255, 255, 0.14);
+  --menu-activo: var(--sobre-marca);
+  --menu-activo-tinta: var(--marca);
+  --logo-punto: var(--marca-detalle);
+  --tarjeta-borde-hover: var(--borde);
+}
+.marca {
+  font-size: 23px;
+  font-stretch: var(--titulos-ancho, 100%);
+}
+.marca .logo {
+  width: 26px;
+  height: 26px;
+}
+.barra :focus-visible {
+  outline-color: var(--sobre-marca);
+}
+.barra .billetera .dir,
+.barra .explica {
+  color: rgba(255, 255, 255, 0.82);
+}
+.barra .boton {
+  border-color: var(--sobre-marca);
+  background: var(--sobre-marca);
+  color: var(--marca);
+}
+@media (hover: hover) and (pointer: fine) {
+  .barra .boton.chico:hover:not(:disabled) {
+    border-color: var(--sobre-marca);
+    background: rgba(255, 255, 255, 0.88);
+  }
+}
+.barra .punto.ok {
+  background: var(--marca-detalle);
+}
+
+/* Los números de dinero, con la letra de la marca y del mismo ancho. */
+:is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-family: var(--titulos);
+  font-variant-numeric: tabular-nums;
+}
+.dato dd.alerta {
+  color: var(--alerta);
+}
+
+/* Detalles del navegador con los colores de la marca. */
+:root {
+  caret-color: var(--acento-texto);
+  scrollbar-color: var(--borde) var(--papel);
+  accent-color: var(--acento);
+}
+
+/* =====================================================================================================
+   LAS PIEZAS: blancas y muy redondeadas, con sombras en capas; botones, etiquetas y filtros en píldora; el ámbar
+   solo para a quién le toca y lo elegido. Números en Geist, de ancho fijo.
+   ===================================================================================================== */
+:root .barra::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
+  height: 3px;
+  z-index: -1;
+  background: var(--marca-detalle);
+}
+:root .marca {
+  letter-spacing: -0.02em;
+}
+:root .menu a {
+  font-weight: 550;
+}
+:root .selector h1 {
+  font-size: 42px;
+  line-height: 1.04;
+}
+:root .panel h2 {
+  font-size: 23px;
+}
+:root :is(.miembros h2, .historia-seccion h2, .invitar h2, .rendimiento h2) {
+  font-size: 20px;
+}
+:root
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+:root .opciones-historial {
+  padding: 12px 16px 16px;
+}
+:root .boton {
+  border-width: 1px;
+  border-radius: 999px;
+  padding-inline: 22px;
+  font-weight: 600;
+}
+:root .boton.chico {
+  padding-inline: 16px;
+}
+:root :is(.boton.secundario, .boton.chico) {
+  background: var(--superficie);
+  border-color: var(--borde);
+}
+:root .etiqueta {
+  border: 0;
+  padding: 3px 12px;
+  background: var(--superficie-2);
+  color: var(--tinta-2);
+  font-weight: 600;
+}
+:root :is(.etiqueta.abierta, .etiqueta.por-repartir) {
+  background: var(--turno-suave);
+  color: var(--tinta);
+}
+:root .etiqueta.en-curso {
+  background: var(--pago-suave);
+  color: var(--pago-texto);
+}
+:root .etiqueta.cancelada {
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+}
+:root .lugar {
+  border: 1.5px dashed var(--borde);
+}
+:root .lugar.lleno {
+  border: 0;
+  background: var(--acento);
+}
+:root .filtro {
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--tinta-2);
+}
+:root .filtro.activo {
+  border-color: var(--marca);
+  background: var(--marca);
+  color: var(--sobre-marca);
+}
+:root :is(.modo, .moneda) {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-chico);
+  background: var(--superficie);
+}
+:root :is(.modo.elegido, .moneda.elegida, .moneda[aria-checked='true']) {
+  border-color: var(--acento);
+  background: var(--pago-suave);
+  box-shadow: 0 0 0 1px var(--acento) inset;
+}
+:root th {
+  border-bottom: 1px solid var(--linea);
+  color: var(--tinta-2);
+  font-weight: 600;
+  text-transform: none;
+}
+:root td {
+  border-bottom-color: var(--linea);
+}
+:root .tarjeta-cobro {
+  border: 1px solid var(--marca);
+  background: var(--marca);
+  color: var(--sobre-marca);
+}
+:root :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-family: var(--texto);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+/* =====================================================================================================
+   EL CARÁCTER DE ÓRBITA: la línea azul que brilla bajo la barra, piezas sin borde (solo sombra, como las
+   plantillas de Framer) y Geist en peso medio.
+   ===================================================================================================== */
+:root .barra::after {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--marca-detalle) 30%, #8eabff 50%, var(--marca-detalle) 70%, transparent);
+  box-shadow: 0 0 18px 1px rgba(76, 125, 255, 0.55);
+}
+:root .marca {
+  font-weight: 560;
+  letter-spacing: -0.03em;
+}
+:root .menu a {
+  font-weight: 500;
+}
+:root .selector h1 {
+  font-weight: 560;
+  letter-spacing: -0.035em;
+}
+:root
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border-color: transparent;
+}
+:root[data-modo='oscuro']
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial),
+:root:has(.app[data-pagina='demo'])
+  :is(.panel, .tarjeta, .barra-cuenta, .demo-ahora, .demo-persona, .como-probar, .chequeo, .historial-cabeza, .opciones-historial) {
+  border-color: var(--linea);
+}
+:root .boton {
+  font-weight: 500;
+}
+:root :is(.tarjeta-bolsa strong, .saldo strong, .demo-reloj, .demo-grande, .dato dd) {
+  font-weight: 560;
+  letter-spacing: -0.03em;
+}
+
+/* =====================================================================================================
+   LAS RUEDAS
+   ===================================================================================================== */
+
+/* ---------- Segmentos que se pintan de azul al pagar y el punto del logo que da la vuelta ---------- */
+.rm-pista {
+  fill: none;
+  stroke: var(--linea);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 7;
+  stroke-linecap: round;
+}
+.rm-segmento {
+  fill: var(--superficie);
+  stroke: var(--borde);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition:
+    fill 500ms ease,
+    stroke 500ms ease;
+}
+.rueda-orbita .nodo.pago .rm-segmento,
+.rueda-orbita:not(.activa) .nodo:not(.libre) .rm-segmento {
+  fill: var(--acento);
+  stroke: var(--acento);
+}
+.rueda-orbita .nodo.turno .rm-segmento {
+  stroke: var(--turno);
+  stroke-width: 4;
+}
+.rueda-orbita .nodo.libre .rm-segmento {
+  fill: none;
+  stroke-dasharray: 6 6;
+}
+.rueda-orbita .nodo.moroso .rm-segmento {
+  fill: var(--alerta-suave);
+  stroke: var(--alerta);
+  stroke-dasharray: 6 5;
+}
+.rueda-orbita .nodo-turno {
+  font-family: var(--texto);
+  font-size: 19px;
+  font-weight: 650;
+  fill: var(--tinta);
+}
+.rueda-orbita .nodo.pago .nodo-turno,
+.rueda-orbita:not(.activa) .nodo:not(.libre) .nodo-turno {
+  fill: var(--sobre-acento);
+}
+.rueda-orbita .nodo-nombre {
+  font-size: 16px;
+  font-weight: 600;
+}
+.rm-cubo {
+  fill: var(--cubo);
+}
+.rm-tiempo-pista {
+  fill: none;
+  stroke: var(--linea);
+  stroke-width: 5;
+}
+.rueda-orbita .rueda-tiempo {
+  stroke: var(--turno);
+  stroke-width: 5;
+}
+.rueda-orbita .rueda-tiempo.vencida {
+  stroke: var(--alerta);
+}
+.rueda-orbita .centro text {
+  fill: var(--sobre-cubo);
+}
+.rueda-orbita .centro .centro-grande {
+  fill: var(--turno);
+  font-family: var(--texto);
+  font-size: 42px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.rueda-orbita .centro .centro-medio {
+  font-family: var(--titulos);
+  font-size: 23px;
+  font-weight: 750;
+}
+.rueda-orbita .centro .centro-sub {
+  font-weight: 600;
+}
+.rueda-orbita .centro .centro-nota {
+  fill: var(--sobre-cubo-2);
+}
+.rueda-orbita .centro .centro-nota.alerta {
+  fill: #ffb59c;
+  font-weight: 700;
+}
+.rueda-orbita .nodo-cobro circle {
+  fill: var(--tinta);
+}
+.rueda-orbita .nodo-cobro path {
+  stroke: var(--papel);
+}
+.rm-orbita {
+  transition: transform 900ms var(--ease-in-out);
+}
+.rm-punto {
+  fill: var(--turno);
+  stroke: var(--tinta);
+  stroke-width: 3;
+}
+
+/* ---------- Leyendas ---------- */
+:root .muestra.pintado {
+  border-radius: 4px;
+  background: var(--acento);
+}
+.muestra.punto {
+  background: var(--turno);
+  border: 3px solid var(--tinta);
+}
+.muestra.cobro {
+  background: var(--tinta);
+}
+.muestra svg path {
+  stroke: var(--papel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rm-orbita,
+  .rm-segmento {
+    transition: none;
+  }
+}

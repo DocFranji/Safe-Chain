@@ -1,6 +1,13 @@
 // Mismos casos que contracts/tanda/src/test_deudas.rs.
 import { describe, expect, it } from 'vitest'
-import { bolsaQueRecupera, errorMontoDeuda, faltantesAlCerrar, garantiaPendiente, saldoSuDeuda } from './deudas'
+import {
+  bolsaQueRecupera,
+  destinoTrasTerminar,
+  errorMontoDeuda,
+  faltantesAlCerrar,
+  garantiaPendiente,
+  saldoSuDeuda,
+} from './deudas'
 
 const U = 10_000_000n
 const BETO = 'GBETO'
@@ -82,5 +89,16 @@ describe('faltantesAlCerrar (como cerrar_ronda)', () => {
       { direccion: BETO, falta: 60n * U },
       { direccion: CARLA, falta: 100n * U },
     ])
+  })
+})
+
+describe('destinoTrasTerminar (M1 v4)', () => {
+  const cobro = (d: string) => d !== 'MOROSA'
+  it('directo a quien cobró de menos si recibió su bolsa', () => {
+    expect(destinoTrasTerminar('CARLA', 'ANA', cobro)).toBe('directo')
+  })
+  it('al reparto si su bolsa se retuvo, o si es la propia', () => {
+    expect(destinoTrasTerminar('MOROSA', 'ANA', cobro)).toBe('reparto')
+    expect(destinoTrasTerminar('ANA', 'ANA', cobro)).toBe('reparto')
   })
 })

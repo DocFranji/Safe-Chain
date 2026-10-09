@@ -1,35 +1,10 @@
-/* Colores y tipografía de toda la app. Cambien aquí para ajustar el estilo. */
+/*
+ * Colores, letras y movimiento de toda la app: diseño Órbita (DESIGN.md). Marino y azul eléctrico, blanco y casi
+ * blanco, sombras en capas, Geist en peso medio y un ámbar para a quién le toca. Tiene modo oscuro
+ * ([data-modo='oscuro'], ver src/lib/apariencia.ts); la demo siempre va en oscuro porque se proyecta.
+ * El resto del CSS solo usa estas variables.
+ */
 :root {
-  /* Paleta de Rounda (la misma de la landing, src/landing/landing.css). Cambien aquí para ajustar toda la app. */
-  --papel: #06100c; /* fondo */
-  --superficie: #0c1a14; /* paneles y tarjetas */
-  --tinta: #eef6f1; /* texto principal */
-  --tinta-2: #a3b8ad; /* texto secundario */
-  --linea: rgba(255, 255, 255, 0.12); /* divisiones suaves */
-  --borde: rgba(255, 255, 255, 0.42); /* bordes que deben verse (campos, botones) */
-  --acento: #3ee08f; /* acción principal */
-  --sobre-acento: #04140c; /* texto sobre el acento */
-  --turno: #f2c14e; /* a quien le toca cobrar */
-  --turno-suave: rgba(242, 193, 78, 0.14);
-  --sobre-turno: #1d1403; /* texto sobre el color de turno */
-  --pago: #3ee08f; /* pagó / correcto */
-  --pago-suave: rgba(62, 224, 143, 0.14);
-  --pago-texto: #8ff0bf;
-  --alerta: #f0826e; /* vencido / error */
-  --alerta-suave: rgba(224, 112, 92, 0.18);
-  --alerta-texto: #ffb4a6;
-  --titulos: 'Archivo', system-ui, sans-serif;
-
-  /* Profundidad: tres niveles de superficie y el brillo verde de la landing. */
-  --superficie-2: #11241b; /* superficie sobre superficie (hover, filas) */
-  --borde-luz: rgba(255, 255, 255, 0.07); /* filo de luz arriba de las tarjetas */
-  --brillo: rgba(62, 224, 143, 0.35);
-  --sombra: 0 1px 0 0 var(--borde-luz) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
-  --sombra-alta: 0 1px 0 0 var(--borde-luz) inset, 0 24px 60px -28px rgba(0, 0, 0, 0.95),
-    0 0 0 1px rgba(62, 224, 143, 0.18);
-  --radio: 18px;
-  --radio-chico: 12px;
-
   /* Movimiento (curvas fuertes: las de CSS por defecto se sienten flojas).
      Entrar o salir: --ease-out. Moverse en pantalla: --ease-in-out. Nunca ease-in en la interfaz. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -40,13 +15,100 @@
   --t-rapido: 200ms; /* hover, colores, avisos */
   --t-medio: 280ms; /* entrar una página o una tarjeta */
 
-  color-scheme: dark; /* campos, barras de scroll y desplegables en oscuro */
-  font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  color-scheme: light;
+  font-family: var(--texto);
   font-size: 17px;
   line-height: 1.5;
   color: var(--tinta);
   background: var(--papel);
   -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}
+
+/* ---------- Órbita ----------
+   La estética de las plantillas de Framer que eligió el equipo (Vallure, Arewno, Payer, Cryptor): campo marino con
+   un brillo azul eléctrico, piezas blancas con sombras en capas muy suaves y una sola letra (Geist) en peso medio.
+   El azul es la marca y lo pagado; un ámbar cálido marca a quién le toca. */
+:root {
+  --c-rojo: #d92d20;
+  --c-naranja: #e8772e;
+  --c-amarillo: #ffb547;
+  --c-azul: #1f4fff;
+  --c-verde: #12a150;
+  --c-tinta: #0b0d17;
+  --rueda-llanta: #ffffff;
+  --rueda-trazo: #0b0d17;
+
+  --papel: #f7f8fa;
+  --superficie: #ffffff;
+  --superficie-2: #f0f2f6;
+  --tinta: #0b0d17;
+  --tinta-2: #5d6170;
+  --linea: #e5e7ee;
+  --borde: #8e93a3;
+  --grosor: 1px;
+  --marca: #070c24;
+  --sobre-marca: #ffffff;
+  --marca-detalle: #4c7dff; /* el punto del logo y la línea bajo la barra */
+  --acento: #1f4fff;
+  --sobre-acento: #ffffff;
+  --acento-borde: #1f4fff;
+  --acento-texto: #1a44e0;
+  --turno: #ffb547;
+  --turno-suave: #fff3dc;
+  --sobre-turno: #0b0d17;
+  --pago: #1f4fff;
+  --pago-suave: #e9eeff;
+  --pago-texto: #1a3fc4;
+  --alerta: #d92d20;
+  --alerta-suave: #fdeceb;
+  --alerta-texto: #a8231a;
+  --cubo: #070c24;
+  --sobre-cubo: #ffffff;
+  --sobre-cubo-2: #aab4d8;
+  --brillo: rgba(31, 79, 255, 0.3);
+  --sombra: 0 0 0 1px rgba(11, 13, 23, 0.04), 0 1px 1px rgba(11, 13, 23, 0.04), 0 6px 12px -6px rgba(11, 13, 23, 0.08);
+  --sombra-alta: 0 0 0 1px rgba(11, 13, 23, 0.04), 0 12px 24px -12px rgba(11, 13, 23, 0.16), 0 32px 64px -32px rgba(7, 12, 36, 0.28);
+  --foco: #1f4fff;
+  --radio: 20px;
+  --radio-chico: 12px;
+  --texto: 'Geist Variable', system-ui, sans-serif;
+  --titulos: 'Geist Variable', system-ui, sans-serif;
+  --titulos-peso: 560;
+  --titulos-espacio: -0.03em;
+  --titulos-ancho: 100%;
+}
+:root[data-modo='oscuro'],
+:root:has(.app[data-pagina='demo']) {
+  color-scheme: dark;
+  --c-azul: #5b84ff;
+  --c-tinta: #eef0f7;
+  --rueda-llanta: #0d1120;
+  --rueda-trazo: #05070f;
+  --papel: #05070f;
+  --superficie: #0d1120;
+  --superficie-2: #151a2e;
+  --tinta: #eef0f7;
+  --tinta-2: #9aa1b8;
+  --linea: #1d2338;
+  --borde: #4d5570;
+  --marca: #070c24;
+  --acento: #5b84ff;
+  --sobre-acento: #05070f;
+  --acento-borde: #5b84ff;
+  --acento-texto: #8eabff;
+  --turno-suave: #3a2a0c;
+  --sobre-turno: #05070f;
+  --pago: #5b84ff;
+  --pago-suave: #141d3d;
+  --pago-texto: #a9bdff;
+  --alerta: #ff7a6b;
+  --alerta-suave: #3a1714;
+  --alerta-texto: #ffb4a8;
+  --cubo: #101a4a;
+  --sombra: none;
+  --sombra-alta: 0 18px 40px -22px rgba(0, 0, 0, 0.8);
+  --foco: #8eabff;
 }
 
 *,
@@ -59,7 +121,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background: var(--papel);
-  /* Lo que se sale de lado (el vidrio de la barra) no crea barra de desplazamiento horizontal. */
+  /* Lo que se sale de lado (franjas de lado a lado) no crea barra de desplazamiento horizontal. */
   overflow-x: clip;
 }
 
@@ -73,11 +135,14 @@ h1,
 h2,
 h3 {
   font-family: var(--titulos);
+  font-weight: var(--titulos-peso);
+  font-stretch: var(--titulos-ancho, 100%);
+  letter-spacing: var(--titulos-espacio);
 }
 
 ::selection {
-  background: var(--acento);
-  color: var(--sobre-acento);
+  background: var(--turno);
+  color: var(--sobre-turno);
 }
 
 a {
@@ -92,13 +157,20 @@ a:hover {
 
 code {
   font-size: 0.9em;
-  background: var(--superficie);
+  background: var(--superficie-2);
   border: 1px solid var(--linea);
   border-radius: 5px;
   padding: 1px 6px;
 }
 
 :focus-visible {
-  outline: 3px solid var(--turno);
+  outline: 3px solid var(--foco);
   outline-offset: 2px;
+}
+
+/* Números de dinero y tablas: todos del mismo ancho. */
+td,
+dd,
+.saldo {
+  font-variant-numeric: tabular-nums;
 }

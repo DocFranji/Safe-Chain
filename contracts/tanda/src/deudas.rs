@@ -11,14 +11,20 @@
 //!   quedan cuotas por pagar, de esa bolsa primero se repone su garantía para esas cuotas (como la que
 //!   dejó al unirse; vuelve al final con rendimiento): así no puede cobrar y volver a desaparecer.
 //! - Puede pagar otra persona (por ejemplo, un familiar): el dinero sale de `pagador`.
+//! - (v4) **También después de finalizar.** El contrato ya no guarda dinero de esa tanda, así que el
+//!   pago va directo de `pagador` a quien recibió de menos. Si esa ronda tenía la bolsa retenida (la
+//!   de otro moroso o la del propio deudor), esa bolsa se repartió al finalizar: el pago va en partes
+//!   iguales a quienes recibieron ese reparto (`Repartidos`). Saldar ya no devuelve la bolsa retenida
+//!   (se repartió), pero sí deja al día: el historial anota `DeudaSaldada` y la persona se desbloquea.
 //!
 //! Diseño y decisiones: `docs/tiempos-y-deudas.md`.
-use soroban_sdk::{contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contractimpl, token, Address, Env, Map, Vec};
 
 use crate::almacenamiento::*;
 use crate::{
-    ganchos, BovedaClient, ClaveM1, Deuda, Error, Estado, EvAbono, EvBolsaRecuperada,
-    EvDeudaPagada, Faltante, Tanda, TandaContract, TandaContractArgs, TandaContractClient, BPS,
+    ganchos, BovedaClient, ClaveM1, Deuda, Error, Estado, EvAbono, EvAbonoFinal, EvBolsaRecuperada,
+    EvDeudaPagada, Faltante, Miembro, Tanda, TandaContract, TandaContractArgs, TandaContractClient,
+    BPS,
 };
 
 /// Garantía para las `restantes` cuotas que alguien todavía debe, con las reglas de la tanda: la
@@ -80,12 +86,39 @@ pub(crate) fn anotar_ronda(
     }
 }
 
+/// (v4) La llama `finalizar` cuando reparte bolsas retenidas: anota quiénes las recibieron
+/// (`elegidos`), para que lo que se pague después por esas rondas les llegue a ellos.
+pub(crate) fn anotar_reparto(env: &Env, id: u32, elegidos: &Vec<Address>) {
+    let clave = ClaveM1::Repartidos(id);
+    env.storage().persistent().set(&clave, elegidos);
+    extender(env, &clave);
+}
+
+/// (v4) Al final de `finalizar`: si alguien quedó debiendo, todo lo de la tanda vive lo máximo que
+/// permite la red (~180 días en testnet), para que pueda pagar sin restaurar datos archivados.
+pub(crate) fn al_finalizar(env: &Env, t: &Tanda, id: u32, datos: &Vec<Miembro>) {
+    if datos.iter().any(|m| m.deuda > 0) {
+        renovar_tras_finalizar(env, t, id);
+    }
+}
+
+/// (v4) Renueva al máximo de la red todo lo de una tanda finalizada que todavía tiene deudas.
+fn renovar_tras_finalizar(env: &Env, t: &Tanda, id: u32) {
+    let max = env.storage().max_ttl();
+    renovar_tanda_con_vida(env, id, t, max);
+    let clave = ClaveM1::Repartidos(id);
+    if env.storage().persistent().has(&clave) {
+        renovar(env, &clave, max);
+    }
+}
+
 #[contractimpl]
 impl TandaContract {
     /// Paga (toda o una parte) la deuda de `miembro` en la tanda `id`. Puede pagarla otra persona
     /// (`pagador`, que es quien firma y de quien sale el dinero). Devuelve la deuda que queda.
     ///
-    /// Solo mientras la tanda está `Activa` o `PorLiquidar`. No se puede pagar de más.
+    /// Mientras la tanda está `Activa` o `PorLiquidar`, y también después de `Finalizada` (v4: el
+    /// dinero va directo a quien recibió de menos). No se puede pagar de más.
     pub fn pagar_deuda(
         env: Env,
         id: u32,
@@ -98,7 +131,10 @@ impl TandaContract {
             return Err(Error::MontoInvalido);
         }
         let mut t = cargar_tanda(&env, id)?;
-        if t.estado != Estado::Activa && t.estado != Estado::PorLiquidar {
+        if !matches!(
+            t.estado,
+            Estado::Activa | Estado::PorLiquidar | Estado::Finalizada
+        ) {
             return Err(Error::EstadoInvalido);
         }
         let mut m = cargar_miembro(&env, id, &miembro)?;
@@ -107,6 +143,11 @@ impl TandaContract {
         }
         if monto > m.deuda {
             return Err(Error::PagoExcesivo);
+        }
+        if t.estado == Estado::Finalizada {
+            return Ok(pagar_tras_finalizar(
+                &env, &t, id, &miembro, &pagador, monto, m,
+            ));
         }
 
         let yo = env.current_contract_address();
@@ -238,6 +279,151 @@ impl TandaContract {
         }
         Ok(out)
     }
+}
+
+/// (v4) `pagar_deuda` en una tanda `Finalizada`. El contrato ya no tiene dinero de esa tanda: el pago
+/// va directo de `pagador` a quien le corresponde, del faltante más viejo al más nuevo:
+/// - si quien cobró de menos SÍ recibió su bolsa, a esa persona;
+/// - si su bolsa quedó retenida (era morosa, o es el propio deudor) y al finalizar se repartió, en
+///   partes iguales a quienes recibieron ese reparto (`Repartidos`), que son quienes perdieron ese
+///   dinero; si nadie lo recibió (todos terminaron en mora), a quien cobró de menos.
+///
+/// Se junta lo de cada persona y se le paga UNA vez: como mucho 11 transferencias y 11 eventos,
+/// aunque la deuda tenga faltantes de muchas rondas.
+///
+/// Saldar no devuelve la bolsa retenida (ya se repartió), pero deja a la persona al día.
+fn pagar_tras_finalizar(
+    env: &Env,
+    t: &Tanda,
+    id: u32,
+    miembro: &Address,
+    pagador: &Address,
+    monto: i128,
+    mut m: Miembro,
+) -> i128 {
+    let repartidos: Vec<Address> = env
+        .storage()
+        .persistent()
+        .get(&ClaveM1::Repartidos(id))
+        .unwrap_or_else(|| Vec::new(env));
+    m.deuda -= monto;
+    let deuda_restante = m.deuda;
+    EvDeudaPagada {
+        id,
+        miembro: miembro.clone(),
+        pagador: pagador.clone(),
+        monto,
+        deuda_restante,
+    }
+    .publish(env);
+
+    // 1) Del faltante más viejo al más nuevo: cuánto va directo a cada quien y cuánto al reparto.
+    let mut d = cargar_deuda(env, id, miembro);
+    let mut directo: Map<Address, i128> = Map::new(env);
+    let mut al_reparto: i128 = 0;
+    let mut resto = monto;
+    let mut quedan: Vec<Faltante> = Vec::new(env);
+    for f in d.faltantes.iter() {
+        if resto == 0 {
+            quedan.push_back(f);
+            continue;
+        }
+        let abono = resto.min(f.monto);
+        resto -= abono;
+        let cobro = if f.acreedor == *miembro {
+            m.cobro
+        } else {
+            cargar_miembro(env, id, &f.acreedor)
+                .map(|a| a.cobro)
+                .unwrap_or(true)
+        };
+        if cobro || repartidos.is_empty() {
+            let antes = directo.get(f.acreedor.clone()).unwrap_or(0);
+            directo.set(f.acreedor.clone(), antes + abono);
+        } else {
+            al_reparto += abono;
+        }
+        if abono < f.monto {
+            quedan.push_back(Faltante {
+                monto: f.monto - abono,
+                ..f
+            });
+        }
+    }
+    d.faltantes = quedan;
+    // Los faltantes suman la deuda, así que no sobra nada. Si alguna regla futura sumara deuda sin
+    // anotar a quién se le debe, eso va al reparto (como antes de finalizar iba al fondo final).
+    al_reparto += resto;
+
+    // 2) Lo del reparto, en partes iguales; el resto del redondeo, al último.
+    let mut del_reparto: Map<Address, i128> = Map::new(env);
+    if al_reparto > 0 {
+        let k = repartidos.len() as i128;
+        if k == 0 {
+            // Solo por la regla futura de arriba sin nadie a quien repartir: queda en el contrato.
+            token::Client::new(env, &t.token).transfer(
+                pagador,
+                env.current_contract_address(),
+                &al_reparto,
+            );
+        } else {
+            let parte = al_reparto / k;
+            for (j, dir) in repartidos.iter().enumerate() {
+                let extra = if j as i128 == k - 1 {
+                    al_reparto - parte * k
+                } else {
+                    0
+                };
+                del_reparto.set(dir, parte + extra);
+            }
+        }
+    }
+
+    // 3) Una transferencia por persona.
+    let tok = token::Client::new(env, &t.token);
+    for (hacia, cuanto) in directo.iter() {
+        entregar(env, &tok, id, pagador, miembro, &hacia, cuanto, false);
+    }
+    for (hacia, cuanto) in del_reparto.iter() {
+        entregar(env, &tok, id, pagador, miembro, &hacia, cuanto, true);
+    }
+
+    d.pagado += monto;
+    if deuda_restante == 0 {
+        m.moroso = false;
+    }
+    guardar_deuda(env, t, id, miembro, &d);
+    guardar_miembro(env, id, miembro, &m);
+    ganchos::al_pagar_deuda(env, t, id, miembro, monto, deuda_restante);
+    renovar_tras_finalizar(env, t, id);
+    deuda_restante
+}
+
+/// (v4) Pasa `monto` de `pagador` a `hacia` y lo anuncia (`EvAbonoFinal`).
+fn entregar(
+    env: &Env,
+    tok: &token::Client,
+    id: u32,
+    pagador: &Address,
+    deudor: &Address,
+    hacia: &Address,
+    monto: i128,
+    reparto: bool,
+) {
+    if monto <= 0 {
+        return;
+    }
+    if pagador != hacia {
+        tok.transfer(pagador, hacia, &monto);
+    }
+    EvAbonoFinal {
+        id,
+        deudor: deudor.clone(),
+        hacia: hacia.clone(),
+        monto,
+        reparto,
+    }
+    .publish(env);
 }
 
 /// Entrega `monto` a `acreedor` (quien cobró de menos). Si su bolsa sigue retenida porque también

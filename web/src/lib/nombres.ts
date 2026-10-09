@@ -29,7 +29,67 @@ export function direccionCorta(direccion: string): string {
   return `${direccion.slice(0, 4)}…${direccion.slice(-4)}`
 }
 
-/** El nombre si lo conocemos; si no, la dirección corta. */
+// ---------------------------------------------------------------------------
+// Apodos públicos (misión M2, N4): cada persona elige el suyo en su Perfil y queda guardado en el
+// contrato de historial. Como cualquiera elige el que quiera, siempre se muestran con la dirección corta.
+// Se leen una vez por dirección (al pedir su nombre) y quedan en caché; la app se vuelve a dibujar
+// cuando llegan (`suscribirApodos`).
+// ---------------------------------------------------------------------------
+
+/** undefined = no se ha pedido; null = no tiene apodo. */
+const apodos = new Map<string, string | null>()
+let lector: ((dir: string) => Promise<string | null>) | null = null
+let version = 0
+const oyentes = new Set<() => void>()
+let aviso: ReturnType<typeof setTimeout> | null = null
+
+/** La app indica cómo leer un apodo (lib/historial.ts::leerApodo). Sin lector no se piden apodos. */
+export function usarLectorDeApodos(f: ((dir: string) => Promise<string | null>) | null): void {
+  lector = f
+}
+
+export function suscribirApodos(oyente: () => void): () => void {
+  oyentes.add(oyente)
+  return () => oyentes.delete(oyente)
+}
+
+export function versionApodos(): number {
+  return version
+}
+
+function avisar() {
+  version++
+  // Varias lecturas que llegan juntas se dibujan una sola vez.
+  if (aviso) return
+  aviso = setTimeout(() => {
+    aviso = null
+    oyentes.forEach((o) => o())
+  }, 50)
+}
+
+/** Guarda un apodo ya conocido (por ejemplo, el que la persona acaba de poner o quitar). */
+export function fijarApodo(direccion: string, apodo: string | null): void {
+  apodos.set(direccion, apodo)
+  avisar()
+}
+
+/** El apodo de `direccion` si ya se leyó (null si no tiene). Si no se ha leído, lo pide. */
+export function apodoDe(direccion: string): string | null {
+  const a = apodos.get(direccion)
+  if (a === undefined && lector) {
+    apodos.set(direccion, null) // pedido en curso: no se vuelve a pedir
+    lector(direccion)
+      .then((x) => {
+        if (x) fijarApodo(direccion, x)
+      })
+      .catch(() => undefined)
+  }
+  return a ?? null
+}
+
+/** Cómo mostrar a alguien: "Apodo · GADM…TVPD"; si no tiene, el nombre de la demo; si no, la dirección corta. */
 export function nombreDe(direccion: string): string {
+  const apodo = apodoDe(direccion)
+  if (apodo) return `${apodo} · ${direccionCorta(direccion)}`
   return NOMBRES[direccion] ?? direccionCorta(direccion)
 }

@@ -7,7 +7,7 @@ import * as SDK from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 const { xdr, StrKey, nativeToScVal, TransactionBuilder, Address, scValToNative, SorobanDataBuilder } = SDK
 
 export const PASS = 'Test SDF Network ; September 2015'
-export const TANDA_ID = 'CADFZFJDRFSM4WT6VO3F4IXM2Z4ZKKD3VLOELAMJMUFDCXZ2I2E3BYMC'
+export const TANDA_ID = 'CAUT2PXKDEKE4ZWNXULA23SYRCK25FLQBXO3IV2HYVVY5JIKVKXURQ2Q'
 export const TOKEN_ID = 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ5'
 export const BOVEDA_ID = StrKey.encodeContract(Buffer.alloc(32, 7))
 /** M1: bóveda "real" (sin acelerar) para tandas de días, semanas o meses. La de arriba es la rápida. */
@@ -91,6 +91,8 @@ export function nuevoEstado() {
     // M2: historial de cada dirección (lo que no está, vale cero). `historialActivo: false` simula un
     // contrato de tanda anterior a M2 (sin `get_historial`).
     historialActivo: true,
+    // M2 v4: apodos públicos (dirección → apodo). Vacío por defecto para no cambiar los demás escenarios.
+    apodos: {},
     historiales: {
       [ANA]: historial({ cuotas_a_tiempo: 30, tandas_cumplidas: 3, cobros: 3, puntos_positivos: 330 }),
       [BETO]: historial({ cuotas_a_tiempo: 11, cuotas_tarde: 1, tandas_con_atrasos: 1, cobros: 1, puntos_positivos: 138 }),
@@ -256,6 +258,74 @@ export function conMiBolsaLista(e) {
   e.historias = { ...e.historias, 6: [] } // la historia de la tanda 6 del mock es la de `conTandaMorosa`
   return e
 }
+/**
+ * M1 v4 (N3): agrega la tanda 6, mensual y en curso (ronda 2 de 3, me toca cobrar a mí). La ronda 1 se cerró
+ * antes porque todos pagaron, así que esta ronda vence en ~1 mes + 28 días; y ya pagamos todos otra vez:
+ * se puede cerrar antes ("Todos pagaron: cobra tu bolsa ya"). `subasta`: la misma tanda, pero en subasta.
+ */
+export function conTodosPagaron(e, { subasta = false } = {}) {
+  const mes = 2_592_000
+  e.tandas[6] = {
+    boveda: BOVEDA_REAL,
+    tanda: tanda({
+      creador: ANA, estado: est('Activa'), ronda_actual: 1, periodo_seg: BigInt(mes), inicio_ronda: BigInt(ahora() + 28 * 86_400),
+      shares_boveda: 400n * U,
+    }),
+    miembros: [
+      [ANA, miembro(0, { colateral: 200n * U, colateral_inicial: 200n * U, cobro: true })],
+      [ME, miembro(1)],
+      [BETO, miembro(2)],
+    ],
+    pagaron: [ANA, ME, BETO],
+    turnos: subasta ? estadoTurnos(opcionesTurnos('Subasta', { descuento_max_bps: 2000 })) : undefined,
+  }
+  if (subasta) e.tandas[6].miembros = e.tandas[6].miembros.map(([a, m], i) => [a, { ...m, posicion: i === 0 ? 0 : SIN_TURNO }])
+  e.historias = {
+    ...e.historias,
+    6: [
+      ['creada', { creador: ANA, cuota: 100n * U, n_miembros: 3 }],
+      ['ronda', { ronda: 0, beneficiario: ANA, monto_pagado: 300n * U }],
+      ['antes', { ronda: 0, vence: BigInt(ahora() + 28 * 86_400) }],
+    ],
+  }
+  return e
+}
+
+/**
+ * M1 v4 (N2b): agrega la tanda 6, mensual y TERMINADA. "Yo" quedé debiendo 150 TUSD: 100 a Beto (ronda 2, que
+ * cobró de menos) y 50 a mi propia ronda (la 3: mi bolsa se retuvo y se repartió al final entre Ana y Beto).
+ */
+export function conDeudaTerminada(e) {
+  e.tandas[6] = {
+    boveda: BOVEDA_REAL,
+    tanda: tanda({
+      creador: ANA, estado: est('Finalizada'), ronda_actual: 3, cobertura_bps: 0, periodo_seg: 2_592_000n,
+      inicio_ronda: BigInt(ahora() - 10 * 86_400), retenido: 150n * U,
+    }),
+    miembros: [
+      [ANA, miembro(0, { colateral: 0n, cobro: true })],
+      [BETO, miembro(1, { colateral: 0n, cobro: true })],
+      [ME, miembro(2, { colateral: 0n, atrasos: 2, moroso: true, deuda: 150n * U, multas_pendientes: 10n * U })],
+    ],
+    pagaron: [],
+    deudas: [
+      [ME, { faltantes: [{ ronda: 1, acreedor: BETO, monto: 100n * U }, { ronda: 2, acreedor: ME, monto: 50n * U }], bolsa_retenida: 150n * U, pagado: 0n }],
+    ],
+    liquidados: [[ANA, 175n * U], [BETO, 175n * U], [ME, 0n]],
+    finalizada: { rendimiento: 0n, fondo_premios: 0n, retenido: 150n * U, sin_repartir: 0n },
+  }
+  e.historias = {
+    ...e.historias,
+    6: [
+      ['creada', { creador: ANA, cuota: 100n * U, n_miembros: 3 }],
+      ['moroso', { miembro: ME, deuda: 100n * U }],
+      ['finalizada', { rendimiento: 0n, fondo_premios: 0n, retenido: 150n * U, sin_repartir: 0n }],
+      ['abono_fin', { deudor: ME, hacia: BETO, monto: 20n * U, reparto: false }],
+    ],
+  }
+  return e
+}
+
 /** M2: un historial con todo en cero salvo lo que se indique. */
 export function historial(o = {}) {
   const base = {
@@ -377,6 +447,12 @@ function valorSim(est, contrato, fn, args) {
     if (fn === 'historial') return specHistorial.nativeToUdt(h, 'Historial')
     if (fn === 'puntaje') return u32(puntaje(h))
     if (fn === 'beneficio_colateral_bps') return u32(beneficioDe(h))
+    // --- M2 v4 ---
+    if (fn === 'tiene_mora') return xdr.ScVal.scvBool(h.veces_moroso > h.deudas_saldadas)
+    if (fn === 'apodo') {
+      const a = est.apodos?.[nativos[0]]
+      return a ? nativeToScVal(a, { type: 'string' }) : xdr.ScVal.scvVoid()
+    }
   }
   if (contrato === TOKEN_ID) {
     if (fn === 'balance') return i128(est.cuentas[nativos[0]]?.saldo ?? 0n)
@@ -439,6 +515,9 @@ const TIPOS = {
   // M1
   deuda_pag: { miembro: ['symbol', 'address'], pagador: ['symbol', 'address'], monto: ['symbol', 'i128'], deuda_restante: ['symbol', 'i128'] },
   abono: { deudor: ['symbol', 'address'], acreedor: ['symbol', 'address'], ronda: ['symbol', 'u32'], monto: ['symbol', 'i128'], retenida: ['symbol', 'bool'] },
+  // M1 v4
+  antes: { ronda: ['symbol', 'u32'], vence: ['symbol', 'u64'] },
+  abono_fin: { deudor: ['symbol', 'address'], hacia: ['symbol', 'address'], monto: ['symbol', 'i128'], reparto: ['symbol', 'bool'] },
 }
 
 // Historias por tanda: [evento, datos]

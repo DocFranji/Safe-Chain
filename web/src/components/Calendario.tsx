@@ -58,7 +58,7 @@ export function Calendario({ id, datos, ahora, yo }: Props) {
 
   const filas = Array.from({ length: tanda.n_miembros }, (_, r) => {
     const quien = miembros.find((m) => m.posicion === r)
-    const nombre = quien ? nombreDe(quien.direccion) : '—'
+    const nombre = quien ? nombreDe(quien.direccion) : '-'
     if (r < tanda.ronda_actual) {
       return { r, nombre, cuando: quien && !quien.cobro ? 'Cerrada · bolsa retenida' : 'Cerrada · ya cobró', actual: false }
     }
