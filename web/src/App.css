@@ -2291,3 +2291,23 @@ a.billetera {
     display: block;
   }
 }
+
+/* UX + Órbita: las elecciones de "Crear" (plantilla y frecuencia) se marcan con el azul de acento, que se ve
+   igual de bien en claro y en oscuro (el marino de la marca se pierde sobre el fondo oscuro). */
+:root :is(.frecuencias, .presets) .filtro.activo {
+  border-color: var(--acento);
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+/* El botón para entrar de la barra va blanco sobre el marino, también en modo oscuro. */
+:root .barra .boton.chico {
+  border-color: var(--sobre-marca);
+  background: var(--sobre-marca);
+  color: var(--marca);
+}
+@media (max-width: 600px) {
+  :root .barra .boton.chico {
+    padding-inline: 12px;
+    font-size: 14px;
+  }
+}
