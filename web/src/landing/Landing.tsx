@@ -14,6 +14,7 @@ import { useEnPantalla } from './movimiento'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
+import { BotonModo } from '../components/BotonModo'
 import { bolsa, colateralDeTurno, tablaColateral } from '../lib/colateral'
 import fotoFamilia from '../assets/fotos/familia.webp'
 import abuela from '../assets/fotos/caras/abuela.webp'
@@ -105,9 +106,12 @@ export function Landing() {
               Preguntas
             </a>
           </span>
-          <a className="lo-boton azul chico" href={RUTA_LOBBY}>
-            Abrir la app
-          </a>
+          <span className="lo-nav-lado">
+            <BotonModo />
+            <a className="lo-boton azul chico" href={RUTA_LOBBY}>
+              Abrir la app
+            </a>
+          </span>
         </nav>
       </header>
 

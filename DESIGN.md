@@ -211,7 +211,8 @@ Diales (skill Taste): variedad 7, movimiento 8, densidad 4.
 - **Rojo (#d92d20):** vencido, mora, error.
 
 En oscuro: fondo #05070f, piezas #0d1120, texto #eef0f7; la acción sube a #5b84ff con texto oscuro. La portada y el
-cierre son marinos en los dos modos. La demo usa siempre el oscuro.
+cierre son marinos en los dos modos. El modo arranca como el del teléfono o la computadora y cada persona lo cambia
+con el botón de la barra; queda guardado en su navegador. La demo usa siempre el oscuro.
 
 ## Typography
 
@@ -247,6 +248,8 @@ el logo.
 
 - **Barra de la portada:** píldora flotante y fija; oscura sobre la portada y clara (vidrio) sobre el resto.
 - **Barra de la app:** marina, con el logo en blanco y una línea azul de 1 px que brilla debajo.
+- **Botón de modo (`BotonModo.tsx`):** círculo de 38 px con un anillo fino del color del texto, en las dos barras.
+  El ícono es un círculo lleno a medias que gira media vuelta al pasar a oscuro. No aparece en la demo.
 - **Rueda:** `RuedaOrbita.tsx`: lo pagado en azul, a quién le toca en ámbar con el punto del logo, el cubo marino.
 - **Órbitas (`web/src/landing/piezas.tsx`):** anillos con caras que giran sin ponerse de cabeza; se pausan fuera de
   pantalla.

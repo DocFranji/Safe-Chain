@@ -201,6 +201,64 @@
   margin: 48px 0;
 }
 
+/* ---------- Botón de claro u oscuro (BotonModo.tsx): un círculo mitad lleno que da media vuelta ---------- */
+.barra-lado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.boton-modo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--t-presion) var(--ease-out),
+    background-color var(--t-rapido) ease;
+}
+.boton-modo:active {
+  transform: scale(0.94);
+}
+.boton-modo:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.boton-modo svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 500ms var(--ease-in-out);
+}
+.boton-modo circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.boton-modo path {
+  fill: currentColor;
+}
+.boton-modo[aria-pressed='true'] svg {
+  transform: rotate(180deg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .boton-modo:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boton-modo svg {
+    transition: none;
+  }
+}
+
 /* ---------- Billetera (arriba a la derecha) ---------- */
 .billetera {
   display: flex;

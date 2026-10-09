@@ -650,6 +650,34 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Header: click en la marca abre la landing', (await page.locator('.ln').count()) === 1)
   await page.close()
 }
+{
+  // Modo claro u oscuro: arranca como el sistema, el botón de la barra lo cambia y se recuerda; ?modo= manda
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est })
+  const modo = () => page.evaluate(() => document.documentElement.dataset.modo)
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto(BASE + '#/')
+  await page.waitForSelector('.ln', { timeout: 15000 }).catch(() => {})
+  check('Modo: sin elegir, sigue al sistema (oscuro)', (await modo()) === 'oscuro')
+  const enPortada = page.locator('.ln .boton-modo')
+  check('Modo: la barra de la portada tiene el botón', (await enPortada.count()) === 1 && (await enPortada.getAttribute('aria-pressed')) === 'true')
+  await enPortada.click()
+  check('Modo: el botón de la portada pasa a claro', (await modo()) === 'claro')
+  await page.goto(BASE + '#/tandas')
+  await page.reload()
+  await page.waitForSelector('.barra .boton-modo', { timeout: 15000 }).catch(() => {})
+  check('Modo: al recargar se recuerda lo elegido aunque el sistema esté en oscuro', (await modo()) === 'claro')
+  await page.locator('.barra .boton-modo').click()
+  check('Modo: el botón de la barra de la app pasa a oscuro', (await modo()) === 'oscuro' && (await page.locator('.barra .boton-modo').getAttribute('aria-pressed')) === 'true')
+  await page.goto(BASE.replace(/\/?$/, '/') + '?modo=claro#/tandas')
+  await page.waitForSelector('.barra', { timeout: 15000 }).catch(() => {})
+  check('Modo: ?modo= en la URL manda sobre lo elegido', (await modo()) === 'claro')
+  await page.goto(BASE + '#/demo')
+  await page.waitForTimeout(800)
+  check('Modo: la demo (siempre oscura) no muestra el botón', (await page.locator('.boton-modo').count()) === 0)
+  check('Modo: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
 
 // ---------------------------------------------------------------- M3. Mecanismos de turnos
 {
