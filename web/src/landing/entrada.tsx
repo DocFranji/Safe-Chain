@@ -1,4 +1,4 @@
-// Cómo se entra a la app desde la portada (lo usan las dos portadas: la clásica y la de Órbita).
+// Cómo se entra a la app desde la portada.
 import { useEffect, useState } from 'react'
 import { RUTA_DEMO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
@@ -9,10 +9,10 @@ import { useSesionGoogle } from '../cuentas/sesionGoogle'
  *  - con Freighter, la billetera de Stellar, como siempre (desde la app).
  * Si la web no tiene VITE_PRIVY_APP_ID, el botón principal abre la app (y ahí se conecta Freighter). */
 const CLASES_ENTRADA = {
-  caja: 'ln-acciones ln-entrada d3',
-  principal: 'ln-boton principal',
-  google: 'ln-boton google',
-  secundario: 'ln-boton secundario',
+  caja: 'lo-acciones',
+  principal: 'lo-boton blanco',
+  google: 'lo-boton blanco',
+  secundario: 'lo-boton vidrio',
 }
 
 export function EntradaApp({ clases = CLASES_ENTRADA }: { clases?: typeof CLASES_ENTRADA }) {

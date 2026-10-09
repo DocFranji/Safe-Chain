@@ -1,9 +1,8 @@
-// La rueda de la portada: la misma de la app (el dibujo de cada diseño), con una tanda de ejemplo
+// La rueda de la portada: la misma de la app, con una tanda de ejemplo
 // de 5 personas que avanza sola. Cada ronda tiene tres momentos: paga quien cobra, pagan casi todos, pagan todos;
 // después la rueda gira y cobra la siguiente persona. Con "reducir movimiento" se queda quieta en un momento.
 import { coloresSinRepetir, type ModeloRueda } from '../lib/rueda'
-import { useTema } from '../lib/tema'
-import { DibujoRueda } from '../components/Rueda'
+import { RuedaOrbita } from '../components/RuedaOrbita'
 import { MOMENTOS, N, NOMBRES, usePasoMuestra } from './muestra'
 
 function modeloMuestra(paso: number): ModeloRueda {
@@ -38,7 +37,6 @@ function modeloMuestra(paso: number): ModeloRueda {
 
 /** Sin `paso`, la rueda avanza sola; con `paso`, la mueve quien la usa (así otra pieza muestra la misma ronda). */
 export function RuedaMuestra({ paso: pasoDado, nota = true }: { paso?: number; nota?: boolean }) {
-  const tema = useTema()
   const pasoPropio = usePasoMuestra(pasoDado === undefined)
   const paso = pasoDado ?? pasoPropio
 
@@ -60,7 +58,7 @@ export function RuedaMuestra({ paso: pasoDado, nota = true }: { paso?: number; n
   )
   return (
     <figure className="rueda ln-rueda">
-      <DibujoRueda tema={tema} m={m} centro={centro} etiqueta={etiqueta} />
+      <RuedaOrbita m={m} centro={centro} etiqueta={etiqueta} />
       {nota && <figcaption className="ln-rueda-nota">Una tanda de ejemplo: 5 personas, cuota de 100 TUSD.</figcaption>}
     </figure>
   )

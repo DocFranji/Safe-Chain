@@ -201,9 +201,9 @@ details[open] > :not(summary) {
   }
 }
 
-/* ---------- La marca al abrir la app: el fleco de Sarchí se desenrolla y la línea de Montaña se traza ---------- */
+/* ---------- La marca al abrir la app: la línea azul de la barra se traza ---------- */
 /* La barra es la misma en todas las páginas de la app: solo se ve al entrar, no en cada cambio de página. */
-:root:is([data-tema='sarchi'], [data-tema='montana'], [data-tema='orbita']) .barra::after {
+:root .barra::after {
   animation: trazar-borde 900ms var(--ease-out) 150ms backwards;
 }
 
@@ -319,7 +319,7 @@ details[open] > :not(summary) {
     animation-name: aparecer-suave;
     animation-delay: 0ms;
   }
-  :root:is([data-tema='sarchi'], [data-tema='montana'], [data-tema='orbita']) .barra::after,
+  :root .barra::after,
   .nodo-halo,
   .etiqueta.en-curso::before,
   .tarjeta-cobro::after,
