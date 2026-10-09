@@ -1,22 +1,16 @@
-// La "rueda" de la tanda: cada persona es un lugar del círculo, en orden de turno.
-// Hay un dibujo por opción de diseño en prueba (src/lib/tema.ts):
-// - Sarchí: la rueda pintada de la carreta, que gira una ronda a la vez (RuedaSarchi.tsx).
-// - Montaña: segmentos que se pintan de verde y el punto del logo que señala a quien cobra (RuedaMontana.tsx).
-// El modelo (quién está dónde, quién pagó, cuánto gira) es común: src/lib/rueda.ts.
-import type { ReactNode } from 'react'
+// La "rueda" de la tanda: cada persona es un lugar del círculo, en orden de turno. El dibujo está en RuedaOrbita.tsx
+// (segmentos que se pintan de azul al pagar y el punto del logo que señala a quien cobra); el modelo (quién está
+// dónde, quién pagó, cuánto falta) está en src/lib/rueda.ts.
 import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import { duracion } from '../lib/formato'
 import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
-import { armarRueda, type ModeloRueda } from '../lib/rueda'
-import { useTema, type Tema } from '../lib/tema'
-import { RuedaSarchi } from './RuedaSarchi'
-import { RuedaMontana } from './RuedaMontana'
+import { armarRueda } from '../lib/rueda'
+import { RuedaOrbita } from './RuedaOrbita'
 
 type Props = { datos: DatosTanda; ahora: number; yo: string | null }
 
 export function Rueda({ datos, ahora, yo }: Props) {
-  const tema = useTema()
   const m = armarRueda(datos, ahora, yo)
   const estado = datos.tanda.estado.tag
   const etiqueta = resumen(datos, m.restante)
@@ -24,15 +18,15 @@ export function Rueda({ datos, ahora, yo }: Props) {
 
   return (
     <figure className="rueda">
-      <DibujoRueda tema={tema} m={m} centro={centro} etiqueta={etiqueta} />
+      <RuedaOrbita m={m} centro={centro} etiqueta={etiqueta} />
 
       {estado !== 'Abierta' && (
         <figcaption className="leyenda">
           <span>
-            <i className={`muestra ${MUESTRA_TURNO[tema]}`} /> Cobra este turno
+            <i className="muestra punto" /> Cobra este turno
           </span>
           <span>
-            <i className={`muestra ${MUESTRA_PAGO[tema]}`} /> Pagó este turno
+            <i className="muestra pintado" /> Pagó este turno
           </span>
           <span>
             <i className="muestra cobro">
@@ -43,19 +37,6 @@ export function Rueda({ datos, ahora, yo }: Props) {
         </figcaption>
       )}
     </figure>
-  )
-}
-
-// La leyenda dibuja lo mismo que la rueda de cada diseño: cómo se marca a quien cobra y lo pagado.
-const MUESTRA_TURNO: Record<Tema, string> = { orbita: 'punto', sarchi: 'flecha', montana: 'punto' }
-const MUESTRA_PAGO: Record<Tema, string> = { orbita: 'pintado', sarchi: 'pintado', montana: 'pintado' }
-
-/** El dibujo de la rueda según el diseño en prueba (también lo usa la rueda de ejemplo de la portada). */
-export function DibujoRueda({ tema, m, centro, etiqueta }: { tema: Tema; m: ModeloRueda; centro: ReactNode; etiqueta: string }) {
-  return tema === 'montana' || tema === 'orbita' ? (
-    <RuedaMontana m={m} centro={centro} etiqueta={etiqueta} />
-  ) : (
-    <RuedaSarchi m={m} centro={centro} etiqueta={etiqueta} />
   )
 }
 

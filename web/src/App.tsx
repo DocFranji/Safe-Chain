@@ -16,6 +16,7 @@ import { Landing } from './landing/Landing'
 import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { BotonesEntrar } from './components/BotonesEntrar'
+import { BotonModo } from './components/BotonModo'
 import { direccionCorta, nombreDe, NOMBRES, suscribirApodos, usarLectorDeApodos, versionApodos } from './lib/nombres'
 import { leerApodo } from './lib/historial'
 import { useSyncExternalStore } from 'react'
@@ -61,7 +62,11 @@ export default function App() {
             </a>
           )}
         </nav>
-        <BotonBilletera billetera={billetera} />
+        <div className="barra-lado">
+          {/* La demo siempre va en oscuro (se proyecta): ahí el botón no haría nada. */}
+          {ruta.tipo !== 'demo' && <BotonModo />}
+          <BotonBilletera billetera={billetera} />
+        </div>
       </header>
 
       {ruta.tipo !== 'demo' && <BarraCuenta billetera={billetera} cuenta={cuenta} />}
