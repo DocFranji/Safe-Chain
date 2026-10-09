@@ -2311,3 +2311,148 @@ a.billetera {
     font-size: 14px;
   }
 }
+
+/* =====================================================================================================
+   UX + Órbita: la tarjeta de la rueda, igual que el celular de la portada (landing.css, .lo-telefono):
+   la rueda, la línea "Turno 2 de 3 · Cobra Beto" y una píldora por persona con "Pagó" o "Por pagar".
+   ===================================================================================================== */
+.tarjeta-ronda {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tarjeta-ronda .rueda > svg {
+  max-width: 440px;
+  margin-inline: auto;
+}
+.tarjeta-ronda .miembros {
+  margin-top: 8px;
+}
+.ronda-linea {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 2px 12px;
+}
+.ronda-linea h2 {
+  margin: 0;
+}
+.miembros .ronda-linea h2 {
+  margin-bottom: 0;
+  font-size: 20px;
+}
+.ronda-linea span {
+  color: var(--tinta-2);
+  font-size: 16px;
+}
+.lista-personas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.persona {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 16px;
+  background: var(--superficie-2);
+  transition: background-color var(--t-rapido) ease;
+}
+.persona-inicial {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 1px var(--linea);
+  font-family: var(--titulos);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--tinta);
+}
+.persona.pago .persona-inicial {
+  background: var(--acento);
+  box-shadow: none;
+  color: var(--sobre-acento);
+}
+.persona-cuerpo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.persona-nombre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.persona-nombre a {
+  color: inherit;
+  text-decoration: none;
+}
+.persona-nombre .marca-yo {
+  margin-left: 0;
+}
+.persona .sub {
+  font-size: 13.5px;
+}
+.persona-estado {
+  margin-left: auto;
+  padding-left: 8px;
+  flex: none;
+  font-style: normal;
+  color: var(--tinta-2);
+  text-align: right;
+}
+.persona.pago .persona-estado {
+  color: var(--acento);
+  font-weight: 700;
+}
+.persona.yo {
+  box-shadow: inset 0 0 0 1.5px var(--acento);
+}
+.persona.cobra .persona-inicial {
+  box-shadow: 0 0 0 3px var(--turno);
+}
+.persona.libre {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--linea);
+  color: var(--tinta-2);
+}
+.persona.libre .persona-inicial {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px dashed var(--borde);
+  border: 1.5px dashed var(--borde);
+  color: var(--tinta-2);
+}
+.persona-estado:not(:empty) {
+  white-space: nowrap;
+}
+
+/* En el celular: primero la siguiente acción, después la tarjeta de la rueda y al final los intereses. */
+@media (max-width: 780px) {
+  .app[data-pagina='tanda'] .escenario > .columna {
+    display: contents;
+  }
+  .app[data-pagina='tanda'] .escenario > .columna > .panel:first-child {
+    order: -2;
+  }
+  .app[data-pagina='tanda'] .escenario > .tarjeta-ronda {
+    order: -1;
+  }
+  .app[data-pagina='tanda'] .tarjeta-ronda {
+    padding: 16px 14px 18px;
+  }
+  .app[data-pagina='tanda'] .tarjeta-ronda .leyenda {
+    display: none;
+  }
+}

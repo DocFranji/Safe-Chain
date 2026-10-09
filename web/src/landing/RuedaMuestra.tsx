@@ -42,24 +42,24 @@ export function RuedaMuestra({ paso: pasoDado, nota = true }: { paso?: number; n
 
   const m = modeloMuestra(paso)
   const ronda = Math.floor(paso / MOMENTOS) % N
-  const etiqueta = `Ejemplo: tanda de ${N} personas, ronda ${ronda + 1}. Cobra ${NOMBRES[ronda]}.`
+  const etiqueta = `Ejemplo: tanda de ${N} personas, turno ${ronda + 1}. Cobra ${NOMBRES[ronda]}.`
   const centro = (
     <g className="centro">
       <text className="centro-grande" x={0} y={-6}>
-        500
+        $500
       </text>
       <text className="centro-sub" x={0} y={21}>
-        TUSD para {NOMBRES[ronda]}
+        para {NOMBRES[ronda] === 'Tú' ? 'ti' : NOMBRES[ronda]}
       </text>
       <text className="centro-nota" x={0} y={44}>
-        Ronda {ronda + 1} de {N}
+        Turno {ronda + 1} de {N}
       </text>
     </g>
   )
   return (
     <figure className="rueda ln-rueda">
       <RuedaOrbita m={m} centro={centro} etiqueta={etiqueta} />
-      {nota && <figcaption className="ln-rueda-nota">Una tanda de ejemplo: 5 personas, cuota de 100 TUSD.</figcaption>}
+      {nota && <figcaption className="ln-rueda-nota">Una tanda de ejemplo: 5 personas, cuota de $100.</figcaption>}
     </figure>
   )
 }

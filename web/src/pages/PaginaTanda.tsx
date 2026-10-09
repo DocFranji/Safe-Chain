@@ -1,5 +1,5 @@
-// Una tanda: la rueda de turnos, el panel de acciones, quiénes participan y, según el estado,
-// la invitación (abierta), el rendimiento (en curso) o los resultados (terminada).
+// Una tanda: el panel con la siguiente acción, la tarjeta de la rueda (rueda, turno y personas, como el celular de la
+// portada) y, según el estado, la invitación (abierta), los intereses (en curso) o el cierre y los resultados (terminada).
 import { useAhora, useTanda } from '../hooks/useTanda'
 import { useEventos } from '../hooks/useEventos'
 import type { Billetera } from '../hooks/useBilletera'
@@ -64,13 +64,16 @@ export function PaginaTanda({ id, billetera, saldo }: Props) {
           {adentro && invitar}
           {estado === 'Finalizada' && yo && <CierreTanda datos={datos} yo={yo} eventos={historia.eventos} />}
           <div className="escenario">
-            <Rueda datos={datos} ahora={ahora} yo={billetera.direccion} />
+            {/* Como el celular de la portada: la rueda, el turno y las personas en una sola tarjeta. */}
+            <section className="panel tarjeta-ronda" aria-label="La rueda de la tanda">
+              <Rueda datos={datos} ahora={ahora} yo={billetera.direccion} />
+              <ListaMiembros datos={datos} yo={billetera.direccion} />
+            </section>
             <div className="columna">
               <PanelRonda id={id} datos={datos} billetera={billetera} saldo={saldoMoneda} ahora={ahora} alCambiar={recargar} />
               {(estado === 'Abierta' || estado === 'Activa' || estado === 'PorLiquidar') && <Rendimiento datos={datos} />}
             </div>
           </div>
-          <ListaMiembros datos={datos} yo={billetera.direccion} />
           <Calendario id={id} datos={datos} ahora={ahora} yo={billetera.direccion} />
           {estado === 'Finalizada' && (
             <Resultados datos={datos} yo={billetera.direccion} eventos={historia.eventos} error={historia.error} />

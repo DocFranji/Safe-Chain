@@ -103,7 +103,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   }
 
   return (
-    <section className="panel" aria-labelledby="panel-titulo">
+    <section className="panel panel-ronda" aria-labelledby="panel-titulo">
       {invitado ? (
         <div className="invitacion">
           <h2 id="panel-titulo">{anfitrion ? `${anfitrion} te invita a una tanda` : 'Te invitaron a una tanda'}</h2>

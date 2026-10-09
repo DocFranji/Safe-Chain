@@ -2,8 +2,9 @@
 import type { CSSProperties } from 'react'
 import type { ResumenTanda } from '../lib/lectura'
 import { bolsa, colateralDeTurno } from '../lib/colateral'
-import { claseEstado, duracion, etiquetaEstado } from '../lib/formato'
+import { claseEstado, etiquetaEstado } from '../lib/formato'
 import { dinero } from '../lib/glosario'
+import { porPeriodo } from '../lib/resumen'
 import { rutaTanda } from '../lib/rutas'
 import { bolsaListaParaCobrar } from '../lib/cobro'
 import { tituloModo } from '../lib/turnos'
@@ -65,8 +66,7 @@ export function TarjetaTanda({ resumen, yo, ahora }: Props) {
           ))}
         </div>
         <p className="tarjeta-datos">
-          {miembros.length} de {n} personas · cuota {dinero(tanda.cuota)} · cada{' '}
-          {duracion(Number(tanda.periodo_seg))}
+          {miembros.length} de {n} personas · {dinero(tanda.cuota)} {porPeriodo(Number(tanda.periodo_seg))}
         </p>
         <p className="tarjeta-detalle">{detalle}</p>
         {modo !== 'Llegada' && <p className="tarjeta-datos">Turnos: {tituloModo(modo).toLowerCase()}</p>}

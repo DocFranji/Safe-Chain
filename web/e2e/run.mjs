@@ -214,7 +214,7 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Deuda: un pago parcial válido habilita "Pagar $40"', !(await page.getByRole('button', { name: 'Pagar $40' }).isDisabled()))
   const lista = (await page.locator('.miembros').first().innerText()).replace(/\u00a0/g, ' ')
   check('Lista: "Debe $100" para quien está en mora', /Debe \$100/.test(lista), lista.slice(0, 400))
-  check('Lista: "Saldó su deuda" para Carla', /Se puso al día/.test(lista), lista.slice(0, 400))
+  check('Lista: "se puso al día" para Carla', /se puso al día/i.test(lista), lista.slice(0, 400))
   const cal = (await page.locator('.calendario').innerText().catch(() => '')).replace(/\u00a0/g, ' ')
   check('Calendario: 4 rondas, 2 cerradas y fechas para las que faltan', (await page.locator('.calendario tbody tr').count()) === 4 && (cal.match(/Cerrada/g) ?? []).length === 2 && /Vence el \S+ \d+ de \S+/.test(cal), cal)
   // M1 fase 2: "Agregar a mi calendario" baja un .ics con las 2 fechas que faltan y recordatorios.
@@ -262,7 +262,7 @@ const browser = await chromium.launch(opcionesNavegador())
   const { page, errores } = await nuevaPagina(browser, { est })
   await page.goto(BASE + '#/tanda/6')
   await page.waitForSelector('.panel .acciones button', { timeout: 15000 }).catch(() => {})
-  const panel = (await page.locator('.panel').first().innerText()).replace(/\u00a0/g, ' ')
+  const panel = (await page.locator('.panel-ronda').innerText()).replace(/\u00a0/g, ' ')
   const boton = page.getByRole('button', { name: 'Todos pagaron: cobra tu pozo ya' })
   check('Cerrar antes: a quien cobra le ofrece "Todos pagaron: cobra tu bolsa ya"', (await boton.count()) === 1 && !(await boton.isDisabled()), panel.slice(0, 500))
   check('Cerrar antes: explica que las fechas no cambian y cuándo vence la próxima', /Las fechas no cambian: el próximo turno ya se puede pagar y vence el \S+ \d+ de \S+/.test(panel), panel)
@@ -279,7 +279,7 @@ const browser = await chromium.launch(opcionesNavegador())
   const { page, errores } = await nuevaPagina(browser, { est, direccion: CARLA, viewport: { width: 390, height: 844 } })
   await page.goto(BASE + '#/tanda/6')
   await page.waitForSelector('.panel .acciones button', { timeout: 15000 }).catch(() => {})
-  const panel = (await page.locator('.panel').first().innerText()).replace(/\u00a0/g, ' ')
+  const panel = (await page.locator('.panel-ronda').innerText()).replace(/\u00a0/g, ' ')
   check('Cerrar antes: cualquiera puede ("Todos pagaron: cerrar ya y pagarle a …")', /Todos pagaron: entregarle el pozo a/.test(panel) && /cualquier persona del grupo puede hacerlo/.test(panel), panel.slice(0, 500))
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
   check('Móvil (390px): cerrar antes no se desborda', !overflow)
@@ -293,7 +293,7 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.goto(BASE + '#/tanda/6')
   await page.waitForSelector('.panel .acciones', { timeout: 15000 }).catch(() => {})
   await page.waitForTimeout(500)
-  const panel = (await page.locator('.panel').first().innerText()).replace(/\u00a0/g, ' ')
+  const panel = (await page.locator('.panel-ronda').innerText()).replace(/\u00a0/g, ' ')
   check('Subasta: aunque todos pagaron, no ofrece cerrar antes', !/Todos pagaron: c/.test(panel) && !/Pasar al siguiente turno|Entregarle el pozo/.test(panel), panel.slice(0, 500))
   check('Subasta: explica que se entrega al terminar el plazo', /En la subasta el pozo se entrega cuando termina el plazo/.test(panel), panel.slice(0, 600))
   check('Subasta (todos pagaron): sin errores de consola', errores.length === 0, errores.join(' | '))
@@ -416,7 +416,7 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Invitación: "Beto te invita a una tanda"', /Beto te invita a una tanda/.test(inv), inv)
   check('Invitación: "5 personas · $50 por semana"', /5 personas · \$50 por semana/.test(inv), inv)
   check('Invitación: cuánto recibe cada turno y cuánto dejo de depósito', /Cada semana una persona recibe \$250\./.test(inv) && /Dejas \$\d+ de depósito de seguridad y lo recuperas al final/.test(inv), inv)
-  check('Invitación: el botón para unirme está en la misma tarjeta', (await page.locator('.panel').first().getByRole('button', { name: /Unirme y dejar/ }).count()) === 1)
+  check('Invitación: el botón para unirme está en la misma tarjeta', (await page.locator('.panel-ronda').getByRole('button', { name: /Unirme y dejar/ }).count()) === 1)
   const desborde = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
   check('Invitación (375 px): sin desborde horizontal', !desborde)
   await shot(page, 'ux-invitacion-375')
@@ -429,7 +429,7 @@ const browser = await chromium.launch(opcionesNavegador())
   const { page } = await nuevaPagina(browser, { est, conectado: false, viewport: { width: 375, height: 800 } })
   await page.goto(BASE + '#/tanda/5')
   await page.waitForSelector('.invitacion', { timeout: 15000 }).catch(() => {})
-  const panel = await page.locator('.panel').first().innerText().catch(() => '')
+  const panel = await page.locator('.panel-ronda').innerText().catch(() => '')
   check('Invitación sin cuenta: la ve igual y el botón para entrar está ahí mismo', /Beto te invita a una tanda/.test(panel) && /Instalar Freighter|Conectar billetera Stellar|Entrar con Google/.test(panel), panel.slice(0, 400))
   await shot(page, 'ux-invitacion-sin-cuenta-375')
   await page.close()
@@ -1211,7 +1211,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   est.historialActivo = false
   const { page, errores } = await nuevaPagina(browser, { est })
   await page.goto(BASE + '#/tanda/2')
-  await page.waitForSelector('.miembros table', { timeout: 15000 }).catch(() => {})
+  await page.waitForSelector('.lista-personas', { timeout: 15000 }).catch(() => {})
   await page.waitForTimeout(800)
   check('Sin historial: no hay insignias', (await page.locator('.insignia').count()) === 0)
   await page.goto(BASE + '#/crear')
@@ -1344,7 +1344,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await verTodas(page)
   await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
   const tarjeta = await page.locator('.tarjeta', { hasText: 'Tanda 6' }).innerText({ timeout: 15000 }).catch(() => '')
-  check('M4: la tarjeta de la tanda USDC en el lobby dice USDC', /\$300/.test(tarjeta) && /cuota \$100/.test(tarjeta), tarjeta)
+  check('M4: la tarjeta de la tanda USDC en el lobby dice USDC', /\$300/.test(tarjeta) && /\$100 cada 2 min/.test(tarjeta), tarjeta)
   await page.close()
 }
 {
@@ -1584,16 +1584,36 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.close()
 }
 
-// ---------------------------------------------------------------- UX: a 375 px las tablas caben sin desplazarse
+// ---------------------------------------------------------------- UX: a 375 px, igual que el celular de la portada
 for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tanda/1', CARLA, 'terminada']]) {
   const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion, viewport: { width: 375, height: 800 } })
   await page.goto(BASE + hash)
-  await page.waitForSelector('.miembros table', { timeout: 15000 }).catch(() => {})
+  await page.waitForSelector('.lista-personas', { timeout: 15000 }).catch(() => {})
   await page.waitForTimeout(1500)
   const anchas = await page.evaluate(() => [...document.querySelectorAll('.tabla-scroll')].filter((t) => t.scrollWidth > t.clientWidth + 1).length)
-  check(`375 px (${que}): las tablas de personas caben sin desplazarse`, anchas === 0, `tablas anchas: ${anchas}`)
-  const fila = await page.locator('.miembros tbody tr').first().innerText()
-  check(`375 px (${que}): el estado de cada persona va debajo de su nombre`, /Cobra en el turno|Ya cobró|Cobra en este turno/.test(fila), fila)
+  check(`375 px (${que}): ninguna tabla se desplaza de lado`, anchas === 0, `tablas anchas: ${anchas}`)
+  check(`375 px (${que}): sin desborde horizontal`, await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+  if (hash === '#/tanda/2') {
+    const filas = (await page.locator('.lista-personas .persona').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '))
+    check('Tarjeta de la rueda: una píldora por persona con "Pagó" o "Por pagar"', filas.length === 3 && /Ana.*Por pagar/.test(filas[0]) && /Beto.*Pagó/.test(filas[1]) && /Carla.*Por pagar/.test(filas[2]), JSON.stringify(filas))
+    check('Tarjeta de la rueda: "Turno 2 de 3 · Cobra Beto"', /Turno 2 de 3/.test(await page.locator('.ronda-linea').innerText()) && /Cobra Beto/.test(await page.locator('.ronda-linea').innerText()))
+    check('Tarjeta de la rueda: la rueda y las personas van juntas', (await page.locator('.tarjeta-ronda .rueda').count()) === 1 && (await page.locator('.tarjeta-ronda .lista-personas').count()) === 1)
+    const orden = await page.evaluate(() => {
+      const y = (s) => document.querySelector(s)?.getBoundingClientRect().top ?? -1
+      return [y('.siguiente'), y('.tarjeta-ronda'), y('.rendimiento')]
+    })
+    check('375 px: primero la siguiente acción, después la rueda con las personas y al final los intereses', orden[0] >= 0 && orden[0] < orden[1] && orden[1] < orden[2], JSON.stringify(orden))
+    await shot(page, 'ux-tanda-como-portada-375')
+  }
+  await page.close()
+}
+{
+  // La portada dice lo mismo que la app: dólares y turnos.
+  const { page } = await nuevaPagina(browser, { est: nuevoEstado(), conectado: false, viewport: { width: 375, height: 800 } })
+  await page.goto(BASE + '#/')
+  await page.waitForSelector('.lo-telefono', { timeout: 15000 }).catch(() => {})
+  const tel = await page.locator('.lo-telefono').innerText().catch(() => '')
+  check('Portada: el celular de ejemplo habla en dólares y turnos (sin TUSD ni "Ronda")', /\$500/.test(tel) && /Turno \d de 5/.test(tel) && !/TUSD|Ronda/.test(tel), tel.slice(0, 300))
   await page.close()
 }
 
