@@ -93,3 +93,8 @@ export function nombreDe(direccion: string): string {
   if (apodo) return `${apodo} · ${direccionCorta(direccion)}`
   return NOMBRES[direccion] ?? direccionCorta(direccion)
 }
+
+/** El nombre de alguien solo si se conoce (apodo o nombre de la demo); null si solo hay dirección. */
+export function nombreConocido(direccion: string): string | null {
+  return apodoDe(direccion) ?? NOMBRES[direccion] ?? null
+}
