@@ -3,7 +3,7 @@ import type { DatosTanda } from '../hooks/useTanda'
 import { dinero } from '../lib/glosario'
 import { saldoSuDeuda } from '../lib/deudas'
 import { nombreDe } from '../lib/nombres'
-import { EXPLORADOR } from '../config'
+import { rutaHistorial } from '../lib/rutas'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
 import { InsigniaNivel } from './InsigniaNivel'
 
@@ -31,7 +31,7 @@ export function ListaMiembros({ datos, yo }: Props) {
               <th scope="col">Persona</th>
               <th scope="col" className="num">Depósito</th>
               {activa && <th scope="col">Este turno</th>}
-              <th scope="col">Estado</th>
+              <th scope="col" className="solo-ancho">Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -42,11 +42,14 @@ export function ListaMiembros({ datos, yo }: Props) {
                 <tr key={m.direccion} className={m.direccion === yo ? 'fila-yo' : undefined}>
                   <td className="turno">{tieneTurno(m.posicion) ? m.posicion + 1 : '?'}</td>
                   <td>
-                    <a href={`${EXPLORADOR}/account/${m.direccion}`} target="_blank" rel="noreferrer" title={m.direccion}>
+                    {/* UX: el nombre lleva a la reputación de la persona, no al explorador de la red. */}
+                    <a href={rutaHistorial(m.direccion)} title={m.direccion}>
                       {nombreDe(m.direccion)}
                     </a>
                     <InsigniaNivel dir={m.direccion} />
                     {m.direccion === yo && <span className="marca-yo">tú</span>}
+                    {/* En el celular, la columna "Estado" se esconde y su texto va aquí. */}
+                    <span className="sub solo-movil">{estadoMiembro(m, activa, tanda.ronda_actual)}</span>
                   </td>
                   <td className="num">
                     {dinero(m.colateral)}
@@ -59,7 +62,7 @@ export function ListaMiembros({ datos, yo }: Props) {
                       </span>
                     </td>
                   )}
-                  <td>
+                  <td className="solo-ancho">
                     {estadoMiembro(m, activa, tanda.ronda_actual)}
                     {saldoSuDeuda(
                       datos.deudas.find((d) => d.direccion === m.direccion),

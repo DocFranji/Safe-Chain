@@ -2278,3 +2278,16 @@ a.billetera {
   flex-wrap: wrap;
   gap: 10px;
 }
+
+/* UX (375 px): las tablas de personas no se salen de la pantalla. Lo secundario pasa debajo del nombre. */
+.solo-movil {
+  display: none;
+}
+@media (max-width: 600px) {
+  .solo-ancho {
+    display: none;
+  }
+  .solo-movil {
+    display: block;
+  }
+}

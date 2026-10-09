@@ -1584,6 +1584,19 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.close()
 }
 
+// ---------------------------------------------------------------- UX: a 375 px las tablas caben sin desplazarse
+for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tanda/1', CARLA, 'terminada']]) {
+  const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion, viewport: { width: 375, height: 800 } })
+  await page.goto(BASE + hash)
+  await page.waitForSelector('.miembros table', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(1500)
+  const anchas = await page.evaluate(() => [...document.querySelectorAll('.tabla-scroll')].filter((t) => t.scrollWidth > t.clientWidth + 1).length)
+  check(`375 px (${que}): las tablas de personas caben sin desplazarse`, anchas === 0, `tablas anchas: ${anchas}`)
+  const fila = await page.locator('.miembros tbody tr').first().innerText()
+  check(`375 px (${que}): el estado de cada persona va debajo de su nombre`, /Cobra en el turno|Ya cobró|Cobra en este turno/.test(fila), fila)
+  await page.close()
+}
+
 // ---------------------------------------------------------------- UX: la siguiente acción, arriba del panel
 {
   const BETO_DIR = 'GBPDH2E2EX5D7DO76YRIX477LPJWNPB7MJZRTEDJWBKZMS5KTLLRU2LO'

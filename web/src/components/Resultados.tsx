@@ -71,7 +71,7 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Turno</th>
+                  <th scope="col" className="solo-ancho">Turno</th>
                   <th scope="col">Persona</th>
                   <th scope="col" className="num">
                     Depósito
@@ -79,7 +79,7 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                   <th scope="col" className="num">
                     Recibió al final
                   </th>
-                  <th scope="col">Cómo le fue</th>
+                  <th scope="col" className="solo-ancho">Cómo le fue</th>
                 </tr>
               </thead>
               <tbody>
@@ -88,14 +88,15 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
                   const hayPagos = r.pagos.length > 0
                   return (
                     <tr key={m.direccion} className={m.direccion === yo ? 'fila-yo' : undefined}>
-                      <td className="turno">{m.posicion + 1}</td>
+                      <td className="turno solo-ancho">{m.posicion + 1}</td>
                       <td>
                         {nombreDe(m.direccion)}
                         {m.direccion === yo && <span className="marca-yo">tú</span>}
+                        {hayPagos && <span className="sub solo-movil">{comoLeFue(m, final)}</span>}
                       </td>
                       <td className="num">{dinero(m.colateral_inicial)}</td>
                       <td className="num">{hayPagos ? dinero(final) : '-'}</td>
-                      <td>{hayPagos ? comoLeFue(m, final) : '-'}</td>
+                      <td className="solo-ancho">{hayPagos ? comoLeFue(m, final) : '-'}</td>
                     </tr>
                   )
                 })}
