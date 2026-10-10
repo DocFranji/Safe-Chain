@@ -686,7 +686,7 @@ fn abono_a_una_bolsa_retenida_y_luego_recuperada() {
 /// Una tanda de `n` con la cobertura dada y cuota de 100. Devuelve (id, gente) con la gente en el orden
 /// en que llegaron (y cobran).
 fn tanda_de(c: &Ctx, n: u32, cobertura_bps: u32) -> (u32, StdVec<Address>) {
-    let g = personas(c, n);
+    let g = personas(c, n as usize);
     let id = c.tanda.crear_tanda(
         &c.creador,
         &c.token.address,

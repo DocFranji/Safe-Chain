@@ -50,7 +50,7 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
         return {
           ...base,
           tipo: 'info',
-          titulo: 'Se creó la tanda',
+          titulo: ev.data.nombre ? `Se creó la tanda «${ev.data.nombre}»` : 'Se creó la tanda',
           detalle: [
             ev.data.n_miembros !== undefined ? `${ev.data.n_miembros} personas` : null,
             ev.data.cuota !== undefined ? `cuota de ${dinero(ev.data.cuota)}` : null,
@@ -319,6 +319,34 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
               titulo: `${quien(ev.data.hacia)} recibió los ${dinero(ev.data.monto)} que le faltaban`,
               detalle: `Lo pagó ${quien(ev.data.deudor)}, con la tanda ya terminada`,
             }
+      case 'EvGarantiaRepartida': {
+        // (v5) La garantía de quien no pagó se repartió al final entre quienes cobraron de menos.
+        const partes = ev.data.partes ?? []
+        const resto =
+          ev.data.deuda_restante !== undefined && ev.data.deuda_restante > 0n
+            ? `Todavía debe ${dinero(ev.data.deuda_restante)}`
+            : 'Con eso quedó al día'
+        if (partes.length === 1 && !partes[0].a_pozo)
+          return {
+            ...base,
+            tipo: 'clave',
+            titulo: `${quien(partes[0].acreedor)} recibió ${dinero(partes[0].monto)} del depósito de ${quien(ev.data.deudor)}`,
+            detalle: `Lo que le faltó por su atraso. ${resto}`,
+          }
+        const detalle = partes
+          .map((p) =>
+            p.a_pozo
+              ? `${dinero(p.monto)} al pozo de quienes cumplieron (el de ${quien(p.acreedor)} estaba guardado)`
+              : `${quien(p.acreedor)} recibió ${dinero(p.monto)}`,
+          )
+          .join(' · ')
+        return {
+          ...base,
+          tipo: 'clave',
+          titulo: `El depósito de ${quien(ev.data.deudor)} (${dinero(ev.data.repartido)}) se repartió entre quienes cobraron de menos`,
+          detalle: [detalle, resto].filter(Boolean).join('. '),
+        }
+      }
       case 'EvBovedaRapida':
         return { ...base, tipo: 'info', titulo: 'Se cambió dónde ganan intereses las tandas de prueba' }
       // --- M2: historial crediticio ---

@@ -465,3 +465,22 @@ que le quedan). La variante `DEUDA=1` (garantía mínima) ahora deja a Ana en mo
 - `test_invariantes.rs`: el modelo de `cerrar` sigue la regla nueva, y el de `finalizar` calcula **aparte** el
   reparto (por afectado, al fondo, lo que sobra, la deuda que queda) y lo compara con lo que hizo el contrato.
   `INVARIANTES_SEMILLAS=400 cargo test -p tanda --release invariantes_al_azar`.
+
+### 9.4 Peor caso medido (v5)
+
+12 personas, garantía mínima, casi nadie paga (11 morosos con garantía), contratos en WASM, contra los límites de mainnet
+(100 M instrucciones, 100 lecturas, **50 escrituras**, 16 384 B de eventos; las pruebas fallan si se pasa cualquiera):
+
+| Operación | Instrucciones | Lecturas | Escrituras |
+| --- | --- | --- | --- |
+| `cerrar_ronda` | 10,0 M | 51 | 26 |
+| `finalizar` con 11 morosos (reparte sus garantías) | 28,3 M | 41 | 31 |
+| `finalizar` con 11 morosos e historial | 29,9 M | 46 | 34 |
+| `pagar_deuda` | 6,9 M | 38 | 17 |
+| `finalizar` (la deudora cobra la última ronda) + `pagar_deuda` tras finalizar | 17,2 M + 10,6 M | 50 + 48 | 30 + 15 |
+
+`tanda.wasm`: 95 352 bytes (límite de la red: 128 KB). Invariantes al azar con 400 semillas
+(`INVARIANTES_SEMILLAS=400 cargo test -p tanda --release invariantes_al_azar`): en verde.
+
+Primer intento de `finalizar` con un evento por afectado: **20 108 B de eventos en el peor caso (límite 16 384)**. Por eso
+el evento es uno por moroso y solo las primeras 24 partes van detalladas (ver §9.2).
