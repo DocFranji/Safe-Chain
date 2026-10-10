@@ -6,6 +6,7 @@ import type { contract } from '@stellar/stellar-sdk'
 import type { DatosTanda } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from './BotonesEntrar'
+import { BotonUnirse } from './BotonUnirse'
 import { AccionesTurnos } from './AccionesTurnos'
 import { PagarDeuda } from './PagarDeuda'
 import { CerrarRonda } from './CerrarRonda'
@@ -140,13 +141,13 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <>
             {estado === 'Abierta' && !mio && colateralSiguiente !== null && !eligeTurno(modo) && (
               <>
-                <button
-                  className="boton principal"
-                  disabled={ocupado || faltaParaUnirse > 0n}
-                  onClick={() => ejecutar((c) => c.unirse({ id, miembro: yo }), 'Listo: ya eres parte de la tanda.')}
-                >
-                  Unirme y dejar {dinero(colateralSiguiente)} de depósito
-                </button>
+                {/* Si alguien del grupo tiene un pago pendiente en otra tanda, antes de firmar se pide confirmar. */}
+                <BotonUnirse
+                  miembros={miembros.map((m) => m.direccion)}
+                  deshabilitado={ocupado || faltaParaUnirse > 0n}
+                  unirse={() => void ejecutar((c) => c.unirse({ id, miembro: yo }), 'Listo: ya eres parte de la tanda.')}
+                  texto={<>Unirme y dejar {dinero(colateralSiguiente)} de depósito</>}
+                />
                 {faltaParaUnirse > 0n && <FaltaSaldo falta={faltaParaUnirse} />}
                 <NotaHistorial yo={yo} requisitos={historial.requisitos} normal={colateralNormal!} conDescuento={historial.garantia} />
                 <p className="explica">

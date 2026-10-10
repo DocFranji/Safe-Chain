@@ -12,6 +12,7 @@ cd web/e2e && npm install && npm test          # ~100 comprobaciones; capturas e
 
 - `BASE=http://localhost:5173/ npm test`: probar contra otro servidor (por ejemplo, `npm run dev`).
 - `CHROMIUM_PATH=/ruta/a/chrome npm test`: usar otro Chromium. En las sesiones de Claude Code en la nube ya hay uno en `/opt/pw-browsers/chromium`; en tu PC instala uno con `npx playwright install chromium`.
+- `est.demoraRpc = 1200` (en un escenario, antes de abrir la página): cada respuesta del RPC simulado tarda ese tiempo en ms. Sirve para probar qué pasa si alguien toca un botón antes de que llegue una lectura.
 - `node snap.mjs "#/tanda/2" nombre 390`: captura de una página a 390 px de ancho (`me` = con billetera conectada, `none` = sin billetera).
 
 ## Archivos
