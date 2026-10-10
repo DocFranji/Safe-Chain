@@ -613,6 +613,12 @@ impl TandaContract {
             // no se transfería, y `finalizar` pagaba de más y se trababa. Con rendimiento >= 0 da lo
             // mismo que antes; nunca hay pagos negativos.
             let disponible = (suma_col2 + rendimiento_resto).max(0);
+            // Si la bóveda perdió valor, las multas que se cobraron "de la garantía anotada" pueden no
+            // tener el dinero que las respalde (pasa cuando hay multas pendientes y la garantía vale
+            // menos de lo anotado). El déficit lo absorbe el fondo de multas, para no repartir de más ni
+            // trabar `finalizar`. Con rendimiento >= 0 (lo normal) no cambia nada.
+            let deficit = (-(suma_col2 + rendimiento_resto)).max(0);
+            t.fondo_premios -= deficit.min(t.fondo_premios);
             let mut repartido: i128 = 0;
             let mut ultimo: Option<u32> = None;
             for i in 0..n {
