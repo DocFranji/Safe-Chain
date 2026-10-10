@@ -1,7 +1,7 @@
 //! Eventos: avisos que el contrato publica y la interfaz escucha (línea de tiempo, resultados).
 use soroban_sdk::{contractevent, Address, String, Vec};
 
-use crate::ModoTurnos;
+use crate::{ModoTurnos, ParteGarantia};
 
 // ---------------------------------------------------------------------------
 // Eventos: avisos que el contrato publica y la interfaz escucha para actualizarse.
@@ -336,4 +336,20 @@ pub struct EvAbonoFinal {
     pub hacia: Address,
     pub monto: i128,
     pub reparto: bool,
+}
+
+// --- M1 v5: la garantía de un moroso se reparte entre los afectados ---
+
+/// Al finalizar, la garantía que le quedaba a `deudor` se repartió entre quienes cobraron de menos,
+/// en proporción a lo que le faltó a cada uno. Un solo evento por moroso (con todas las partes).
+/// `deuda_restante` es lo que todavía debe después del reparto.
+#[contractevent(topics = ["garantia_rep"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvGarantiaRepartida {
+    #[topic]
+    pub id: u32,
+    pub deudor: Address,
+    pub repartido: i128,
+    pub deuda_restante: i128,
+    pub partes: Vec<ParteGarantia>,
 }

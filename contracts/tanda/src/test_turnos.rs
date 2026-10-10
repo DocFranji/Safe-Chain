@@ -411,7 +411,7 @@ fn sorteo_moroso_antes_de_su_turno_pierde_su_bolsa() {
     }
     let m = c.miembro(id, &ultimo);
     assert!(m.moroso && !m.cobro);
-    assert_eq!(m.deuda, 200 * U); // las cuotas de las rondas 2 y 3 que su garantía no cubrió
+    assert_eq!(m.deuda, 300 * U); // las tres cuotas: su garantía (una) no alcanza y no se usa mientras la tanda sigue
     assert_eq!(c.tanda.get_tanda(&id).retenido, 200 * U);
     c.al_final(id, &gente);
     assert_eq!(c.saldo(&ultimo), SALDO_INICIAL - CUOTA); // pierde su garantía
@@ -541,13 +541,15 @@ fn precio_por_turno_con_moroso_el_fondo_cuadra() {
     c.tanda.unirse_en_turno(&id, &c.beto, &1);
     c.tanda.unirse_en_turno(&id, &c.carla, &2);
     let cumplen = [c.ana.clone(), c.beto.clone()];
-    // Ronda 1: Carla no paga (su garantía cubre). Ana cobra 300 − 30 de prima.
+    // Ronda 1: Carla no paga y su garantía (una cuota) no alcanza para las 3: cae en mora. Ana cobra
+    // 200 − 30 de prima.
     let ana0 = c.saldo(&c.ana);
     c.pagan_todos(id, &cumplen);
     c.cerrar(id);
-    assert_eq!(c.saldo(&c.ana), ana0 - CUOTA + 270 * U);
+    assert_eq!(c.saldo(&c.ana), ana0 - CUOTA + 170 * U);
     assert_eq!(c.tanda.get_estado_turnos(&id).fondo_primas, 30 * U);
-    // Ronda 2: Carla no paga y cae en mora: Beto cobra 200.
+    assert!(c.miembro(id, &c.carla).moroso);
+    // Ronda 2: sigue sin pagar: Beto cobra 200.
     c.pagan_todos(id, &cumplen);
     c.cerrar(id);
     assert!(c.miembro(id, &c.carla).moroso);
@@ -721,22 +723,22 @@ fn subasta_no_le_da_la_bolsa_a_un_moroso() {
         c.tanda.unirse(&id, p);
     }
     let cumplen = [c.beto.clone(), c.carla.clone()];
-    // Ronda 1: Beto gana con 5 %. Ana no paga: su garantía (100) la cubre.
+    // Ronda 1: Beto gana con 5 %. Todos pagan.
     c.tanda.ofertar(&id, &c.beto, &500);
-    c.pagan_todos(id, &cumplen);
+    c.pagan_todos(id, &gente);
     c.cerrar(id);
     assert_eq!(c.turno(id, &c.beto), 0);
-    assert_eq!(c.miembro(id, &c.ana).colateral, 7_5 * U / 10); // solo su dividendo (7,5)
     assert!(!c.miembro(id, &c.ana).moroso);
-    // Ronda 2: Ana oferta 20 % pero no paga. Su dividendo no alcanza: cae en mora y su oferta no vale.
+    // Ronda 2: Ana oferta 20 % pero no paga. Su garantía (100 y un dividendo) no alcanza para las 2
+    // cuotas que le quedan: cae en mora y su oferta no vale.
     c.tanda.ofertar(&id, &c.ana, &2_000);
     let carla0 = c.saldo(&c.carla);
     c.pagan_todos(id, &cumplen);
     c.cerrar(id);
     assert!(c.miembro(id, &c.ana).moroso);
     assert_eq!(c.turno(id, &c.carla), 1, "la bolsa no va a la morosa");
-    // Bolsa: 200 pagados + 7,5 de la garantía de Ana = 207,5; Carla no tenía nada que apartar.
-    assert_eq!(c.saldo(&c.carla), carla0 - CUOTA + 2075 * U / 10);
+    // Bolsa: los 200 pagados; Carla no tenía nada que apartar.
+    assert_eq!(c.saldo(&c.carla), carla0 - CUOTA + 200 * U);
     // Ronda 3: solo queda Ana (en mora): su bolsa se retiene y se reparte al final.
     c.pagan_todos(id, &cumplen);
     c.cerrar(id);
@@ -1692,10 +1694,11 @@ fn conectar_historial_wasm(c: &Ctx) -> Hist {
 // Casos borde, incluidos los que cruzan con las deudas de M1
 // ===========================================================================
 
-/// 4 personas, garantía mínima. Ronda 1: Ana gana con 6 %. Ronda 2: Beto, Carla y Dani caen en mora;
-/// nadie puede cobrar al día, así que el turno es de Beto (en mora) y su bolsa se retiene. Carla salda
-/// su deuda (M1) y vuelve a poder ofertar: en la ronda 3 gana, y como todos los demás están en mora,
-/// su descuento no tiene a quién ir como dividendo y pasa al retenido que se reparte al final.
+/// 4 personas, garantía mínima. Ronda 1: Ana gana con 6 % y es la única que paga: Beto, Carla y Dani
+/// caen en mora (su garantía no alcanza para lo que les falta pagar). Ronda 2: Ana paga, ninguno de los
+/// morosos puede; el turno es de Beto (en mora) y su bolsa se retiene. Carla salda su deuda (M1) y vuelve
+/// a poder ofertar: en la ronda 3 gana, y como todos los demás están en mora, su descuento no tiene a
+/// quién ir como dividendo y pasa al retenido que se reparte al final.
 #[test]
 fn subasta_moroso_que_salda_vuelve_a_ofertar_y_dividendo_sin_receptores() {
     let c = setup();
@@ -1705,19 +1708,18 @@ fn subasta_moroso_que_salda_vuelve_a_ofertar_y_dividendo_sin_receptores() {
     for p in &gente {
         c.tanda.unirse(&id, p);
     }
-    // Ronda 1: Ana oferta 6 % y paga; los demás no (sus garantías cubren).
+    // Ronda 1: Ana oferta 6 % y paga; los demás no: quedan morosos y su garantía no se toca.
     c.tanda.ofertar(&id, ana, &600);
     c.tanda.pagar_cuota(&id, ana);
     c.cerrar(id);
     assert_eq!(c.turno(id, ana), 0);
     for p in [beto, carla, dani] {
-        assert_eq!(c.miembro(id, p).colateral, 8 * U); // solo su dividendo (24 / 3)
-    }
-    // Ronda 2: nadie paga. Beto, Carla y Dani caen en mora; el turno es de Beto y se retiene.
-    c.cerrar(id);
-    for p in [beto, carla, dani] {
         assert!(c.miembro(id, p).moroso);
+        assert_eq!(c.miembro(id, p).colateral, CUOTA);
     }
+    // Ronda 2: solo paga Ana. El turno es de Beto, que está en mora, y su bolsa se retiene.
+    c.tanda.pagar_cuota(&id, ana);
+    c.cerrar(id);
     assert_eq!(c.turno(id, beto), 1);
     let retenido = c.tanda.get_tanda(&id).retenido;
     assert!(retenido > 0);

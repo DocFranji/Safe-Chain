@@ -155,6 +155,17 @@ pub struct Deuda {
     pub pagado: i128,
 }
 
+/// (v5) Una parte de la garantía de un moroso que se repartió al finalizar: `acreedor` es quien
+/// cobró de menos. Si su propia bolsa había quedado retenida (también era moroso), `a_pozo` es `true`:
+/// esa parte no se le paga a él, va al fondo que se reparte entre quienes cumplieron.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ParteGarantia {
+    pub acreedor: Address,
+    pub monto: i128,
+    pub a_pozo: bool,
+}
+
 /// Claves de almacenamiento de M1. Enum propio para no tocar `DataKey`.
 #[contracttype]
 #[derive(Clone)]

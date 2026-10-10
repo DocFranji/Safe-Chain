@@ -191,6 +191,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 miembros={miembros}
                 pagaron={pagaron}
                 cuota={tanda.cuota}
+                restantes={tanda.n_miembros - tanda.ronda_actual}
                 beneficiario={beneficiario}
                 yo={yo}
                 ocupado={ocupado}

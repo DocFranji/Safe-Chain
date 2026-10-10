@@ -11,7 +11,7 @@ Una tanda es un grupo que aporta la misma cuota cada ronda y, por turnos, uno re
 1. **Se crea la tanda**: cuota, número de personas, duración de cada ronda, multa por atraso y cuánta garantía cubre lo que aún se debe. Se comparte el enlace.
 2. **Cada quien deja una garantía al unirse.** Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Ejemplo con 3 personas y cuota de 100 TUSD: el turno 1 deja 200, el turno 2 deja 100 y el turno 3 deja 100.
 3. **Cada ronda todos pagan su cuota** y el contrato entrega la bolsa a quien le toca.
-4. **Si alguien no paga, su garantía cubre su cuota.** Quien cobra recibe la bolsa completa y el grupo no pierde nada.
+4. **Si alguien no paga y su garantía alcanza para todo lo que le falta, la garantía cubre su cuota.** Quien cobra recibe la bolsa completa y el grupo no pierde nada. Si no alcanza, la garantía no se usa en el camino: la persona queda en mora y, al terminar, su garantía se reparte entre quienes cobraron de menos, en proporción a lo que le faltó a cada uno.
 5. **Pagar tarde tiene costo:** una multa que se descuenta de la garantía y se reparte, al final, entre quienes nunca se atrasaron.
 6. **Al terminar**, cada quien recupera lo que le sobró de garantía más su parte del rendimiento, que la garantía generó en una bóveda mientras esperaba.
 7. **Quien queda en mora puede pagar su deuda** (o un familiar por él). El dinero le llega a quien cobró de menos por su atraso y la persona vuelve a estar al día.

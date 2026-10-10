@@ -7,7 +7,10 @@
 //!    pone más garantía (porque después de cobrar todavía debe más cuotas).
 //! 2. El colateral se guarda en una **bóveda** que genera rendimiento.
 //! 3. Cada ronda todos pagan una cuota y el miembro de turno recibe la bolsa.
-//! 4. Si alguien no paga, **su colateral cubre su cuota**: el beneficiario cobra completo.
+//! 4. Si alguien no paga y su colateral alcanza para TODAS las cuotas que le quedan, **su colateral
+//!    cubre su cuota**: el beneficiario cobra completo. Si no alcanza (v5), el colateral no se usa
+//!    mientras la tanda sigue: la cuota es deuda a favor de quien cobró de menos y, al final, el colateral
+//!    se reparte entre esas personas en proporción a lo que le faltó a cada una.
 //! 5. Al final, cada uno recupera su colateral sobrante + rendimiento, y las multas se
 //!    reparten entre quienes nunca se atrasaron.
 //!
@@ -17,7 +20,8 @@
 //!
 //! ## Cómo está organizado (para trabajar en paralelo sin pisarse)
 //! - `lib.rs`: límites, interfaz de la bóveda y el flujo principal (crear, unirse, pagar,
-//!   cerrar ronda, finalizar, cancelar).
+//!   cerrar ronda, finalizar, cancelar). `nombres.rs`: el nombre de la tanda (v5). `deudas.rs`: pagar
+//!   deudas y repartir la garantía de los morosos al finalizar (v5).
 //! - `tipos.rs`: datos guardados (`Tanda`, `Miembro`, `DataKey`) y códigos de `Error`.
 //! - `eventos.rs`: avisos que publica el contrato.
 //! - `consultas.rs`: funciones de solo lectura (`get_*`).
@@ -378,7 +382,8 @@ impl TandaContract {
     }
 
     /// Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
-    /// - Quien no pagó: su colateral cubre la cuota. Si no alcanza, queda moroso.
+    /// - Quien no pagó: su colateral cubre la cuota si alcanza para todas las que le quedan (v5). Si no,
+    ///   la cuota queda como deuda, su colateral no se toca y queda moroso.
     /// - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
     /// - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
     ///   fechas no se mueven: la ronda siguiente vence cuando le tocaba.
@@ -415,17 +420,24 @@ impl TandaContract {
                 bolsa += t.cuota;
                 continue;
             }
-            // No pagó: el colateral responde.
+            // No pagó: el colateral responde, pero solo si alcanza para TODO lo que le falta pagar.
             let mut m = cargar_miembro(&env, id, &dir)?;
             m.atrasos += 1;
-            let cubierto = if m.colateral >= t.cuota {
-                // Regla 1: alcanza. Se cubre la cuota y se anota la multa (se cobra al final).
+            // (M1 v5) Cuotas que le quedan: esta y las siguientes. Si su garantía las cubre todas y no
+            // debe nada de antes, nadie sale perjudicado: se cubre al instante (como siempre) y quien
+            // cobra recibe la bolsa completa. Si no alcanza, no se paga a nadie "en orden" (el que
+            // cobra justo después se llevaría todo y los últimos nada): cada falta queda como deuda a
+            // favor de quien cobró de menos, y al finalizar la garantía se reparte entre los afectados
+            // en proporción a lo que le faltó a cada uno (`deudas::repartir_garantias`).
+            let le_quedan = t.cuota * (t.n_miembros - ronda) as i128;
+            let cubierto = if m.deuda == 0 && m.colateral >= le_quedan {
+                // Alcanza. Se cubre la cuota y se anota la multa (se cobra al final).
                 m.multas_pendientes += multa(&t);
                 t.cuota
             } else {
-                // Regla 2: no alcanza. Entra lo que queda y el miembro queda moroso.
-                m.deuda += t.cuota - m.colateral;
-                faltantes.push_back((dir.clone(), t.cuota - m.colateral)); // M1
+                // No alcanza (o ya debe de antes): la cuota es deuda y la garantía no se toca.
+                m.deuda += t.cuota;
+                faltantes.push_back((dir.clone(), t.cuota)); // M1
                 if !m.moroso {
                     m.moroso = true;
                     ganchos::al_quedar_moroso(&env, &t, id, &dir, m.deuda);
@@ -436,7 +448,7 @@ impl TandaContract {
                     }
                     .publish(&env);
                 }
-                m.colateral
+                0
             };
             if cubierto > 0 {
                 m.colateral -= cubierto;
@@ -517,8 +529,9 @@ impl TandaContract {
     }
 
     /// Reparte todo al terminar las rondas. CUALQUIERA puede llamarla.
-    /// Orden: retirar de la bóveda → cobrar multas → devolver colateral + rendimiento
-    /// → repartir multas y retenido entre los cumplidos.
+    /// Orden: retirar de la bóveda → repartir la garantía de los morosos entre quienes cobraron de menos
+    /// (v5) → cobrar multas → devolver colateral + rendimiento → repartir multas y retenido entre los
+    /// cumplidos.
     pub fn finalizar(env: Env, id: u32) -> Result<(), Error> {
         let mut t = cargar_tanda(&env, id)?;
         if t.estado != Estado::PorLiquidar {
@@ -548,6 +561,29 @@ impl TandaContract {
         //    (Puede ser negativo si la bóveda perdió; se reparte igual, en proporción.)
         let rendimiento = total - suma_colateral;
 
+        // 2b) (M1 v5) La garantía de cada moroso (con su parte del rendimiento) se reparte entre
+        //     quienes cobraron de menos, en proporción a lo que le faltó a cada uno. Lo que sobre
+        //     queda en su `colateral` para devolvérselo. Los demás reparten lo que resta.
+        let mut pagos: Vec<i128> = Vec::new(&env);
+        let mut usado: Vec<i128> = Vec::new(&env);
+        for _ in 0..n {
+            pagos.push_back(0);
+            usado.push_back(0);
+        }
+        let morosos = deudas::repartir_garantias(
+            &env,
+            &mut t,
+            id,
+            &miembros,
+            &mut datos,
+            &mut pagos,
+            &mut usado,
+            total,
+            suma_colateral,
+        );
+        // Rendimiento de las garantías de los demás (igual a `rendimiento` si ningún moroso tenía).
+        let rendimiento_resto = (total - morosos.sacado) - (suma_colateral - morosos.garantia);
+
         // 3) Cobrar multas del colateral sobrante.
         for i in 0..n {
             let mut m = datos.get(i).unwrap();
@@ -559,13 +595,15 @@ impl TandaContract {
         }
 
         // 4) Colateral + rendimiento, en proporción al colateral (ya sin multas).
-        let mut pagos: Vec<i128> = Vec::new(&env);
         let mut suma_col2: i128 = 0;
         for i in 0..n {
-            pagos.push_back(0);
             let m = datos.get(i).unwrap();
             if !m.moroso {
                 suma_col2 += m.colateral;
+            } else if m.colateral > 0 {
+                // (M1 v5) Al moroso le vuelve lo que sobró de su garantía, después de pagar a los
+                // afectados y sus multas.
+                pagos.set(i, pagos.get(i).unwrap() + m.colateral);
             }
         }
         if suma_col2 > 0 {
@@ -574,14 +612,14 @@ impl TandaContract {
             // participaciones: sumar "colateral + parte" daba a veces un pago negativo al último, que
             // no se transfería, y `finalizar` pagaba de más y se trababa. Con rendimiento >= 0 da lo
             // mismo que antes; nunca hay pagos negativos.
-            let disponible = (suma_col2 + rendimiento).max(0);
+            let disponible = (suma_col2 + rendimiento_resto).max(0);
             let mut repartido: i128 = 0;
             let mut ultimo: Option<u32> = None;
             for i in 0..n {
                 let m = datos.get(i).unwrap();
                 if !m.moroso && m.colateral > 0 {
                     let pago = disponible * m.colateral / suma_col2;
-                    pagos.set(i, pago);
+                    pagos.set(i, pagos.get(i).unwrap() + pago);
                     repartido += pago;
                     ultimo = Some(i);
                 }
@@ -592,7 +630,7 @@ impl TandaContract {
             }
         } else {
             // Nadie tiene colateral: el rendimiento se suma al fondo de premios.
-            t.fondo_premios += rendimiento;
+            t.fondo_premios += rendimiento_resto;
         }
 
         // 5) Multas + retenido, en partes iguales entre quienes nunca se atrasaron.
@@ -646,6 +684,11 @@ impl TandaContract {
             let mut m = datos.get(i).unwrap();
             ganchos::al_terminar(&env, &t, id, &dir, &m, monto);
             m.colateral = 0;
+            if m.moroso && m.deuda == 0 {
+                // (M1 v5) Su garantía pagó todo lo que debía a los demás: queda al día.
+                m.moroso = false;
+                ganchos::al_saldar_con_garantia(&env, id, &dir, usado.get(i).unwrap());
+            }
             guardar_miembro(&env, id, &dir, &m);
             EvLiquidado {
                 id,

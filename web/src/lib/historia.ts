@@ -97,7 +97,7 @@ export function narrar(eventos: EventoTanda[], f: Formato): EntradaHistoria[] {
           ...base,
           tipo: 'alerta',
           titulo: `${quien(ev.data.miembro)} quedó con un pago pendiente`,
-          detalle: `Su depósito ya no alcanzó: debe ${dinero(ev.data.deuda)}`,
+          detalle: `Su depósito no alcanza para las cuotas que le quedan y no se usa por ahora: debe ${dinero(ev.data.deuda)}`,
         }
       case 'EvRonda': {
         const pagado = ev.data.monto_pagado ?? 0n

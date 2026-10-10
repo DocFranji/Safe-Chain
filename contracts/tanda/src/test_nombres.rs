@@ -75,9 +75,12 @@ fn nombres_validos_con_tildes_signos_y_numeros() {
         "ÁÉÍÓÚÜÑ áéíóúüñ",
         "Crème brûlée à ç",
         "1234567890123456789012345678901234567890", // 40 caracteres
-        "ñññññññññññññññññññññññññññññññññññññññ",   // 40 caracteres de 2 bytes (80 bytes)
+        "ñññññññññññññññññññññññññññññññññññññññ",  // 40 caracteres de 2 bytes (80 bytes)
     ] {
-        assert!(crear_con(&c, nombre).is_ok(), "debía ser válido: {nombre:?}");
+        assert!(
+            crear_con(&c, nombre).is_ok(),
+            "debía ser válido: {nombre:?}"
+        );
     }
 }
 
@@ -85,26 +88,26 @@ fn nombres_validos_con_tildes_signos_y_numeros() {
 fn nombres_invalidos() {
     let c = setup();
     for nombre in [
-        "a",                                          // 1 carácter
-        " ",                                          // solo un espacio
-        " Ana",                                       // espacio al principio
-        "Ana ",                                       // espacio al final
-        "12345678901234567890123456789012345678901",  // 41 caracteres
-        "ñññññññññññññññññññññññññññññññññññññññññ",    // 41 caracteres de 2 bytes
-        "Tanda #1",                                   // símbolo no permitido
+        "a",                                         // 1 carácter
+        " ",                                         // solo un espacio
+        " Ana",                                      // espacio al principio
+        "Ana ",                                      // espacio al final
+        "12345678901234567890123456789012345678901", // 41 caracteres
+        "ñññññññññññññññññññññññññññññññññññññññññ", // 41 caracteres de 2 bytes
+        "Tanda #1",                                  // símbolo no permitido
         "a@b",
         "Tanda <b>",
-        "Tanda\nnueva",                               // salto de línea
+        "Tanda\nnueva", // salto de línea
         "Tanda\ttab",
-        "Tanda 5×",                                   // × no es letra
-        "Mitad ÷ dos",                                // ÷ tampoco
-        "Tanda 🎉",                                    // emoji
-        "Здравствуйте",                               // otro alfabeto
+        "Tanda 5×",     // × no es letra
+        "Mitad ÷ dos",  // ÷ tampoco
+        "Tanda 🎉",     // emoji
+        "Здравствуйте", // otro alfabeto
         "日本語の名前",
-        "Cafe\u{0301} bar",                           // e + acento suelto (sin normalizar)
-        "Tanda\u{200b}oculta",                        // espacio de ancho cero
-        "Tanda\u{a0}nbsp",                            // espacio de no separación
-        "ª º",                                        // ordinales
+        "Cafe\u{0301} bar",    // e + acento suelto (sin normalizar)
+        "Tanda\u{200b}oculta", // espacio de ancho cero
+        "Tanda\u{a0}nbsp",     // espacio de no separación
+        "ª º",                 // ordinales
     ] {
         assert!(es_invalido(&c, nombre), "debía ser inválido: {nombre:?}");
     }
@@ -210,9 +213,13 @@ fn el_evento_creada_trae_el_nombre() {
         n_miembros: 3,
         nombre: s(&c, "Con evento"),
     };
-    assert!(c.env.events().all().events().iter().any(|e| {
-        *e == esperado.to_xdr(&c.env, &c.tanda_addr)
-    }));
+    assert!(c
+        .env
+        .events()
+        .all()
+        .events()
+        .iter()
+        .any(|e| { *e == esperado.to_xdr(&c.env, &c.tanda_addr) }));
 }
 
 #[test]

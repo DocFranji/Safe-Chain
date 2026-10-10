@@ -15,7 +15,9 @@
 use soroban_sdk::{contractimpl, Address, Env, String, Vec};
 
 use crate::almacenamiento::*;
-use crate::{ClaveM1, Error, OpcionesTanda, Tanda, TandaContract, TandaContractArgs, TandaContractClient};
+use crate::{
+    ClaveM1, Error, OpcionesTanda, Tanda, TandaContract, TandaContractArgs, TandaContractClient,
+};
 
 /// Caracteres mínimo y máximo de un nombre.
 pub const NOMBRE_MIN: u32 = 2;

@@ -81,6 +81,8 @@ const MENSAJES: Record<number, string> = {
   56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
   // M2 v4: bloqueo por deuda
   65: 'Tienes un pago pendiente en otra tanda. Págalo desde tu Perfil («Mis deudas») para poder unirte.',
+  // M1 (v5): nombre de la tanda
+  70: 'El nombre de la tanda debe tener de 2 a 40 caracteres: letras, números y los signos . , - _ ! ? ¿ ¡ (sin espacios al principio ni al final, ni emojis).',
   // M4: adaptador de Blend (contrato aparte; sus errores llegan tal cual al firmar)
   50: 'El monto debe ser mayor que cero.',
   51: 'La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar.',
@@ -133,6 +135,7 @@ const CODIGO_POR_NOMBRE: Record<string, number> = {
   TokenSinBoveda: 55,
   BovedaDeOtroToken: 56,
   DeudaPendiente: 65,
+  NombreInvalido: 70,
 }
 
 /** Convierte cualquier error (del contrato, de Freighter o de la red) en una frase clara. */
