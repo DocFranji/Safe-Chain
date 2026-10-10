@@ -769,6 +769,62 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Modo: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
+{
+  // Buscadores y redes (docs/seo.md): metadatos de la portada, robots.txt, sitemap e imagen para compartir
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est, conectado: false })
+  await page.goto(BASE + '#/')
+  await page.waitForSelector('.ln', { timeout: 15000 }).catch(() => {})
+  const meta = await page.evaluate(() => {
+    const atributo = (sel, attr = 'content') => document.querySelector(sel)?.getAttribute(attr) ?? ''
+    let ld = null
+    try {
+      ld = JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '')
+    } catch {
+      ld = null
+    }
+    return {
+      lang: document.documentElement.lang,
+      titulo: document.title,
+      descripcion: atributo('meta[name="description"]'),
+      canonical: atributo('link[rel="canonical"]', 'href'),
+      ogUrl: atributo('meta[property="og:url"]'),
+      ogImagen: atributo('meta[property="og:image"]'),
+      ogAncho: atributo('meta[property="og:image:width"]'),
+      ogAlto: atributo('meta[property="og:image:height"]'),
+      tarjeta: atributo('meta[name="twitter:card"]'),
+      ld,
+      head: document.head.innerHTML,
+    }
+  })
+  check('Buscadores: idioma español y título con tanda, ahorro, Costa Rica y Stellar', meta.lang === 'es' && /tanda/i.test(meta.titulo) && /ahorro/.test(meta.titulo) && /Costa Rica/.test(meta.titulo) && /Stellar/.test(meta.titulo), meta.titulo)
+  check('Buscadores: descripción de 160 caracteres o menos que habla de tandas', meta.descripcion.length > 50 && meta.descripcion.length <= 160 && /Tandas de ahorro/.test(meta.descripcion), `${meta.descripcion.length}`)
+  check('Buscadores: canonical y og:url en https://rounda.net/', meta.canonical === 'https://rounda.net/' && meta.ogUrl === 'https://rounda.net/', `${meta.canonical} ${meta.ogUrl}`)
+  check('Buscadores: ninguna URL apunta a rounda-phi.vercel.app', !/rounda-phi/.test(meta.head))
+  check('Buscadores: imagen para redes de 1200×630 y tarjeta grande', meta.ogImagen === 'https://rounda.net/og.jpg' && meta.ogAncho === '1200' && meta.ogAlto === '630' && meta.tarjeta === 'summary_large_image')
+  check('Buscadores: JSON-LD de WebApplication en rounda.net', meta.ld?.['@type'] === 'WebApplication' && meta.ld?.url === 'https://rounda.net/' && meta.ld?.inLanguage === 'es-CR', JSON.stringify(meta.ld)?.slice(0, 120))
+  const imagen = await page.evaluate(
+    (ruta) =>
+      new Promise((listo) => {
+        const img = new Image()
+        img.onload = () => listo({ w: img.naturalWidth, h: img.naturalHeight })
+        img.onerror = () => listo(null)
+        img.src = ruta
+      }),
+    new URL(meta.ogImagen).pathname,
+  )
+  check('Buscadores: la imagen para redes existe en el sitio y mide 1200×630', imagen?.w === 1200 && imagen?.h === 630, JSON.stringify(imagen))
+  const raiz = BASE.replace(/[#?].*$/, '').replace(/\/?$/, '/')
+  const robots = await page.request.get(raiz + 'robots.txt')
+  const textoRobots = await robots.text()
+  // La compilación de las pruebas no es producción (VERCEL_ENV vacío): no se deja indexar
+  check('Buscadores: robots.txt fuera de producción dice Disallow: /', robots.ok() && /User-agent: \*/.test(textoRobots) && /Disallow: \//.test(textoRobots), textoRobots)
+  const sitemap = await page.request.get(raiz + 'sitemap.xml')
+  const textoSitemap = await sitemap.text()
+  check('Buscadores: sitemap.xml con la portada de rounda.net', sitemap.ok() && /<loc>https:\/\/rounda\.net\/<\/loc>/.test(textoSitemap) && !/<loc>[^<]*#/.test(textoSitemap), textoSitemap.slice(0, 200))
+  check('Buscadores: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
 
 // ---------------------------------------------------------------- M3. Mecanismos de turnos
 {

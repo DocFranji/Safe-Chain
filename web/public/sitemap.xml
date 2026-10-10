@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Solo la portada: las rutas #/… de la app no las indexan los buscadores (docs/seo.md). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://rounda.net/</loc>
+  </url>
+</urlset>
