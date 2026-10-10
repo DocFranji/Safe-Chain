@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
-import { ME, ANA, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTodosPagaron, conDeudaTerminada, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, conMiBolsaLista, conTandaUsdc, historial, ADAPTADOR_USDC, USDC_ID } from './mock.mjs'
+import { ME, ANA, BETO, CARLA, TANDA_ID, nuevoEstado, nuevoEstadoTurnos, conTandaMorosa, conTodosPagaron, conDeudaTerminada, conTandaExigente, conPrimerosConHistorial, conSubastaSellada, conMiBolsaLista, conTandaUsdc, historial, ADAPTADOR_USDC, USDC_ID } from './mock.mjs'
 import { BASE_URL, nuevaPagina, opcionesNavegador } from './helpers.mjs'
 import { StrKey } from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 
@@ -1676,6 +1676,169 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
     const hallada = [...t.matchAll(JERGA)].map((m) => t.slice(Math.max(0, m.index - 30), m.index + 20).replace(/\n/g, ' | '))
     check(`Glosario: sin jerga en ${que}`, hallada.length === 0, hallada.slice(0, 5).join(' // '))
     if (hash === '#/tanda/2') check(`Glosario: montos en dólares en ${que}`, /\$300/.test(t) && /\$100/.test(t), t.slice(0, 300))
+    await page.close()
+  }
+}
+
+// ---------------------------------------------------------------- UX (plan v5, pedido 4): un pago pendiente en el grupo se dice fuerte
+// Quien debe en OTRA tanda y ya está en esta: aviso rojo arriba mientras la tanda está abierta, confirmación al
+// unirse ("Unirme igual") y una marca junto a su nombre mientras la tanda sigue. Lee el historial (`tiene_mora`).
+{
+  const pendiente = historial({ cuotas_a_tiempo: 4, veces_moroso: 1, deudas_saldadas: 0, puntos_positivos: 40, puntos_negativos: 100 })
+  const JERGA_MORA = /(?<![\p{L}])(TUSD|garantías?|colateral|bolsas?|rondas?|morosos?|mora|XLM|Friendbot|trustline|bóvedas?)(?![\p{L}])/iu
+  const limpio = (s) => s.replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim()
+  // Intentar unirse muestra un aviso en el panel ("Confirma en Freighter…"; con el mock, que no sirve la cuenta, el error). Sin intento, no hay aviso.
+  const intentos = (page, panel) => page.locator(`${panel} .aviso`).count()
+
+  // A. Tanda 5 (abierta: Beto y Carla). Carla tiene un pago pendiente en otra tanda y mira "yo", que no está en ella.
+  {
+    const est = nuevoEstado()
+    est.historiales[CARLA] = pendiente
+    const { page, errores } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/tanda/5')
+    await page.waitForSelector('.aviso-mora', { timeout: 15000 }).catch(() => {})
+    const aviso = limpio(await page.locator('.aviso-mora').innerText().catch(() => ''))
+    check('Pago pendiente: la tanda abierta dice arriba quién lo tiene, con las palabras del plan', /Carla tiene un pago pendiente en otra tanda Si la tanda empieza y no paga, su depósito podría no alcanzar\./.test(aviso), aviso)
+    check('Pago pendiente: es una alerta que no se puede cerrar', (await page.locator('.aviso-mora[role="alert"]').count()) === 1 && (await page.locator('.aviso-mora button').count()) === 0)
+    check('Pago pendiente: el aviso va arriba de la invitación y de la rueda', await page.evaluate(() => {
+      const y = (s) => document.querySelector(s)?.getBoundingClientRect().top ?? -1
+      return y('.aviso-mora') >= 0 && y('.aviso-mora') < y('.panel-ronda') && y('.aviso-mora') < y('.tarjeta-ronda')
+    }))
+    const filas = (await page.locator('.lista-personas .persona').allInnerTexts()).map(limpio)
+    check('Pago pendiente: la marca va junto a Carla y no junto a Beto', /Beto/.test(filas[0]) && !/Pago pendiente/.test(filas[0]) && /Carla.*Pago pendiente en otra tanda/.test(filas[1]), JSON.stringify(filas))
+    const historiales = est.llamadas.filter((l) => l.endsWith('.historial')).length
+    check('Pago pendiente: no suma consultas (usa la lectura de las insignias: una por persona)', historiales <= 3, `lecturas del historial: ${historiales}`)
+
+    const unirse = page.getByRole('button', { name: /^Unirme y dejar/ })
+    await unirse.click()
+    const conf = limpio(await page.locator('.confirmar-union').innerText().catch(() => ''))
+    check('Pago pendiente: al unirse pide confirmar, con "Mejor no" y "Unirme igual"', /^ANTES DE UNIRTE Carla tiene un pago pendiente en otra tanda Si la tanda empieza y no paga, su depósito podría no alcanzar y el pozo de algún turno podría llegar incompleto\./i.test(conf) && (await page.getByRole('button', { name: 'Unirme igual' }).count()) === 1 && (await page.getByRole('button', { name: 'Mejor no' }).count()) === 1, conf)
+    check('Pago pendiente: el foco pasa a la advertencia y todavía no se pidió firmar', (await page.evaluate(() => document.activeElement?.classList.contains('confirmar-union'))) && (await intentos(page, '.panel-ronda')) === 0)
+    check('Pago pendiente: ni el aviso ni la confirmación usan jerga', !JERGA_MORA.test(aviso) && !JERGA_MORA.test(conf), `${aviso} | ${conf}`)
+    await page.setViewportSize({ width: 375, height: 800 })
+    check('Pago pendiente (375 px): sin desborde horizontal con el aviso y la confirmación', await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    await shot(page, 'ux-pago-pendiente-confirma-375')
+    await page.setViewportSize({ width: 1280, height: 900 })
+    check('Pago pendiente: sin errores de consola', errores.length === 0, errores.join(' | '))
+
+    await page.getByRole('button', { name: 'Mejor no' }).click()
+    await page.waitForTimeout(200)
+    check('Pago pendiente: "Mejor no" vuelve al botón de unirse y no firma nada', (await page.locator('.confirmar-union').count()) === 0 && (await unirse.isVisible()) && (await intentos(page, '.panel-ronda')) === 0)
+    check('Pago pendiente: al volver, el foco queda en el botón de unirse', await page.evaluate(() => /^Unirme y dejar/.test(document.activeElement?.textContent ?? '')))
+    await unirse.click()
+    await page.getByRole('button', { name: 'Unirme igual' }).click()
+    await page.waitForTimeout(1500)
+    check('Pago pendiente: "Unirme igual" sí sigue con la unión (empieza a firmar)', (await intentos(page, '.panel-ronda')) === 1)
+    check('Pago pendiente: la confirmación se cierra al seguir', (await page.locator('.confirmar-union').count()) === 0)
+    await page.close()
+  }
+
+  // B. Sin pagos pendientes: Carla ya saldó el suyo (el historial de ejemplo lo dice). Ni aviso ni marca, y unirse va directo.
+  {
+    const est = nuevoEstado()
+    const { page, errores } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/tanda/5')
+    await page.waitForSelector('.lista-personas', { timeout: 15000 }).catch(() => {})
+    await page.waitForTimeout(1500)
+    check('Sin pago pendiente: ni aviso rojo ni marcas', (await page.locator('.aviso-mora').count()) === 0 && (await page.locator('.marca-mora').count()) === 0)
+    await page.getByRole('button', { name: /^Unirme y dejar/ }).click()
+    await page.waitForTimeout(1500)
+    check('Sin pago pendiente: unirse va directo, sin preguntar', (await page.locator('.confirmar-union').count()) === 0 && (await intentos(page, '.panel-ronda')) === 1)
+    check('Sin pago pendiente: sin errores de consola', errores.filter((e) => !/mock|operación/.test(e)).length === 0, errores.join(' | '))
+    await page.close()
+  }
+
+  // C. Quien mira es quien tiene el pago pendiente (Carla, que ya está en la tanda): se le habla a ella y se le lleva a sus deudas.
+  {
+    const est = nuevoEstado()
+    est.historiales[CARLA] = pendiente
+    const { page } = await nuevaPagina(browser, { est, direccion: CARLA })
+    await page.goto(BASE + '#/tanda/5')
+    await page.waitForSelector('.aviso-mora', { timeout: 15000 }).catch(() => {})
+    const aviso = limpio(await page.locator('.aviso-mora').innerText().catch(() => ''))
+    check('Pago pendiente (yo): "Tienes un pago pendiente en otra tanda", con lo que puede pasar', /Tienes un pago pendiente en otra tanda Si esta tanda empieza y no pagas, tu depósito podría no alcanzar\./.test(aviso), aviso)
+    check('Pago pendiente (yo): lleva a "Ver y pagar mis deudas" (el Perfil)', (await page.locator('.aviso-mora a[href="#/perfil"]').innerText().catch(() => '')) === 'Ver y pagar mis deudas')
+    check('Pago pendiente (yo): no se habla de "Carla" en tercera persona', !/Carla tiene/.test(aviso))
+    await page.close()
+  }
+
+  // D. Dos personas con pagos pendientes: todo en plural, con "y".
+  {
+    const est = nuevoEstado()
+    est.historiales[CARLA] = pendiente
+    est.historiales[BETO] = pendiente
+    const { page } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/tanda/5')
+    await page.waitForSelector('.aviso-mora', { timeout: 15000 }).catch(() => {})
+    const aviso = limpio(await page.locator('.aviso-mora').innerText().catch(() => ''))
+    check('Pago pendiente: dos personas, en plural', /Beto y Carla tienen pagos pendientes en otras tandas Si la tanda empieza y no pagan, sus depósitos podrían no alcanzar\./.test(aviso), aviso)
+    check('Pago pendiente: dos marcas en la lista', (await page.locator('.marca-mora').count()) === 2)
+    await page.close()
+  }
+
+  // E. Tanda en curso: sin aviso rojo (ya empezó), pero la marca sigue junto a la persona. Quien ya debe en ESTA tanda
+  // no la lleva: a su derecha dice "Debe $100".
+  {
+    const est = conTandaMorosa(nuevoEstado())
+    est.historiales[CARLA] = pendiente
+    est.historiales[ME] = pendiente
+    const { page, errores } = await nuevaPagina(browser, { est, direccion: ANA })
+    await page.goto(BASE + '#/tanda/6')
+    await page.waitForSelector('.lista-personas', { timeout: 15000 }).catch(() => {})
+    await page.waitForTimeout(1500)
+    const filas = (await page.locator('.lista-personas .persona').allInnerTexts()).map(limpio)
+    check('Pago pendiente (en curso): sin aviso rojo, la tanda ya empezó', (await page.locator('.aviso-mora').count()) === 0)
+    check('Pago pendiente (en curso): la marca sigue junto a Carla', filas.some((f) => /^C Carla.*Pago pendiente en otra tanda/.test(f)), JSON.stringify(filas))
+    check('Pago pendiente (en curso): quien debe en esta tanda dice "Debe $100" y no lleva la marca', filas.some((f) => /Debe \$100/.test(f) && !/Pago pendiente en otra tanda/.test(f)), JSON.stringify(filas))
+    check('Pago pendiente (en curso): sin errores de consola', errores.length === 0, errores.join(' | '))
+    await page.close()
+  }
+
+  // F. Tanda terminada: ya no hay nada que proteger. Ni aviso ni marcas.
+  {
+    const est = nuevoEstado()
+    est.historiales[CARLA] = pendiente
+    const { page } = await nuevaPagina(browser, { est, direccion: ANA })
+    await page.goto(BASE + '#/tanda/1')
+    await page.waitForSelector('.lista-personas', { timeout: 15000 }).catch(() => {})
+    await page.waitForTimeout(1500)
+    check('Pago pendiente (terminada): ni aviso ni marcas', (await page.locator('.aviso-mora').count()) === 0 && (await page.locator('.marca-mora').count()) === 0)
+    await page.close()
+  }
+
+  // G. La otra forma de unirse (elegir turno, M3) también pregunta. Tanda 8: precio por turno, Ana ya está.
+  {
+    const est = nuevoEstadoTurnos()
+    est.historiales[ANA] = pendiente
+    const { page } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/tanda/8')
+    await page.waitForSelector('.rejilla-turnos', { timeout: 15000 })
+    await page.waitForSelector('.aviso-mora', { timeout: 15000 }).catch(() => {})
+    check('Pago pendiente (elegir turno): el aviso rojo también sale', /Ana tiene un pago pendiente en otra tanda/.test(limpio(await page.locator('.aviso-mora').innerText().catch(() => ''))))
+    await page.locator('.turno-casilla').nth(0).click()
+    await page.getByRole('button', { name: /^Unirme en el turno 1 y dejar/ }).click()
+    check('Pago pendiente (elegir turno): al unirse pide confirmar y todavía no firma', (await page.locator('.confirmar-union').count()) === 1 && (await intentos(page, '.turnos-acciones')) === 0)
+    await page.getByRole('button', { name: 'Unirme igual' }).click()
+    await page.waitForTimeout(1500)
+    check('Pago pendiente (elegir turno): "Unirme igual" sigue con la unión en ese turno', (await page.locator('.confirmar-union').count()) === 0 && (await intentos(page, '.turnos-acciones')) === 1)
+    await page.close()
+  }
+
+  // H. Quien toca "Unirme" antes de que llegue la lectura del historial tampoco se salta la confirmación: el botón
+  // pregunta en el momento de pulsar, no con lo que ya se dibujó.
+  {
+    const est = nuevoEstado()
+    est.historiales[CARLA] = pendiente
+    est.demoraRpc = 1200
+    const { page } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/tanda/5')
+    const unirse = page.getByRole('button', { name: /^Unirme y dejar/ })
+    await unirse.waitFor({ timeout: 20000 })
+    const todaviaSinAviso = (await page.locator('.aviso-mora').count()) === 0
+    await unirse.click()
+    check('Pago pendiente (tocar antes de tiempo): al pulsar todavía no llegó el aviso de arriba', todaviaSinAviso)
+    await page.waitForSelector('.confirmar-union', { timeout: 15000 }).catch(() => {})
+    check('Pago pendiente (tocar antes de tiempo): igual pide confirmar y no empieza a firmar', (await page.locator('.confirmar-union').count()) === 1 && (await intentos(page, '.panel-ronda')) === 0)
     await page.close()
   }
 }
