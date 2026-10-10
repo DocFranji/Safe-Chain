@@ -37,6 +37,7 @@ import {
   nuevaSal,
 } from '../lib/ofertasSelladas'
 import { useHistorialCacheado } from '../hooks/useHistorial'
+import { BotonUnirse } from './BotonUnirse'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { comoConseguir, useMoneda } from '../hooks/useMoneda'
 
@@ -248,18 +249,21 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
             , si todos pagan.
           </p>
           {puedeFirmar && yo && (
-            <button
-              className="boton principal"
-              disabled={ocupado || falta > 0n}
-              onClick={() =>
-                ejecutar(
+            <BotonUnirse
+              miembros={miembros.map((m) => m.direccion)}
+              deshabilitado={ocupado || falta > 0n}
+              unirse={() =>
+                void ejecutar(
                   (c) => c.unirse_en_turno({ id, miembro: yo, posicion: precio.turno }),
                   `Listo: ya eres parte de la tanda, en el turno ${precio.turno + 1}.`,
                 )
               }
-            >
-              Unirme en el turno {precio.turno + 1} y dejar {dinero(precio.colateral)}
-            </button>
+              texto={
+                <>
+                  Unirme en el turno {precio.turno + 1} y dejar {dinero(precio.colateral)}
+                </>
+              }
+            />
           )}
           {falta > 0n && (
             <p className="aviso nota">

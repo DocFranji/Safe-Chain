@@ -2,12 +2,14 @@
 // su nombre, su turno y depósito debajo, y a la derecha cómo va ("Pagó", "Por pagar", "Debe $100"...).
 // Arriba, la línea del turno: "Turno 2 de 3 · Cobra Beto".
 import type { DatosTanda } from '../hooks/useTanda'
+import { usePagosPendientes } from '../hooks/useMora'
 import { dinero } from '../lib/glosario'
 import { saldoSuDeuda } from '../lib/deudas'
 import { nombreDe } from '../lib/nombres'
 import { rutaHistorial } from '../lib/rutas'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
 import { InsigniaNivel } from './InsigniaNivel'
+import './mora.css'
 
 type Props = { datos: DatosTanda; yo: string | null }
 
@@ -15,6 +17,10 @@ export function ListaMiembros({ datos, yo }: Props) {
   const { tanda, miembros, pagaron } = datos
   const estado = tanda.estado.tag
   const activa = estado === 'Activa'
+  // Pedido 4 del plan v5: mientras la tanda sigue, quien tiene un pago pendiente en otra tanda lleva una marca.
+  // Quien ya debe en ESTA tanda no la lleva: a su derecha ya dice "Debe $…".
+  const conMora = usePagosPendientes()
+  const marcarMora = estado === 'Abierta' || activa || estado === 'PorLiquidar'
   const libres = tanda.n_miembros - miembros.length
   // (M3) Con turnos elegidos, los lugares libres no son necesariamente los últimos.
   const turnosSinDuenio = turnosLibres(
@@ -76,6 +82,9 @@ export function ListaMiembros({ datos, yo }: Props) {
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
+                {marcarMora && !m.moroso && conMora.has(m.direccion) && (
+                  <span className="marca-mora">Pago pendiente en otra tanda</span>
+                )}
               </span>
               <em className="persona-estado">{estadoMiembro(m, estado, pago)}</em>
             </li>

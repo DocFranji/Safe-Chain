@@ -1,0 +1,117 @@
+/* Pagos pendientes de otras tandas (pedido 4 del plan v5): el aviso rojo de arriba, la confirmación al unirse y
+   la marca junto a cada persona. Solo usa los colores de alerta de index.css, que ya tienen versión oscura. */
+
+/* El aviso de arriba: rojo, con borde y sin botón de cerrar. Mientras la tanda esté abierta no se puede pasar por alto. */
+.aviso-mora {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-radius: var(--radio-chico);
+  background: var(--alerta-suave);
+  box-shadow: inset 0 0 0 1.5px var(--alerta);
+  color: var(--alerta-texto);
+}
+.aviso-mora-icono {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--alerta);
+  color: var(--superficie);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+.aviso-mora-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.aviso-mora-cuerpo p {
+  margin: 0;
+  font-size: 15px;
+}
+.aviso-mora-cuerpo .aviso-mora-titulo {
+  font-size: 16px;
+  font-weight: 700;
+}
+.aviso-mora-cuerpo a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Al unirse: la misma advertencia, en el lugar del botón, con la opción segura primero. */
+.confirmar-union {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radio-chico);
+  background: var(--alerta-suave);
+  box-shadow: inset 0 0 0 1.5px var(--alerta);
+  color: var(--alerta-texto);
+}
+.confirmar-union:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+.confirmar-union p {
+  margin: 0;
+  font-size: 15px;
+}
+.confirmar-union .confirmar-antes {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.confirmar-union .confirmar-titulo {
+  margin-bottom: 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.confirmar-union .fila-botones {
+  margin-top: 14px;
+}
+/* Los dos botones valen lo mismo a la vista: uno al lado del otro si caben y, si no, cada uno en su fila.
+   (En la página de la tanda la acción principal se estira a todo el ancho; aquí no.) */
+.app[data-pagina] .confirmar-union .fila-botones .boton {
+  flex: 1 1 11rem;
+  width: auto;
+  min-height: 50px;
+  font-size: 16px;
+}
+
+/* En la lista de quiénes participan: una línea bajo los datos de la persona. Es texto, no una pastilla, para que se
+   parta en dos líneas si no cabe (a 375 px la fila ya va llena con el nombre, el nivel y cómo va). */
+.marca-mora {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--alerta-texto);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.marca-mora::before {
+  content: '!';
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--alerta);
+  color: var(--superficie);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
