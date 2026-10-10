@@ -1843,6 +1843,239 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
   }
 }
 
+// ---------------------------------------------------------------- UX (plan v5, pedido 3): la campanita de avisos
+// Los avisos salen de lo que se lee de la red (el estado de las tandas y sus eventos); lo leído se guarda en el
+// navegador (rounda:notificaciones:<cuenta>). Las pruebas siembran `base: 0` para que los eventos del mock (de hace
+// unos minutos) cuenten como sin leer; sin sembrar, lo que pasó antes de la primera vez cuenta como leído.
+{
+  const limpio = (s) => s.replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim()
+  const JERGA_AVISOS = /(?<![\p{L}])(TUSD|garantías?|colateral|bolsas?|rondas?|morosos?|mora|XLM|Friendbot|trustline|bóvedas?)(?![\p{L}])/iu
+  const CLAVE = (cuenta) => `rounda:notificaciones:${cuenta}`
+  /** Siembra lo leído SOLO si todavía no hay nada (así recargar no lo borra). */
+  const sembrar = (page, cuenta, leidas = { base: 0, ids: [] }) =>
+    page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v) }, [CLAVE(cuenta), JSON.stringify(leidas)])
+  const guardado = (page, cuenta) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), CLAVE(cuenta))
+  /** Espera a que la campanita lea la red (el número aparece cuando hay avisos sin leer). */
+  const hayNumero = (page) => page.waitForSelector('.campana-numero', { timeout: 15000 }).then(() => true).catch(() => false)
+  const titulos = async (page) => (await page.locator('.campana-titulo').allInnerTexts()).map((x) => limpio(x.replace('(nuevo)', '')))
+
+  // A. Sin sesión no hay campanita; con sesión, tampoco en la demo (se proyecta).
+  {
+    const sin = await nuevaPagina(browser, { est: nuevoEstado(), conectado: false })
+    await sin.page.goto(BASE + '#/tandas')
+    await sin.page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+    check('Campanita: sin sesión no se muestra', (await sin.page.locator('.boton-campana').count()) === 0)
+    await sin.page.close()
+    const demo = await nuevaPagina(browser, { est: nuevoEstado() })
+    await demo.page.goto(BASE + '#/demo')
+    await demo.page.waitForTimeout(1500)
+    check('Campanita: en la demo tampoco', (await demo.page.locator('.boton-campana').count()) === 0)
+    await demo.page.close()
+  }
+
+  // B. Carla, con todo sin leer: te toca pagar (tanda 2) y tres cosas que pasaron (la tanda 1 empezó y terminó; la 2 empezó).
+  {
+    const est = nuevoEstado()
+    const { page, errores } = await nuevaPagina(browser, { est, direccion: CARLA })
+    await sembrar(page, CARLA)
+    await page.goto(BASE + '#/tandas')
+    const aparecio = await hayNumero(page)
+    const boton = page.locator('.boton-campana')
+    check('Campanita: el número dice cuántos avisos hay sin leer', aparecio && limpio(await page.locator('.campana-numero').innerText()) === '4' && (await boton.getAttribute('aria-label')) === 'Avisos: 4 sin leer', await boton.getAttribute('aria-label'))
+    check('Campanita: cerrada, el botón avisa que abre un panel', (await boton.getAttribute('aria-expanded')) === 'false' && (await boton.getAttribute('aria-haspopup')) === 'dialog')
+    await boton.click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    const lista = await titulos(page)
+    check('Campanita: lo que te toca hacer va primero y después lo que pasó', lista[0] === 'Te toca pagar $100 en Tanda 2' && lista.slice(1).every((x) => /^La tanda (terminó|empezó)$/.test(x)) && lista.length === 4, JSON.stringify(lista))
+    const detalles = (await page.locator('.campana-item').allInnerTexts()).map(limpio)
+    check('Campanita: "Te toca pagar" dice cuándo vence', /Vence en/.test(detalles[0]), detalles[0])
+    check('Campanita: cuando terminó la tanda dice cuánto recibiste', detalles.some((d) => /La tanda terminó \(nuevo\)? ?Tanda 1: recibiste \$114 al final\. Mira el detalle\./.test(d) || /Tanda 1: recibiste \$114 al final/.test(d)), JSON.stringify(detalles))
+    check('Campanita: lo que pasó dice hace cuánto', detalles.slice(1).every((d) => /hace \d+ min|ahora/.test(d)), JSON.stringify(detalles))
+    check('Campanita: los cuatro salen como nuevos', (await page.locator('.campana-item.nueva').count()) === 4)
+    check('Campanita: abierta, el panel es un diálogo con el foco adentro y sin el número', (await page.locator('.campana-panel[role="dialog"]').count()) === 1 && (await page.evaluate(() => document.activeElement?.classList.contains('campana-panel'))) && (await page.locator('.campana-numero').count()) === 0 && (await boton.getAttribute('aria-expanded')) === 'true')
+    check('Campanita: sin jerga en los avisos', !JERGA_AVISOS.test(detalles.join(' ')), detalles.join(' | '))
+    await shot(page, 'ux-campanita-escritorio')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(200)
+    check('Campanita: Escape cierra el panel y el foco vuelve a la campanita', (await page.locator('.campana-panel').count()) === 0 && (await page.evaluate(() => document.activeElement?.classList.contains('boton-campana'))))
+    const g = await guardado(page, CARLA)
+    check('Campanita: al cerrar, lo visto queda leído (se guarda en el navegador)', !!g && ['pagar:2:1', 'termino:1', 'empezo:1', 'empezo:2'].every((id) => g.ids.includes(id)), JSON.stringify(g))
+    check('Campanita: sin avisos nuevos, el número desaparece', (await page.locator('.campana-numero').count()) === 0 && (await boton.getAttribute('aria-label')) === 'Avisos')
+    await boton.click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    check('Campanita: al volver a abrir, ya no hay nuevos (siguen en la lista)', (await page.locator('.campana-item.nueva').count()) === 0 && (await page.locator('.campana-item').count()) === 4)
+    await page.locator('h1').first().click()
+    await page.waitForTimeout(200)
+    check('Campanita: tocar fuera del panel lo cierra', (await page.locator('.campana-panel').count()) === 0)
+    await boton.click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    await page.locator('.menu a', { hasText: 'Crear' }).click()
+    await page.waitForTimeout(400)
+    check('Campanita: en la computadora el toque fuera no se pierde: abre lo que se tocó', /#\/crear$/.test(page.url()) && (await page.locator('.campana-panel').count()) === 0, page.url())
+    await boton.click()
+    await page.getByRole('link', { name: /Te toca pagar \$100 en Tanda 2/ }).click()
+    await page.waitForTimeout(400)
+    check('Campanita: tocar un aviso lleva a su tanda y cierra el panel', /#\/tanda\/2$/.test(page.url()) && (await page.locator('.campana-panel').count()) === 0, page.url())
+    check('Campanita: sin errores de consola', errores.length === 0, errores.join(' | '))
+    // Recargar no borra lo leído: sigue sin número.
+    await page.reload()
+    await page.waitForSelector('.boton-campana', { timeout: 15000 })
+    await page.waitForTimeout(2500)
+    check('Campanita: lo leído sobrevive a recargar la página', (await page.locator('.campana-numero').count()) === 0)
+    await page.close()
+  }
+
+  // C. Primera vez en este navegador: lo que pasó antes cuenta como leído; lo que te toca hacer ahora, no.
+  {
+    const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: CARLA })
+    await page.goto(BASE + '#/tandas')
+    const aparecio = await hayNumero(page)
+    check('Campanita (primera vez): solo cuenta lo que te toca hacer, no la historia vieja', aparecio && limpio(await page.locator('.campana-numero').innerText()) === '1')
+    await page.locator('.boton-campana').click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    check('Campanita (primera vez): la historia está en la lista, pero ya leída', (await page.locator('.campana-item').count()) === 4 && (await page.locator('.campana-item.nueva').count()) === 1)
+    const g = await guardado(page, CARLA)
+    check('Campanita (primera vez): guarda desde cuándo se usa', !!g && typeof g.base === 'number' && g.base > 1_700_000_000, JSON.stringify(g))
+    await page.close()
+  }
+
+  // D. Te toca cobrar; y debes.
+  {
+    const cobro = await nuevaPagina(browser, { est: conMiBolsaLista(nuevoEstado()), direccion: ME })
+    await sembrar(cobro.page, ME)
+    await cobro.page.goto(BASE + '#/tandas')
+    await hayNumero(cobro.page)
+    await cobro.page.locator('.boton-campana').click()
+    await cobro.page.waitForSelector('.campana-panel', { timeout: 5000 })
+    const d = (await cobro.page.locator('.campana-item').allInnerTexts()).map(limpio)
+    check('Campanita: "Te toca cobrar $300 en Tanda 6" va primero y dice que el pozo está listo', /^Te toca cobrar \$300 en Tanda 6/.test(d[0]) && /Tu pozo está listo\./.test(d[0]), JSON.stringify(d))
+    await cobro.page.close()
+
+    const deuda = await nuevaPagina(browser, { est: conTandaMorosa(nuevoEstado()), direccion: ME })
+    await sembrar(deuda.page, ME)
+    await deuda.page.goto(BASE + '#/tandas')
+    await hayNumero(deuda.page)
+    await deuda.page.locator('.boton-campana').click()
+    await deuda.page.waitForSelector('.campana-panel', { timeout: 5000 })
+    const t2 = await titulos(deuda.page)
+    check('Campanita: "Debes $100 en Tanda 6"', t2.includes('Debes $100 en Tanda 6'), JSON.stringify(t2))
+    await deuda.page.close()
+  }
+
+  // E. Alguien te pagó una deuda (Carla le pagó $50 a Beto), con el apodo que llega después de las direcciones.
+  {
+    const est = conTandaMorosa(nuevoEstado())
+    est.apodos[CARLA] = 'Caro'
+    const { page } = await nuevaPagina(browser, { est, direccion: BETO })
+    await sembrar(page, BETO)
+    await page.goto(BASE + '#/tandas')
+    await hayNumero(page)
+    await page.locator('.boton-campana').click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    await page.waitForFunction(() => /Caro te pagó/.test(document.querySelector('.campana-panel')?.textContent ?? ''), null, { timeout: 8000 }).catch(() => {})
+    const t3 = await titulos(page)
+    check('Campanita: "Caro te pagó $50 de lo que te debía" (con el apodo, que llega después)', t3.includes('Caro te pagó $50 de lo que te debía'), JSON.stringify(t3))
+    await page.close()
+  }
+
+  // F. Alguien con un pago pendiente en otra tanda se unió a tu tanda (la 3, que creó "yo"; Ana ya está en ella).
+  {
+    const est = nuevoEstado()
+    est.historiales[ANA] = historial({ cuotas_a_tiempo: 4, veces_moroso: 1, deudas_saldadas: 0, puntos_positivos: 40, puntos_negativos: 100 })
+    const { page } = await nuevaPagina(browser, { est, direccion: ME })
+    await page.goto(BASE + '#/tandas')
+    await hayNumero(page)
+    await page.locator('.boton-campana').click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    const d = (await page.locator('.campana-item').allInnerTexts()).map(limpio)
+    check('Campanita: "Ana, que tiene un pago pendiente, se unió a tu tanda", con lo que puede pasar', d.length === 1 && /^Ana, que tiene un pago pendiente, se unió a tu tanda/.test(d[0]) && /su depósito podría no alcanzar/.test(d[0]), JSON.stringify(d))
+    await page.close()
+    // Sin pago pendiente (Ana está al día): ningún aviso.
+    const sin = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await sin.page.goto(BASE + '#/tandas')
+    await sin.page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+    await sin.page.waitForTimeout(2500)
+    check('Campanita: con todos al día no hay aviso de pago pendiente', (await sin.page.locator('.campana-numero').count()) === 0)
+    await sin.page.close()
+  }
+
+  // G. Te invitaron: quien abre el enlace de una tanda abierta y no se une la ve en la campanita.
+  {
+    const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await page.goto(BASE + '#/tanda/5')
+    await page.waitForSelector('.panel-ronda', { timeout: 15000 }).catch(() => {})
+    await page.waitForTimeout(500)
+    await page.evaluate(() => { window.location.hash = '#/tandas' })
+    await hayNumero(page)
+    await page.locator('.boton-campana').click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    const d = (await page.locator('.campana-item').allInnerTexts()).map(limpio)
+    check('Campanita: "Te invitaron a Tanda 5", con la tanda en una línea', d.length === 1 && /^Te invitaron a Tanda 5/.test(d[0]) && /5 personas · \$50 por semana\. Entra para unirte\./.test(d[0]), JSON.stringify(d))
+    const inv = await page.evaluate(() => JSON.parse(localStorage.getItem('rounda:invitaciones') ?? 'null'))
+    check('Campanita: la invitación se guarda en el navegador', Array.isArray(inv) && inv.length === 1 && inv[0].id === 5, JSON.stringify(inv))
+    await page.close()
+    // Quien ya está en la tanda no se invita a sí mismo: Ana abre la 3 (donde ya está).
+    const ana = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ANA })
+    await sembrar(ana.page, ANA, { base: Math.floor(Date.now() / 1000) + 3600, ids: [] })
+    await ana.page.goto(BASE + '#/tanda/3')
+    await ana.page.waitForSelector('.panel-ronda', { timeout: 15000 }).catch(() => {})
+    await ana.page.waitForTimeout(2500)
+    await ana.page.locator('.boton-campana').click()
+    await ana.page.waitForSelector('.campana-panel', { timeout: 5000 })
+    check('Campanita: no te invita a una tanda donde ya estás', !(await titulos(ana.page)).some((x) => /Te invitaron/.test(x)))
+    await ana.page.close()
+  }
+
+  // H. En el celular (375 px): la campanita cabe en la barra y el panel es una hoja desde abajo, con el foco atrapado.
+  {
+    const { page, errores } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: CARLA, viewport: { width: 375, height: 800 } })
+    await sembrar(page, CARLA)
+    await page.goto(BASE + '#/tandas')
+    await hayNumero(page)
+    check('Campanita (375 px): sin desborde horizontal con la campanita en la barra', await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    await page.locator('.boton-campana').click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    await page.waitForTimeout(500)
+    const hoja = await page.evaluate(() => {
+      const r = document.querySelector('.campana-panel').getBoundingClientRect()
+      return { abajo: Math.round(r.bottom), alto: window.innerHeight, ancho: Math.round(r.width), pantalla: window.innerWidth, fija: getComputedStyle(document.querySelector('.campana-panel')).position }
+    })
+    check('Campanita (375 px): el panel es una hoja fija pegada abajo y de lado a lado', hoja.fija === 'fixed' && hoja.abajo === hoja.alto && hoja.ancho === hoja.pantalla, JSON.stringify(hoja))
+    check('Campanita (375 px): hay un botón "Cerrar" a la vista', await page.getByRole('button', { name: 'Cerrar', exact: true }).isVisible())
+    for (let i = 0; i < 8; i++) await page.keyboard.press('Tab')
+    check('Campanita (375 px): con Tab el foco no se escapa de la hoja', await page.evaluate(() => !!document.activeElement?.closest('.campana-panel')))
+    for (let i = 0; i < 8; i++) await page.keyboard.press('Shift+Tab')
+    check('Campanita (375 px): ni hacia atrás', await page.evaluate(() => !!document.activeElement?.closest('.campana-panel')))
+    check('Campanita (375 px): sin desborde horizontal con la hoja abierta', await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    await shot(page, 'ux-campanita-375')
+    await page.locator('.campana-fondo').click({ position: { x: 20, y: 20 } })
+    await page.waitForTimeout(200)
+    check('Campanita (375 px): tocar el velo de atrás cierra la hoja', (await page.locator('.campana-panel').count()) === 0)
+    await page.locator('.boton-campana').click()
+    await page.waitForSelector('.campana-panel', { timeout: 5000 })
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click()
+    await page.waitForTimeout(200)
+    check('Campanita (375 px): "Cerrar" cierra la hoja', (await page.locator('.campana-panel').count()) === 0)
+    check('Campanita (375 px): sin errores de consola', errores.length === 0, errores.join(' | '))
+    await page.close()
+  }
+
+  // I. Si la red falla, la campanita no estorba: ni número ni errores.
+  {
+    const est = nuevoEstado()
+    est.contratoCaido = true
+    const { page, errores } = await nuevaPagina(browser, { est, direccion: CARLA })
+    await sembrar(page, CARLA)
+    await page.goto(BASE + '#/tandas')
+    await page.waitForSelector('.boton-campana', { timeout: 15000 })
+    await page.waitForTimeout(2500)
+    check('Campanita: con la red caída no muestra número y no da errores', (await page.locator('.campana-numero').count()) === 0 && errores.length === 0, errores.join(' | '))
+    await page.locator('.boton-campana').click()
+    check('Campanita: con la red caída el panel dice que no hay avisos', /No tienes avisos por ahora/.test(await page.locator('.campana-panel').innerText()))
+    await page.close()
+  }
+}
+
 await browser.close()
 const fallos = resultados.filter((r) => !r.ok)
 console.log(`\n${resultados.length - fallos.length}/${resultados.length} comprobaciones correctas`)
