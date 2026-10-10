@@ -982,6 +982,145 @@ td .dir {
   display: flex;
 }
 
+/* Buscar y filtrar (pedido 5 del plan v5; la lógica está en lib/filtros.ts) */
+.buscador {
+  margin-bottom: 14px;
+}
+.buscador input {
+  width: 100%;
+  max-width: 560px;
+  min-height: 48px;
+  padding: 10px 18px 10px 44px;
+  border: var(--grosor) solid var(--borde);
+  border-radius: 99px;
+  /* La lupa, dibujada con el color del texto suave. */
+  background: var(--papel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8fa3' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E")
+    no-repeat 16px 50% / 18px;
+  color: var(--tinta);
+  font: inherit;
+  font-size: 16px;
+  transition:
+    border-color var(--t-rapido) ease,
+    box-shadow var(--t-rapido) ease;
+}
+.buscador input::placeholder {
+  color: var(--tinta-2);
+}
+.buscador input:focus {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 4px var(--brillo);
+  outline: none;
+}
+.filtro.mas-filtros {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Una flecha que gira media vuelta al abrir (la marca es una ronda). */
+.filtro.mas-filtros::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--t-rapido) var(--ease-out);
+}
+.filtro.mas-filtros[aria-expanded='true']::after {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+.panel-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 18px 20px;
+  margin: -6px 0 20px;
+  padding: 20px;
+  border: var(--grosor) solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  animation: aparecer-filtros var(--t-medio) var(--ease-out);
+}
+@keyframes aparecer-filtros {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.panel-filtros .campo > label,
+.panel-filtros legend {
+  font-size: 15px;
+  font-weight: 600;
+}
+.panel-filtros fieldset.campo {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.panel-filtros legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.panel-filtros .campo select,
+.panel-filtros .campo input:not([type='range']):not([type='checkbox']) {
+  min-height: 44px;
+  font-size: 16px;
+}
+.rango {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rango input::placeholder {
+  color: var(--tinta-2);
+}
+.filtro-casillas {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+.filtro-casillas .casilla {
+  font-size: 15px;
+}
+.resultado-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  margin: -4px 0 16px;
+  color: var(--tinta-2);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+/* Pedido 4: alguien de la tanda tiene un pago pendiente (aquí o en otra tanda). */
+.tarjeta-pendiente {
+  align-self: flex-start;
+  margin: 2px 0 0;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+  font-size: 14px;
+  font-weight: 700;
+}
+.tarjeta-numero {
+  margin: -4px 0 0;
+  color: var(--tinta-2);
+  font-size: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-filtros {
+    animation: none;
+  }
+  .filtro.mas-filtros::after {
+    transition: none;
+  }
+}
+
 /* ---------- Crear tanda ---------- */
 .presets {
   display: flex;

@@ -25,7 +25,8 @@ function idValido(texto: string): number | null {
 }
 
 export function parsearRuta(hash: string): Ruta {
-  const limpio = hash.replace(/^#\/?/, '').replace(/\/+$/, '')
+  // Lo que va después de "?" (los filtros de la lista: #/tandas?cuota=10-50) no cambia la página.
+  const limpio = hash.replace(/^#\/?/, '').replace(/\?.*$/, '').replace(/\/+$/, '')
   if (limpio === '') return { tipo: 'inicio' }
   if (limpio === 'tandas') return { tipo: 'lobby' }
   if (limpio === 'crear') return { tipo: 'crear' }
