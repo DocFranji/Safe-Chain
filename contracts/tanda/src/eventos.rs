@@ -1,5 +1,5 @@
 //! Eventos: avisos que el contrato publica y la interfaz escucha (línea de tiempo, resultados).
-use soroban_sdk::{contractevent, Address, Vec};
+use soroban_sdk::{contractevent, Address, String, Vec};
 
 use crate::ModoTurnos;
 
@@ -15,6 +15,8 @@ pub struct EvCreada {
     pub creador: Address,
     pub cuota: i128,
     pub n_miembros: u32,
+    /// (M1 v5) Nombre de la tanda; vacío si no tiene.
+    pub nombre: String,
 }
 
 #[contractevent(topics = ["unido"])]

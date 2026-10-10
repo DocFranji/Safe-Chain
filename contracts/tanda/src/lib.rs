@@ -27,7 +27,7 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 
 mod almacenamiento;
 mod consultas;
@@ -40,6 +40,7 @@ mod turnos;
 // agregar código no choque en este archivo.
 mod bovedas_token; // M4
 mod deudas; // M1
+mod nombres; // M1 (v5)
 mod requisitos; // M2
 mod tiempos; // M1
 mod turnos_acciones; // M3
@@ -54,6 +55,8 @@ mod test_deudas; // M1
 mod test_historial; // M2
 #[cfg(test)]
 mod test_invariantes; // ORQ
+#[cfg(test)]
+mod test_nombres; // M1 (v5)
 #[cfg(test)]
 mod test_tiempos; // M1
 #[cfg(test)]
@@ -151,6 +154,33 @@ impl TandaContract {
         penalidad_bps: u32,
         cobertura_bps: u32,
     ) -> Result<u32, Error> {
+        let sin_nombre = String::from_str(&env, "");
+        Self::crear_en(
+            env,
+            creador,
+            token,
+            cuota,
+            n_miembros,
+            periodo_seg,
+            penalidad_bps,
+            cobertura_bps,
+            sin_nombre,
+        )
+    }
+
+    /// (M1 v5) Cuerpo compartido por `crear_tanda` y `crear_tanda_con_nombre` (`nombres.rs`): `nombre`
+    /// vacío = sin nombre. No se exporta (no es `pub`).
+    pub(crate) fn crear_en(
+        env: Env,
+        creador: Address,
+        token: Address,
+        cuota: i128,
+        n_miembros: u32,
+        periodo_seg: u64,
+        penalidad_bps: u32,
+        cobertura_bps: u32,
+        nombre: String,
+    ) -> Result<u32, Error> {
         creador.require_auth();
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::NoInicializado);
@@ -163,6 +193,7 @@ impl TandaContract {
         {
             return Err(Error::ParametroInvalido);
         }
+        nombres::validar(&nombre)?; // M1 v5
 
         let s = env.storage().instance();
         let id: u32 = s.get::<_, u32>(&DataKey::Contador).unwrap_or(0) + 1;
@@ -187,12 +218,14 @@ impl TandaContract {
         fijar_boveda(&env, id, &tanda)?; // M1: cada tanda guarda su bóveda al crearse
         guardar_tanda(&env, id, &tanda);
         guardar_miembros(&env, id, &Vec::new(&env));
+        nombres::guardar(&env, &tanda, id, &nombre); // M1 v5
 
         EvCreada {
             id,
             creador,
             cuota,
             n_miembros,
+            nombre,
         }
         .publish(&env);
         Ok(id)
