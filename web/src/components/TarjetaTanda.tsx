@@ -2,7 +2,8 @@
 import type { CSSProperties } from 'react'
 import type { ResumenTanda } from '../lib/lectura'
 import { bolsa, colateralDeTurno } from '../lib/colateral'
-import { claseEstado, etiquetaEstado } from '../lib/formato'
+import { claseEstado, duracion, etiquetaEstado } from '../lib/formato'
+import { duracionTotal } from '../lib/filtros'
 import { dinero } from '../lib/glosario'
 import { porPeriodo } from '../lib/resumen'
 import { rutaTanda } from '../lib/rutas'
@@ -14,10 +15,12 @@ type Props = {
   yo: string | null
   /** Segundos Unix actuales (para avisar si la bolsa de quien está conectado ya se puede cobrar). */
   ahora: number
+  /** Pedido 4 del plan v5: cuántas personas de la tanda tienen un pago pendiente (aquí o en otra tanda). */
+  pendientes?: number
 }
 
-export function TarjetaTanda({ resumen, yo, ahora }: Props) {
-  const { id, tanda, miembros, modo } = resumen
+export function TarjetaTanda({ resumen, yo, ahora, pendientes = 0 }: Props) {
+  const { id, nombre, tanda, miembros, modo } = resumen
   const estado = tanda.estado.tag
   const n = tanda.n_miembros
   const params = { cuota: tanda.cuota, nMiembros: n, coberturaBps: tanda.cobertura_bps }
@@ -49,9 +52,10 @@ export function TarjetaTanda({ resumen, yo, ahora }: Props) {
     <li>
       <a className="tarjeta" href={rutaTanda(id)}>
         <div className="tarjeta-cabeza">
-          <h2>Tanda {id}</h2>
+          <h2>{nombre ?? `Tanda ${id}`}</h2>
           <span className={`etiqueta ${claseEstado(estado)}`}>{etiquetaEstado(estado)}</span>
         </div>
+        {nombre && <p className="tarjeta-numero">Tanda {id}</p>}
 
         <p className="tarjeta-bolsa">
           <strong>
@@ -66,9 +70,15 @@ export function TarjetaTanda({ resumen, yo, ahora }: Props) {
           ))}
         </div>
         <p className="tarjeta-datos">
-          {miembros.length} de {n} personas · {dinero(tanda.cuota)} {porPeriodo(Number(tanda.periodo_seg))}
+          {miembros.length} de {n} personas · {dinero(tanda.cuota)} {porPeriodo(Number(tanda.periodo_seg))} · dura{' '}
+          {duracion(duracionTotal(resumen))}
         </p>
         <p className="tarjeta-detalle">{detalle}</p>
+        {pendientes > 0 && (
+          <p className="tarjeta-pendiente">
+            {pendientes === 1 ? '1 persona con un pago pendiente' : `${pendientes} personas con pagos pendientes`}
+          </p>
+        )}
         {modo !== 'Llegada' && <p className="tarjeta-datos">Turnos: {tituloModo(modo).toLowerCase()}</p>}
 
         {(participo || creada) && (

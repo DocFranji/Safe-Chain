@@ -14,7 +14,7 @@ export type EstadoHistorial =
 const VIGENCIA_MS = 30_000
 const cache = new Map<string, { cuando: number; promesa: Promise<Historial | null> }>()
 
-function historialCacheado(dir: string, forzar = false): Promise<Historial | null> {
+export function historialCacheado(dir: string, forzar = false): Promise<Historial | null> {
   const guardado = cache.get(dir)
   if (!forzar && guardado && Date.now() - guardado.cuando < VIGENCIA_MS) return guardado.promesa
   const promesa = leerHistorial(dir).catch((e) => {
