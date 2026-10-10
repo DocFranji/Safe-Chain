@@ -123,8 +123,10 @@ Si alguien necesita tocar un archivo de otro dueño, avisa primero en el tablero
 
 ## WEB · Pedido 1: encontrar el sitio en buscadores
 
+- **El dominio oficial es `https://rounda.net`** (en Cloudflare). Toda URL absoluta (canonical, sitemap, Open Graph,
+  JSON-LD) usa `rounda.net`, no `rounda-phi.vercel.app`.
 - `web/public/robots.txt`: permite todo en producción y apunta al sitemap
-  (`Sitemap: https://rounda-phi.vercel.app/sitemap.xml`).
+  (`Sitemap: https://rounda.net/sitemap.xml`).
 - **Las vistas previas de Vercel no deben indexarse:** `robots.txt` con `Disallow: /` o encabezado
   `X-Robots-Tag: noindex` cuando `VERCEL_ENV` no es `production` (por ejemplo, generando el archivo al compilar).
 - `web/public/sitemap.xml` con la portada (las rutas `#/…` no las indexan los buscadores).
@@ -153,6 +155,29 @@ Si alguien necesita tocar un archivo de otro dueño, avisa primero en el tablero
 - Los filtros se ven en la URL (`#/tandas?cuota=…`) para poder compartirlos, y se recuerdan en el navegador.
 - Lógica pura con pruebas (`lib/filtros.ts`) y pruebas de navegador.
 - El nombre se muestra en la tarjeta de cada tanda si el contrato lo tiene. Con la v4, "Tanda N" como hoy.
+
+## Dominio `rounda.net` (una persona con acceso a Vercel y Cloudflare)
+
+Hoy, antes del piloto si se puede. No toca código.
+
+1. **Vercel** → proyecto `rounda` → Settings → Domains → agregar `rounda.net` y `www.rounda.net`. Elegir `rounda.net`
+   como principal y que `www` redirija a él.
+2. **Cloudflare** → DNS de `rounda.net`, con los registros que muestra Vercel al agregar el dominio. Lo normal:
+   - `A` `@` → `76.76.21.21`;
+   - `CNAME` `www` → `cname.vercel-dns.com`.
+
+   Ponerlos en **"DNS only" (nube gris)**: con el proxy de Cloudflare activo, Vercel no puede emitir el certificado.
+   Si se quiere el proxy, SSL/TLS en **Full (strict)**.
+3. Esperar a que Vercel marque los dos dominios como **Valid Configuration**.
+4. **Privy** (dashboard.privy.io) → Allowed domains: agregar `https://rounda.net` y `https://www.rounda.net`. **Sin esto,
+   "Entrar con Google" falla en el dominio nuevo.**
+5. En Vercel → Domains, hacer que `rounda-phi.vercel.app` **redirija (308) a `rounda.net`**, para que los buscadores
+   vean una sola dirección. Dejarlo para después de confirmar que `rounda.net` funciona completo.
+6. **Google Search Console:** propiedad de tipo *Dominio* para `rounda.net`, verificada con el registro `TXT` que da
+   Google, en Cloudflare. Después, enviar `https://rounda.net/sitemap.xml` (cuando esté el PR de WEB en producción).
+   Lo mismo en Bing Webmaster Tools (puede importar desde Search Console).
+7. Revisar `https://rounda.net/#/estado` en verde, entrar con Google y con Freighter, y pedir TUSD de prueba (el
+   faucet es `/api/faucet` del mismo sitio, así que funciona igual).
 
 ## Calendario (hora de Costa Rica)
 
