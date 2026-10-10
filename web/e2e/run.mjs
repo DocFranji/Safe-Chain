@@ -1361,7 +1361,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
     copia.querySelectorAll('.barra-cuenta, footer').forEach((n) => n.remove())
     return copia.innerText.replace(/\u00a0/g, ' ')
   })
-  check('M4: cóbrala en USDC: "la bolsa sale con $60 menos"', /el pozo sale con \$60 menos/.test(principal), principal.slice(0, 1500))
+  check('M4: cóbrala en USDC: "la bolsa sale con $100 menos" (v5: la garantía no alcanza y no se usa)', /el pozo sale con \$100 menos/.test(principal), principal.slice(0, 1500))
   check('M4: cóbrala en USDC: ningún "TUSD" fuera de la barra de la cuenta', !/TUSD/.test(principal), (principal.match(/.{0,40}TUSD.{0,40}/) ?? [''])[0])
   check('M4: cóbrala en USDC sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
