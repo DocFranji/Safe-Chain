@@ -78,9 +78,9 @@ export function validarParametros(p: Partial<ParametrosTanda>): Errores {
     e.nMiembros = `Entre ${MIN_MIEMBROS} y ${MAX_MIEMBROS} personas.`
   }
   if (p.periodoSeg === undefined || !Number.isInteger(p.periodoSeg) || p.periodoSeg < MIN_PERIODO_SEG) {
-    e.periodoSeg = 'Escribe un número entero: cada ronda debe durar al menos 1 minuto.'
+    e.periodoSeg = 'Escribe un número entero: cada turno debe durar al menos 1 minuto.'
   } else if (p.periodoSeg > MAX_PERIODO_SEG) {
-    e.periodoSeg = 'Cada ronda puede durar hasta 3 meses (90 días).'
+    e.periodoSeg = 'Cada turno puede durar hasta 3 meses (90 días).'
   }
   if (
     p.penalidadBps === undefined ||
@@ -96,7 +96,7 @@ export function validarParametros(p: Partial<ParametrosTanda>): Errores {
     p.coberturaBps < 0 ||
     p.coberturaBps > MAX_COBERTURA_BPS
   ) {
-    e.coberturaBps = 'La garantía va de 0 % a 100 %.'
+    e.coberturaBps = 'El depósito va de 0 % a 100 %.'
   }
   return e
 }

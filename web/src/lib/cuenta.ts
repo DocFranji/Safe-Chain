@@ -38,7 +38,7 @@ export async function leerCuenta(direccion: string): Promise<EstadoCuenta> {
 /** Crea la cuenta en testnet y le da XLM de prueba. */
 export async function activarConFriendbot(direccion: string): Promise<void> {
   const r = await fetch(`${FRIENDBOT_URL}/?addr=${encodeURIComponent(direccion)}`)
-  if (!r.ok) throw new ErrorAmigable('Friendbot no pudo activar la cuenta. Intenta de nuevo en un momento.')
+  if (!r.ok) throw new ErrorAmigable('No pudimos preparar tu cuenta. Intenta de nuevo en un momento.')
 }
 
 /** Firma la aceptación de TUSD (con Freighter o con la cuenta de Google) y la envía a la red. */
@@ -50,13 +50,13 @@ export async function aceptarTusd(direccion: string): Promise<void> {
     .setTimeout(60)
     .build()
   const firmada = await firmarTransaccion(tx.toXDR(), { networkPassphrase: NETWORK_PASSPHRASE, address: direccion })
-  if (firmada.error) throw new ErrorAmigable(firmada.error.message || 'Se canceló la firma.')
+  if (firmada.error) throw new ErrorAmigable(firmada.error.message || 'Se canceló la confirmación.')
   await horizon().submitTransaction(TransactionBuilder.fromXDR(firmada.signedTxXdr, NETWORK_PASSPHRASE))
 }
 
 /** Pide TUSD de prueba al faucet. Lanza un Error con un mensaje listo para mostrar. */
 export async function pedirFaucet(direccion: string): Promise<void> {
-  if (!FAUCET_URL) throw new ErrorAmigable('El faucet no está activado en esta versión de la web.')
+  if (!FAUCET_URL) throw new ErrorAmigable('En esta versión de la web no se regalan dólares de práctica.')
   let respuesta: Response
   try {
     respuesta = await fetch(FAUCET_URL, {
@@ -65,12 +65,39 @@ export async function pedirFaucet(direccion: string): Promise<void> {
       body: JSON.stringify({ address: direccion }),
     })
   } catch {
-    throw new ErrorAmigable('No pudimos contactar al faucet. Revisa tu conexión.')
+    throw new ErrorAmigable('No pudimos pedir los dólares de práctica. Revisa tu conexión.')
   }
   const datos: unknown = await respuesta.json().catch(() => null)
   const ok = typeof datos === 'object' && datos !== null && (datos as { ok?: unknown }).ok === true
   if (ok) return
   const mensaje = typeof datos === 'object' && datos !== null ? (datos as { error?: unknown }).error : undefined
   // Sin JSON válido casi siempre significa que el sitio no tiene la función del faucet (por ejemplo, `npm run dev`).
-  throw new ErrorAmigable(typeof mensaje === 'string' ? mensaje : 'El faucet no está disponible en este entorno.')
+  throw new ErrorAmigable(typeof mensaje === 'string' ? mensaje : 'Aquí no se pueden pedir dólares de práctica (el servicio no está disponible).')
+}
+
+/** Los pasos de "Preparar mi cuenta", para contarle a la persona en cuál va. */
+export type PasoPreparar = 'crear' | 'activar' | 'recibir'
+
+/**
+ * Prepara una cuenta nueva de una sola vez: la crea (Friendbot), activa los dólares de práctica (trustline,
+ * la única firma) y le regala dólares de práctica (faucet). Se salta lo que ya está hecho.
+ */
+export async function prepararCuenta(
+  direccion: string,
+  estado: EstadoCuenta,
+  saldo: bigint | null,
+  alAvanzar: (paso: PasoPreparar) => void = () => {},
+): Promise<void> {
+  if (!estado.existe) {
+    alAvanzar('crear')
+    await activarConFriendbot(direccion)
+  }
+  if (!estado.trustline) {
+    alAvanzar('activar')
+    await aceptarTusd(direccion)
+  }
+  if ((saldo ?? 0n) === 0n && FAUCET_URL) {
+    alAvanzar('recibir')
+    await pedirFaucet(direccion)
+  }
 }

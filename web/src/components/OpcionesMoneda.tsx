@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react'
 import { TUSD, monedasDisponibles, type Moneda } from '../lib/monedas'
 
 const LEMA: Record<string, string> = {
-  simulado: 'Rendimiento simulado y rápido: ideal para probar',
-  real: 'Rendimiento real en Blend, el protocolo de préstamos de Stellar',
+  simulado: 'Intereses simulados y rápidos: ideal para probar',
+  real: 'Intereses reales en Blend, un servicio de préstamos',
 }
 
 export function OpcionesMoneda({ valor, alCambiar }: { valor: Moneda; alCambiar: (m: Moneda) => void }) {
@@ -37,8 +37,8 @@ export function OpcionesMoneda({ valor, alCambiar }: { valor: Moneda; alCambiar:
       </div>
       <p className="ayuda">
         {valor.real
-          ? 'La garantía se deposita en Blend y gana intereses de verdad (en minutos es muy poco). Pide tus USDC de prueba en la barra de arriba.'
-          : 'La garantía rinde en una bóveda simulada que corre más rápido, para que el rendimiento se note en una demo.'}
+          ? 'El depósito se guarda en Blend y gana intereses de verdad (en minutos es muy poco). Pide tus USDC de prueba en la barra de arriba.'
+          : 'Los intereses son simulados y corren más rápido, para que se noten en una demo.'}
       </p>
     </fieldset>
   )

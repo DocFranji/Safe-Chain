@@ -87,9 +87,15 @@ export function apodoDe(direccion: string): string | null {
   return a ?? null
 }
 
-/** Cómo mostrar a alguien: "Apodo · GADM…TVPD"; si no tiene, el nombre de la demo; si no, la dirección corta. */
+/**
+ * Cómo mostrar a alguien: su apodo; si no tiene, el nombre de la demo; si no, la dirección corta.
+ * (UX: el apodo va solo, sin la dirección G... al lado. La dirección completa está en su Perfil.)
+ */
 export function nombreDe(direccion: string): string {
-  const apodo = apodoDe(direccion)
-  if (apodo) return `${apodo} · ${direccionCorta(direccion)}`
-  return NOMBRES[direccion] ?? direccionCorta(direccion)
+  return apodoDe(direccion) ?? NOMBRES[direccion] ?? direccionCorta(direccion)
+}
+
+/** El nombre de alguien solo si se conoce (apodo o nombre de la demo); null si solo hay dirección. */
+export function nombreConocido(direccion: string): string | null {
+  return apodoDe(direccion) ?? NOMBRES[direccion] ?? null
 }

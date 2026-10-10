@@ -3,7 +3,6 @@
 import type { Billetera } from '../hooks/useBilletera'
 import type { Cuenta } from '../hooks/useCuenta'
 import { RUTA_CREAR, RUTA_DEMO } from '../lib/rutas'
-import { SIMBOLO } from '../config'
 
 type Paso = { titulo: string; detalle: React.ReactNode; hecho: boolean; actual: boolean }
 
@@ -16,8 +15,8 @@ export function ComoProbar({ billetera, cuenta }: { billetera: Billetera; cuenta
   if (redOk && (listaCuenta || (cuenta.estado === null && !cuenta.error))) return null
 
   const pasoTusd: Paso = {
-    titulo: `Consigue ${SIMBOLO} de prueba`,
-    detalle: `Aparecerá una barra con los pasos: activar tu cuenta, aceptar ${SIMBOLO} y pedir ${SIMBOLO} gratis. Son dos clics.`,
+    titulo: 'Consigue dólares de práctica',
+    detalle: 'Aparecerá una barra arriba con los pasos: preparar tu cuenta y recibir dólares de práctica gratis. Son unos clics.',
     hecho: listaCuenta,
     actual: redOk && !listaCuenta,
   }
@@ -56,7 +55,7 @@ export function ComoProbar({ billetera, cuenta }: { billetera: Billetera; cuenta
     },
     {
       titulo: 'Conecta tu billetera',
-      detalle: 'Usa el botón «Conectar billetera» de arriba a la derecha y acepta en Freighter.',
+      detalle: 'Usa el botón «Conectar billetera Stellar» de arriba a la derecha y acepta en Freighter.',
       hecho: conectada,
       actual: billetera.comprobada && billetera.instalada && !conectada,
     },

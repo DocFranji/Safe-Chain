@@ -2,7 +2,7 @@
 // calendario del teléfono o Google Calendar, con un recordatorio el día antes. Ataca la causa más común
 // de la mora: olvidarse. Como el contrato ancla las fechas, no se corren aunque una ronda se cierre tarde.
 // Puro (sin red ni navegador): se prueba solo. Formato: RFC 5545 (iCalendar).
-import { monto } from './formato'
+import { dinero } from './glosario'
 
 export type DatosCalendario = {
   /** Número de la tanda. */
@@ -15,7 +15,6 @@ export type DatosCalendario = {
   /** Cuándo vence la ronda actual (segundos Unix). */
   vence: number
   cuota: bigint
-  simbolo: string
   /** Quién cobra cada ronda: `cobra[r]` es el nombre (o null si todavía no se sabe, como en una subasta). */
   cobra: (string | null)[]
   /** Ronda (0, 1, ...) en la que cobra quien descarga el archivo, o null si no se sabe. */
@@ -33,18 +32,18 @@ export function eventosDePago(d: DatosCalendario, ahora: number): EventoPago[] {
   for (let r = d.rondaActual; r < d.nMiembros; r++) {
     const vence = d.vence + (r - d.rondaActual) * d.periodoSeg
     if (vence <= ahora) continue
-    const cuota = `${monto(d.cuota)} ${d.simbolo}`
+    const cuota = dinero(d.cuota)
     const cobro = d.miRonda === r
     const titulo = cobro
-      ? `Tanda ${d.id}: pagas tu cuota y cobras tu bolsa (ronda ${r + 1} de ${d.nMiembros})`
-      : `Tanda ${d.id}: paga tu cuota de ${cuota} (ronda ${r + 1} de ${d.nMiembros})`
+      ? `Tanda ${d.id}: pagas tu cuota y cobras tu pozo (turno ${r + 1} de ${d.nMiembros})`
+      : `Tanda ${d.id}: paga tu cuota de ${cuota} (turno ${r + 1} de ${d.nMiembros})`
     const quien = d.cobra[r]
     const descripcion = [
       `Tu cuota de ${cuota} vence al terminar este evento: págala antes para que no cuente como atraso.`,
       cobro
-        ? 'Esta ronda cobras tú: cuando venza el plazo, abre la tanda y toca "Tu bolsa está lista: cóbrala".'
+        ? 'Este turno cobras tú: cuando venza el plazo, abre la tanda y toca "Tu pozo está listo: cóbralo".'
         : quien
-          ? `Esta ronda cobra ${quien}.`
+          ? `Este turno cobra ${quien}.`
           : null,
       `Abre la tanda: ${d.enlace}`,
     ]

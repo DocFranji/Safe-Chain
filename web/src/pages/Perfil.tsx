@@ -72,7 +72,7 @@ export function Perfil({ billetera }: { billetera: Billetera }) {
         <p className="explica">
           {google
             ? 'Sales de tu cuenta de Google en este navegador.'
-            : 'Este navegador deja de usar tu cuenta de Freighter hasta que vuelvas a pulsar «Conectar billetera». Para quitarle el permiso a Rounda del todo, hazlo desde Freighter (Configuración → Sitios conectados).'}
+            : 'Este navegador deja de usar tu cuenta de Freighter hasta que vuelvas a pulsar «Conectar billetera Stellar» (o «Ya tengo billetera Stellar»). Para quitarle el permiso a Rounda del todo, hazlo desde Freighter (Configuración → Sitios conectados).'}
         </p>
         <button type="button" className="boton secundario" onClick={() => void billetera.salir()}>
           Cerrar sesión

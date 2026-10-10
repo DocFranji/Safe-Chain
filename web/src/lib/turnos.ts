@@ -62,21 +62,21 @@ export const MODOS: { modo: Modo; titulo: string; lema: string; detalle: string 
     titulo: 'Precio por turno',
     lema: 'Quien tiene prisa paga, quien espera gana',
     detalle:
-      'Cada quien elige su turno al unirse. Los primeros reciben un poco menos y los últimos un poco más: lo que pagan unos lo ganan otros, y el contrato no se queda con nada.',
+      'Cada quien elige su turno al unirse. Los primeros reciben un poco menos y los últimos un poco más: lo que pagan unos lo ganan otros, y Rounda no se queda con nada.',
   },
   {
     modo: 'Subasta',
     titulo: 'Subasta',
-    lema: 'Cada ronda gana quien acepte recibir menos',
+    lema: 'Cada turno gana quien acepte recibir menos',
     detalle:
-      'En cada ronda, quien necesita el dinero ofrece recibir un porcentaje menos de la bolsa. Gana la oferta más alta y ese descuento se reparte entre los demás. Si nadie oferta, cobra el siguiente de un orden sorteado al empezar.',
+      'En cada turno, quien necesita el dinero ofrece recibir un porcentaje menos del pozo. Gana la oferta más alta y ese descuento se reparte entre los demás. Si nadie oferta, cobra el siguiente de un orden sorteado al empezar.',
   },
   {
     modo: 'Sorteo',
     titulo: 'Sorteo',
-    lema: 'El contrato sortea el orden',
+    lema: 'Se sortea el orden',
     detalle:
-      'Cuando se llena la tanda, el contrato sortea quién cobra en cada ronda. Nadie tiene ventaja por llegar antes.',
+      'Cuando se llena la tanda, se sortea quién cobra en cada turno. Nadie tiene ventaja por llegar antes.',
   },
   {
     modo: 'Eleccion',

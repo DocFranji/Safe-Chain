@@ -38,14 +38,14 @@ const MENSAJES: Record<number, string> = {
   2: 'Esa tanda no existe. Revisa el número.',
   3: 'La tanda no está en la etapa correcta para hacer esto.',
   4: 'Revisa los datos de la tanda: algún valor está fuera de los límites.',
-  5: 'Esta billetera ya está en la tanda.',
+  5: 'Ya estás en esta tanda.',
   6: 'La tanda ya está completa.',
-  7: 'Esta billetera no es miembro de la tanda.',
-  8: 'Ya pagaste la cuota de esta ronda.',
-  9: 'La ronda todavía no vence y falta alguien por pagar. Se puede cerrar antes solo si todos pagaron.',
-  10: 'Tienes una deuda pendiente en esta tanda. Págala con «Pagar mi deuda» para volver a pagar tus cuotas.',
+  7: 'Esta cuenta no está en la tanda.',
+  8: 'Ya pagaste la cuota de este turno.',
+  9: 'El turno todavía no vence y falta alguien por pagar. El pozo se puede entregar antes solo si todos pagaron.',
+  10: 'Tienes un pago pendiente en esta tanda. Págalo con «Pagar mi deuda» para volver a pagar tus cuotas.',
   11: 'Tu dirección todavía no está verificada.',
-  12: 'Esta billetera no tiene permiso para hacer esto.',
+  12: 'Esta cuenta no tiene permiso para hacer esto.',
   13: 'El contrato todavía no se ha configurado.',
   // M3: turnos
   30: 'Revisa las opciones de turnos: algún valor está fuera de los límites.',
@@ -54,14 +54,14 @@ const MENSAJES: Record<number, string> = {
   33: 'Alguien ya eligió ese turno. Elige otro.',
   34: 'La oferta debe superar la mejor oferta actual sin pasar del máximo permitido.',
   35: 'Solo puede ofertar quien todavía no tiene turno y está al día.',
-  36: 'En este momento no hay subasta abierta (la ronda ya venció o es la última).',
-  37: 'Ese intercambio no es posible: los dos turnos deben ser futuros y nadie puede estar en mora.',
+  36: 'En este momento no hay subasta abierta (el turno ya venció o es el último).',
+  37: 'Ese intercambio no es posible: los dos turnos deben ser futuros y nadie puede tener pagos pendientes.',
   38: 'Ya tienes una propuesta de intercambio abierta. Retírala antes de hacer otra.',
   39: 'No hay una propuesta de intercambio pendiente entre ustedes.',
   40: 'Ese turno pide un historial con más puntos del que tiene esta cuenta. Elige un turno más adelante o revisa tu historial en tu Perfil.',
-  41: 'No es el momento: las ofertas se sellan en la primera mitad de la ronda y se revelan en la segunda.',
-  42: 'La oferta no coincide con la que sellaste en esta ronda (o no sellaste ninguna). Hay que revelarla desde el mismo navegador.',
-  43: 'Ese sello ya lo usó otra persona en esta ronda. Vuelve a sellar tu oferta.',
+  41: 'No es el momento: las ofertas se sellan en la primera mitad del turno y se revelan en la segunda.',
+  42: 'La oferta no coincide con la que sellaste en este turno (o no sellaste ninguna). Hay que revelarla desde el mismo navegador.',
+  43: 'Ese sello ya lo usó otra persona en este turno. Vuelve a sellar tu oferta.',
   // M1: pagar deudas
   14: 'Esa persona no tiene deuda en esta tanda.',
   15: 'Ese monto es mayor que la deuda. Revisa cuánto falta por pagar.',
@@ -74,13 +74,13 @@ const MENSAJES: Record<number, string> = {
   21: 'Esta tanda pide un puntaje de historial más alto que el tuyo. Revisa tu historial en tu Perfil.',
   22: 'Los requisitos solo se pueden cambiar mientras la tanda está abierta y antes de que se una alguien.',
   // M1 (v4): cerrar la ronda antes
-  60: 'En la subasta la ronda no se puede cerrar antes: las ofertas siguen abiertas hasta que vence.',
-  61: 'Ya se adelantaron varias rondas: la próxima fecha límite quedaría a más de 4 meses. Espera unos días para cerrar esta.',
+  60: 'En la subasta el turno no se puede cerrar antes: las ofertas siguen abiertas hasta que vence.',
+  61: 'Ya se adelantaron varios turnos: la próxima fecha límite quedaría a más de 4 meses. Espera unos días para entregar este pozo.',
   // M4: bóveda por token (contrato de la tanda)
   55: 'Esa moneda todavía no se puede usar en tandas.',
   56: 'Esa bóveda guarda otra moneda: no se puede usar para esta.',
   // M2 v4: bloqueo por deuda
-  65: 'Tienes una deuda pendiente en otra tanda. Págala desde tu Perfil («Mis deudas») para volver a unirte.',
+  65: 'Tienes un pago pendiente en otra tanda. Págalo desde tu Perfil («Mis deudas») para poder unirte.',
   // M4: adaptador de Blend (contrato aparte; sus errores llegan tal cual al firmar)
   50: 'El monto debe ser mayor que cero.',
   51: 'La bóveda no tiene suficiente saldo de esta tanda. Avísanos: no debería pasar.',
@@ -148,15 +148,15 @@ export function traducirError(e: unknown): string {
   }
 
   // Errores del token TUSD: se revisan primero porque también usan "Error(Contract, #N)".
-  if (/trustline/i.test(texto)) return 'Esta cuenta todavía no acepta TUSD. Agrega el activo TUSD en Freighter.'
-  if (/balance is not sufficient|insufficient balance/i.test(texto)) return 'No tienes suficiente TUSD para esta operación.'
+  if (/trustline/i.test(texto)) return 'Tu cuenta todavía no tiene activados los dólares de práctica. Usa el botón «Activar dólares de práctica» de arriba.'
+  if (/balance is not sufficient|insufficient balance/i.test(texto)) return 'No tienes suficientes dólares de práctica. Usa el botón «Recibir más dólares de práctica» de arriba.'
 
   const codigo = texto.match(/Error\(Contract, #(\d+)\)/)
   if (codigo) return MENSAJES[Number(codigo[1])] ?? `El contrato rechazó la operación (código ${codigo[1]}).`
 
-  if (/declin|reject|cancel/i.test(texto)) return 'Cancelaste la firma en Freighter. No se hizo ningún cambio.'
-  if (/account not found|Account not found/i.test(texto)) return 'Tu cuenta todavía no está activada en testnet. Usa el botón «Activar con Friendbot» de la barra de arriba.'
-  if (/failed to fetch|networkerror|network error|timeout|timed out/i.test(texto)) return 'No pudimos conectarnos con la red de Stellar. Revisa tu internet e intenta de nuevo.'
+  if (/declin|reject|cancel/i.test(texto)) return 'Cancelaste la confirmación. No se hizo ningún cambio.'
+  if (/account not found|Account not found/i.test(texto)) return 'Tu cuenta todavía no está preparada. Usa el botón «Preparar mi cuenta» de arriba.'
+  if (/failed to fetch|networkerror|network error|timeout|timed out/i.test(texto)) return 'No pudimos conectarnos. Revisa tu internet e intenta de nuevo.'
   return `No se pudo completar la operación: ${texto.slice(0, 180)}`
 }
 
