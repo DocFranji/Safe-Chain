@@ -14,6 +14,7 @@ import { useEnPantalla } from './movimiento'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY } from '../lib/rutas'
 import { useSesionGoogle } from '../cuentas/sesionGoogle'
+import { BotonModo } from '../components/BotonModo'
 import { bolsa, colateralDeTurno, tablaColateral } from '../lib/colateral'
 import fotoFamilia from '../assets/fotos/familia.webp'
 import abuela from '../assets/fotos/caras/abuela.webp'
@@ -58,8 +59,8 @@ const USOS = ['El aguinaldo', 'El marchamo', 'Los útiles de enero', 'El viaje d
 
 // Los dos ritmos salen de los ejemplos de "Crear" (pages/CrearTanda.tsx), con las reglas del contrato.
 const RITMOS = [
-  { nombre: 'Quincenal × 6', detalle: 'Una ronda cada 15 días · 3 meses', cuota: 50n, n: 6, multa: 5 },
-  { nombre: 'Mensual × 12', detalle: 'Una ronda por mes · 1 año', cuota: 50n, n: 12, multa: 5 },
+  { nombre: 'Quincenal × 6', detalle: 'Un turno cada 15 días · 3 meses', cuota: 50n, n: 6, multa: 5 },
+  { nombre: 'Mensual × 12', detalle: 'Un turno por mes · 1 año', cuota: 50n, n: 12, multa: 5 },
 ]
 const COBERTURA = 10_000
 const EJEMPLO = { cuota: 50n, nMiembros: 6, coberturaBps: COBERTURA }
@@ -105,9 +106,12 @@ export function Landing() {
               Preguntas
             </a>
           </span>
-          <a className="lo-boton azul chico" href={RUTA_LOBBY}>
-            Abrir la app
-          </a>
+          <span className="lo-nav-lado">
+            <BotonModo />
+            <a className="lo-boton azul chico" href={RUTA_LOBBY}>
+              Abrir la app
+            </a>
+          </span>
         </nav>
       </header>
 
@@ -141,19 +145,19 @@ function Heroe({ refHeroe }: { refHeroe: RefObject<HTMLElement | null> }) {
           <Palabras renglones={['La tanda de siempre.', 'Nadie se va con la plata.']} retraso={120} />
         </h1>
         <p className="lo-heroe-sub lo-aparece d2">
-          Todos ponen la misma cuota y, por turnos, uno cobra la bolsa. Un contrato en Stellar hace cumplir las reglas.
+          Todos ponen la misma cuota y, por turnos, uno cobra el pozo. Un contrato en Stellar hace cumplir las reglas.
         </p>
         <EntradaApp clases={{ caja: 'lo-acciones lo-aparece d3', principal: 'lo-boton blanco', google: 'lo-boton blanco', secundario: 'lo-boton vidrio' }} />
       </div>
 
       <div className="lo-escena">
         <Orbitas anillos={ANILLOS_HEROE} className="lo-orbitas-heroe" />
-        <div className="lo-telefono" role="img" aria-label={`Ejemplo en vivo: tanda de 5 personas, ronda ${e.ronda + 1}. Cobra ${e.cobra}.`}>
+        <div className="lo-telefono" role="img" aria-label={`Ejemplo en vivo: tanda de 5 personas, turno ${e.ronda + 1}. Cobra ${e.cobra}.`}>
           <div className="lo-telefono-pantalla" aria-hidden="true">
             <div className="lo-tel-estado">
               <span>9:41</span>
               <span className="lo-tel-isla" />
-              <span>TUSD</span>
+              <span>Práctica</span>
             </div>
             <div className="lo-tel-cabeza">
               <strong>Tanda de la oficina</strong>
@@ -162,7 +166,7 @@ function Heroe({ refHeroe }: { refHeroe: RefObject<HTMLElement | null> }) {
             <RuedaMuestra paso={paso} nota={false} />
             <div className="lo-tel-ronda">
               <strong>
-                Ronda {e.ronda + 1} de {e.n}
+                Turno {e.ronda + 1} de {e.n}
               </strong>
               <span>Cobra {e.cobra}</span>
             </div>
@@ -185,15 +189,15 @@ function Heroe({ refHeroe }: { refHeroe: RefObject<HTMLElement | null> }) {
             <strong key={ultimo + paso} className="lo-flota-cambia">
               {ultimo === 'Tú' ? 'Pagaste' : `${ultimo} pagó`}
             </strong>
-            <small>100 TUSD · ronda {e.ronda + 1}</small>
+            <small>$100 · turno {e.ronda + 1}</small>
           </span>
         </div>
         <div className="lo-flota der" aria-hidden="true">
           <Anillito parte={e.pagaron / e.n} />
           <span>
-            <strong>Bolsa de la ronda</strong>
+            <strong>Pozo del turno</strong>
             <small>
-              {e.pagaron} de {e.n} pagaron · 500 TUSD
+              {e.pagaron} de {e.n} pagaron · $500
             </small>
           </span>
         </div>
@@ -202,8 +206,8 @@ function Heroe({ refHeroe }: { refHeroe: RefObject<HTMLElement | null> }) {
             <Logo tam={16} />
           </span>
           <span>
-            <strong>Tu garantía</strong>
-            <small>Vuelve al final, con rendimiento</small>
+            <strong>Tu depósito</strong>
+            <small>Vuelve al final, con intereses</small>
           </span>
         </div>
       </div>
@@ -217,7 +221,7 @@ function Haz() {
   return (
     <section ref={ref} className="lo-haz-seccion" aria-labelledby="lo-haz-titulo">
       <p id="lo-haz-titulo" className="lo-haz-titulo" data-revelar="blur">
-        Cada ronda, la bolsa le toca a alguien. Para lo que haga falta:
+        Cada turno, el pozo le toca a alguien. Para lo que haga falta:
       </p>
       <div className="lo-haz" aria-hidden="true">
         <div className="lo-haz-linea" />
@@ -254,7 +258,7 @@ function QueEs() {
     <section className="lo-seccion">
       <div className="lo-contenedor lo-que-es">
         <p className="lo-insignia">Qué es Rounda</p>
-        <TextoQueSeLlena texto="Rounda es la tanda de siempre: el grupo pone la misma cuota cada ronda y, por turnos, una persona cobra la bolsa. La diferencia es que las reglas no dependen de la buena fe de nadie. Las cumple un contrato en Stellar que nadie puede cambiar." />
+        <TextoQueSeLlena texto="Rounda es la tanda de siempre: el grupo pone la misma cuota cada turno y, por turnos, una persona cobra el pozo. La diferencia es que las reglas no dependen de la buena fe de nadie. Las cumple un contrato en Stellar que nadie puede cambiar." />
       </div>
     </section>
   )
@@ -281,20 +285,20 @@ const PASOS: { t: string; d: string; nota: string; pantalla: ReactNode }[] = [
     pantalla: <PantallaCrear />,
   },
   {
-    t: 'Deja tu garantía',
+    t: 'Deja tu depósito',
     d: 'Antes de entrar ves cuánto vas a depositar. Quien cobra primero deja más.',
-    nota: 'La garantía vuelve al final',
+    nota: 'El depósito vuelve al final',
     pantalla: <PantallaGarantia />,
   },
   {
-    t: 'Paga cada ronda',
+    t: 'Paga cada turno',
     d: 'Todos ponen la misma cuota. Si te atrasas, pagas una multa que se reparte entre quienes cumplieron.',
     nota: 'Cada pago queda en la red',
     pantalla: <PantallaPagos />,
   },
   {
     t: 'Cobra en tu turno',
-    d: 'Al cerrar la ronda, la bolsa le llega a quien le toca. Al final recuperas tu garantía con rendimiento.',
+    d: 'Al cerrar el turno, el pozo le llega a quien le toca. Al final recuperas tu depósito con intereses.',
     nota: 'El orden lo guarda el contrato',
     pantalla: <PantallaCobro />,
   },
@@ -343,7 +347,7 @@ function PantallaCrear() {
       <dl className="lo-pantalla-filas">
         <div>
           <dt>Cuota</dt>
-          <dd>50 TUSD</dd>
+          <dd>$50</dd>
         </div>
         <div>
           <dt>Personas</dt>
@@ -368,13 +372,13 @@ function PantallaGarantia() {
   const max = Math.max(...tabla)
   return (
     <>
-      <p className="lo-pantalla-titulo">Garantía según tu turno</p>
+      <p className="lo-pantalla-titulo">Depósito según tu turno</p>
       <ul className="lo-pantalla-barras">
         {tabla.map((g, i) => (
           <li key={i} className={i === 0 ? 'primero' : undefined}>
             <span>Turno {i + 1}</span>
             <i style={{ '--w': `${(g / max) * 100}%` } as CSSProperties} />
-            <b>{g} TUSD</b>
+            <b>${g}</b>
           </li>
         ))}
       </ul>
@@ -388,7 +392,7 @@ function PantallaPagos() {
   return (
     <>
       <div className="lo-pantalla-cabeza">
-        <p className="lo-pantalla-titulo">Ronda 3 de 6</p>
+        <p className="lo-pantalla-titulo">Turno 3 de 6</p>
         <Anillito parte={5 / 6} oscuro />
       </div>
       <ul className="lo-pantalla-personas">
@@ -414,8 +418,8 @@ function PantallaCobro() {
       </svg>
       <div>
         <p className="lo-pantalla-titulo">Te toca</p>
-        <p className="lo-pantalla-monto">{b} TUSD</p>
-        <p className="lo-pantalla-nota">La bolsa de la ronda. Tu garantía vuelve al final, con rendimiento.</p>
+        <p className="lo-pantalla-monto">${b}</p>
+        <p className="lo-pantalla-nota">El pozo del turno. Tu depósito vuelve al final, con intereses.</p>
       </div>
     </div>
   )
@@ -438,8 +442,8 @@ function Seguridad() {
         <div className="lo-bento">
           <article className="lo-pieza ancha" data-revelar="blur">
             <h3>Quien cobra primero, deja más</h3>
-            <p>La garantía baja turno a turno. Irse después de cobrar cuesta más de lo que se gana.</p>
-            <div className="lo-barras" aria-label="Garantía por turno en una tanda de 5 personas con cuota de 100 TUSD">
+            <p>El depósito baja turno a turno. Irse después de cobrar cuesta más de lo que se gana.</p>
+            <div className="lo-barras" aria-label="Depósito por turno en una tanda de 5 personas con cuota de $100">
               {tabla.map((g, i) => (
                 <div key={i} className="lo-barra-col">
                   <b>{g}</b>
@@ -454,9 +458,9 @@ function Seguridad() {
             <p>Los pagos quedan en la red de Stellar. Cualquiera del grupo puede revisarlos.</p>
             <div className="lo-recibos" aria-hidden="true">
               {[
-                ['Carla pagó', '100 TUSD · ronda 2', nieta],
-                ['Beto pagó', '100 TUSD · ronda 2', oficina1],
-                ['Ana pagó', '105 TUSD · con multa', vecina],
+                ['Carla pagó', '$100 · turno 2', nieta],
+                ['Beto pagó', '$100 · turno 2', oficina1],
+                ['Ana pagó', '$105 · con multa', vecina],
               ].map(([t, d, c], i) => (
                 <div key={t} className="lo-recibo" style={{ '--k': i } as CSSProperties}>
                   <img src={c} alt="" width={30} height={30} loading="lazy" decoding="async" />
@@ -471,7 +475,7 @@ function Seguridad() {
           </article>
           <article className="lo-pieza" data-revelar="blur">
             <h3>Si alguien falla, el grupo no pierde</h3>
-            <p>Su garantía cubre la cuota que falta y la bolsa llega completa a quien le toca.</p>
+            <p>Su depósito cubre la cuota que falta y el pozo llega completo a quien le toca.</p>
             <div ref={refPulso} className="lo-pulso" aria-hidden="true">
               <span className="lo-pulso-onda" />
               <span className="lo-pulso-onda" />
@@ -486,8 +490,8 @@ function Seguridad() {
             </div>
           </article>
           <article className="lo-pieza ancha" data-revelar="blur" data-retraso="100">
-            <h3>Tu garantía gana rendimiento</h3>
-            <p>Mientras esperas tu turno, la garantía queda en una bóveda que genera rendimiento. Con TUSD es simulado para la demo; con USDC es real, en Blend.</p>
+            <h3>Tu depósito gana intereses</h3>
+            <p>Mientras esperas tu turno, el depósito queda en una bóveda que genera intereses. Con dólares de práctica los intereses son simulados; con USDC de prueba son reales, en Blend.</p>
             <div className="lo-rinde" aria-hidden="true">
               <svg viewBox="0 0 160 160" className="lo-rinde-anillo">
                 <circle cx="80" cy="80" r="68" className="pista" />
@@ -498,9 +502,9 @@ function Seguridad() {
               </svg>
               <div className="lo-rinde-texto">
                 <strong>
-                  {Number(colateralDeTurno(EJEMPLO, 0))} TUSD
+                  ${Number(colateralDeTurno(EJEMPLO, 0))}
                 </strong>
-                <span>garantía del turno 1, rindiendo mientras esperas</span>
+                <span>depósito del turno 1, rindiendo mientras esperas</span>
               </div>
             </div>
           </article>
@@ -532,7 +536,7 @@ function LaGente() {
           <img src={fotoFamilia} alt="Una abuela y su nieta miran un celular en la mesa de la cocina." width={640} height={640} loading="lazy" decoding="async" />
           <figcaption>Foto ilustrativa hecha con IA.</figcaption>
         </figure>
-        <Dato valor={100} sufijo=" %" texto="de tu garantía vuelve al final si cumples" />
+        <Dato valor={100} sufijo=" %" texto="de tu depósito vuelve al final si cumples" />
         <Dato valor={0} texto={google ? 'contraseñas que recordar: entras con Google o con Freighter' : 'contraseñas que recordar: entras con Freighter'} />
       </div>
     </section>
@@ -574,13 +578,13 @@ function Ritmos() {
                 <p className="lo-ritmo-nombre">{r.nombre}</p>
                 <p className="lo-ritmo-detalle">{r.detalle}</p>
                 <p className="lo-ritmo-monto">
-                  <strong>{Number(bolsa(p))}</strong> TUSD de bolsa
+                  <strong>${Number(bolsa(p))}</strong> de pozo
                 </p>
                 <ul>
-                  <li>Cuota de {Number(r.cuota)} TUSD</li>
+                  <li>Cuota de ${Number(r.cuota)}</li>
                   <li>{r.n} personas</li>
-                  <li>Garantía del primer turno: {Number(colateralDeTurno(p, 0))} TUSD</li>
-                  <li>Garantía del último turno: {Number(colateralDeTurno(p, r.n - 1))} TUSD</li>
+                  <li>Depósito del primer turno: ${Number(colateralDeTurno(p, 0))}</li>
+                  <li>Depósito del último turno: ${Number(colateralDeTurno(p, r.n - 1))}</li>
                   <li>Multa por atraso: {r.multa} %</li>
                 </ul>
                 <a className={i === 0 ? 'lo-boton blanco ancho' : 'lo-boton azul ancho'} href={RUTA_CREAR}>
@@ -601,15 +605,15 @@ function Preguntas() {
   const lista = [
     {
       p: '¿Qué es una tanda?',
-      r: 'Un grupo pone la misma cuota cada ronda y, por turnos, una persona se lleva toda la bolsa. Al final, todos pusieron lo mismo y todos cobraron una vez.',
+      r: 'Un grupo pone la misma cuota cada turno y, por turnos, una persona se lleva todo el pozo. Al final, todos pusieron lo mismo y todos cobraron una vez.',
     },
     {
       p: '¿Qué pasa si alguien deja de pagar?',
-      r: 'Su garantía cubre la cuota que falta, así que la bolsa llega completa a quien le toca. Por eso quien cobra primero deja más garantía.',
+      r: 'Su depósito cubre la cuota que falta, así que el pozo llega completo a quien le toca. Por eso quien cobra primero deja más depósito.',
     },
     {
-      p: '¿De dónde sale el rendimiento?',
-      r: 'Mientras esperas tu turno, la garantía queda en una bóveda que genera rendimiento. Con TUSD es simulado y acelerado para la demo; con USDC es real, en Blend.',
+      p: '¿De dónde salen los intereses?',
+      r: 'Mientras esperas tu turno, el depósito queda en una bóveda que genera intereses. Con dólares de práctica los intereses son simulados (y acelerados para la demo); con USDC de prueba son reales, en Blend.',
     },
     {
       p: '¿Necesito saber de cripto?',
@@ -621,7 +625,7 @@ function Preguntas() {
       p: '¿Es dinero real?',
       r: 'No. Todo corre en la red de pruebas de Stellar con dinero de prueba, que se pide gratis dentro de la app.',
     },
-    { p: '¿Cuántas personas pueden entrar?', r: 'De 3 a 12 por tanda. Cada persona es un turno: una tanda de 6 personas dura 6 rondas.' },
+    { p: '¿Cuántas personas pueden entrar?', r: 'De 3 a 12 por tanda. Cada persona es un turno: una tanda de 6 personas dura 6 turnos.' },
   ]
   const [abierta, setAbierta] = useState(0)
   return (
@@ -667,7 +671,7 @@ function Cierre() {
         <p className="lo-cierre-texto">
           {google
             ? 'Entras con tu cuenta de Google y te creamos una billetera de prueba. Si ya usas Freighter, también sirve.'
-            : 'Necesitas Freighter, la billetera de Stellar para el navegador, puesta en Testnet. Los TUSD de prueba se piden gratis dentro de la app.'}
+            : 'Necesitas Freighter, la billetera de Stellar para el navegador, puesta en Testnet. Los dólares de práctica se reciben gratis dentro de la app.'}
         </p>
         <div className="lo-acciones">
           <a className="lo-boton blanco" href={RUTA_LOBBY}>

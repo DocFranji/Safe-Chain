@@ -1,34 +1,45 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
-          }
-        ]
-      }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(cargo test:*)",
-      "Bash(cargo fmt:*)",
-      "Bash(cargo clippy:*)",
-      "Bash(cargo build:*)",
-      "Bash(stellar contract build:*)",
-      "Bash(bash scripts/generar_cliente.sh:*)",
-      "Bash(bash scripts/preparar_entorno.sh:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm run build:*)",
-      "Bash(npm test:*)",
-      "Bash(npm ci:*)",
-      "Bash(npm install:*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git fetch:*)"
-    ]
-  }
+    "hooks":  {
+                  "SessionStart":  [
+                                       {
+                                           "hooks":  [
+                                                         {
+                                                             "type":  "command",
+                                                             "command":  "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+              },
+    "permissions":  {
+                        "allow":  [
+                                      "Bash(cargo test:*)",
+                                      "Bash(cargo fmt:*)",
+                                      "Bash(cargo clippy:*)",
+                                      "Bash(cargo build:*)",
+                                      "Bash(stellar contract build:*)",
+                                      "Bash(bash scripts/generar_cliente.sh:*)",
+                                      "Bash(bash scripts/preparar_entorno.sh:*)",
+                                      "Bash(npm run lint:*)",
+                                      "Bash(npm run build:*)",
+                                      "Bash(npm test:*)",
+                                      "Bash(npm ci:*)",
+                                      "Bash(npm install:*)",
+                                      "Bash(git status:*)",
+                                      "Bash(git diff:*)",
+                                      "Bash(git log:*)",
+                                      "Bash(git fetch:*)"
+                                  ]
+                    },
+    "extraKnownMarketplaces":  {
+                                   "understand-anything":  {
+                                                               "source":  {
+                                                                              "source":  "github",
+                                                                              "repo":  "Egonex-AI/Understand-Anything"
+                                                                          }
+                                                           }
+                               },
+    "enabledPlugins":  {
+                           "understand-anything@understand-anything":  true
+                       }
 }

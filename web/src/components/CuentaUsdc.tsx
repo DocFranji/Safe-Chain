@@ -71,7 +71,9 @@ export function CuentaUsdc({ direccion, conGoogle }: { direccion: string; conGoo
           <span className="sub">(de prueba, para tandas con rendimiento real en Blend)</span>
         </p>
       ) : (
-        <>
+        // UX: no es parte del camino principal (crear, unirse, pagar): queda plegado.
+        <details className="cuenta-usdc-mas">
+          <summary>Tandas con intereses reales (Blend)</summary>
           <p className="explica">
             ¿Quieres probar una tanda con <strong>rendimiento real en Blend</strong>? Recibe 1 000 USDC de prueba con
             una sola firma: tu cuenta acepta USDC y Blend te los envía.
@@ -81,7 +83,7 @@ export function CuentaUsdc({ direccion, conGoogle }: { direccion: string; conGoo
               Recibir USDC de prueba
             </button>
           )}
-        </>
+        </details>
       )}
       {aviso && (
         <p className={`aviso ${aviso.tipo}`} role="status" aria-live="polite">

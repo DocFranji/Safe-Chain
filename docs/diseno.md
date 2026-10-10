@@ -37,8 +37,10 @@ formato DESIGN.md de Google; `npx @google/design.md lint DESIGN.md` da 0 errores
 - **La app:** barra marina con el logo en blanco y una línea azul que brilla; piezas blancas redondeadas con sombras
   en capas; botones, etiquetas y filtros en píldora; la rueda con lo pagado en azul y el punto del logo, en ámbar,
   junto a quien cobra; Geist en peso medio para todo.
-- **Modo oscuro:** sigue al teléfono o la computadora; `?modo=claro|oscuro` antes del `#` lo fija (para grabar el
-  video). La demo va siempre en oscuro porque se proyecta. Ver `web/src/lib/apariencia.ts`.
+- **Modo oscuro:** arranca como el teléfono o la computadora. El botón redondo de la barra (en la portada y en la app)
+  lo cambia, y la elección queda guardada en ese navegador (`rounda:modo`). `?modo=claro|oscuro` antes del `#` manda
+  sobre todo (para grabar el video). La demo va siempre en oscuro porque se proyecta, así que ahí no hay botón. Ver
+  `web/src/lib/apariencia.ts` y `web/src/components/BotonModo.tsx`.
 
 ## Dónde está
 
@@ -53,6 +55,7 @@ formato DESIGN.md de Google; `npx @google/design.md lint DESIGN.md` da 0 errores
 | La tanda de ejemplo que comparten la rueda y el celular | `web/src/landing/muestra.ts` y `RuedaMuestra.tsx` |
 | La rueda | `web/src/components/RuedaOrbita.tsx` (el modelo en `web/src/lib/rueda.ts`) |
 | Modo claro u oscuro y letras | `web/src/lib/apariencia.ts` |
+| El botón de modo de las dos barras | `web/src/components/BotonModo.tsx` |
 
 ## Movimiento
 
@@ -68,6 +71,7 @@ formato DESIGN.md de Google; `npx @google/design.md lint DESIGN.md` da 0 errores
 | La gente | Dos anillos de caras giran alrededor del título; las cifras cuentan desde cero; un punto recorre la foto en círculo | La gente detrás de cada tanda |
 | Preguntas | Se abren con altura animada; el + gira y se vuelve × | Leer sin saltos |
 | Cierre | Anillos con caras detrás del título | Volver a la ronda al final |
+| Botón de modo | El círculo lleno a medias gira media vuelta (500 ms) | Mostrar el cambio de claro a oscuro |
 | App, al entrar | La línea azul de la barra se traza (una vez: la barra no se vuelve a dibujar al cambiar de página) | La marca |
 | Lista de tandas | Los lugares ocupados se llenan uno tras otro (35 ms entre uno y otro) | Ver cuánto falta para arrancar |
 

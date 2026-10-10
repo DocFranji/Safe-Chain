@@ -1,10 +1,9 @@
 // Nota de historial junto al botón de unirse (misión M2): qué pide esta tanda y, si da descuento,
-// cuánto baja tu garantía por tu nivel. No dice nada si la tanda no usa el historial.
+// cuánto baja tu depósito por tu nivel. No dice nada si la tanda no usa el historial.
 import { useHistorialCacheado } from '../hooks/useHistorial'
 import { nivelDePuntaje, puntajeDe, tieneMoraPendiente } from '../lib/historial'
-import { monto } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { RUTA_PERFIL } from '../lib/rutas'
-import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   yo: string | null
@@ -15,7 +14,6 @@ type Props = {
 }
 
 export function NotaHistorial({ yo, requisitos, normal, conDescuento }: Props) {
-  const SIMBOLO = useSimbolo()
   const h = useHistorialCacheado(yo ?? '')
   // (v4, N2) Con una deuda abierta en cualquier tanda no se puede unir: se avisa antes de firmar.
   if (yo && h && tieneMoraPendiente(h)) {
@@ -37,20 +35,20 @@ export function NotaHistorial({ yo, requisitos, normal, conDescuento }: Props) {
     <div className="nota-historial">
       {requisitos.puntaje_minimo > 0 && (
         <p className={noAlcanza ? 'aviso nota' : 'explica'}>
-          Esta tanda pide historial {nivelDePuntaje(requisitos.puntaje_minimo)} o mejor ({requisitos.puntaje_minimo}{' '}
+          Esta tanda pide una reputación {nivelDePuntaje(requisitos.puntaje_minimo)} o mejor ({requisitos.puntaje_minimo}{' '}
           puntos).
           {puntaje !== null && (noAlcanza ? ` Tienes ${puntaje}: todavía no puedes unirte.` : ` Tienes ${puntaje}: puedes entrar.`)}{' '}
-          <a href={RUTA_PERFIL}>Ver mi historial</a>
+          <a href={RUTA_PERFIL}>Ver mi reputación</a>
         </p>
       )}
       {requisitos.descuento &&
         (conDescuento !== null && conDescuento < normal ? (
           <p className="aviso listo">
-            Por tu historial {nivel}, tu garantía baja de {monto(normal)} a {monto(conDescuento)} {SIMBOLO}.
+            Por tu reputación {nivel}, tu depósito baja de {dinero(normal)} a {dinero(conDescuento)}.
           </p>
         ) : (
           <p className="explica">
-            Esta tanda da descuento de garantía por buen historial (desde nivel Bronce).
+            Esta tanda da descuento en el depósito por buena reputación (desde nivel Bronce).
           </p>
         ))}
     </div>

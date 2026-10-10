@@ -1,39 +1,52 @@
-// Botones para entrar cuando todavía no hay billetera: con Google (si está configurado) o con Freighter.
+// Botones para entrar cuando todavía no hay cuenta. "Entrar con Google" es el principal (si está configurado);
+// Freighter queda como "Ya tengo billetera Stellar", para quien ya la usa.
 // Se usan en el encabezado (chico), en "Crear tanda" y en el panel de cada tanda.
 import type { Billetera } from '../hooks/useBilletera'
 
-export function BotonesEntrar({ billetera, chico = false }: { billetera: Billetera; chico?: boolean }) {
+type Props = {
+  billetera: Billetera
+  chico?: boolean
+  /** Texto del botón de Google, por ejemplo "Entrar con Google y unirme". */
+  textoGoogle?: string
+}
+
+export function BotonesEntrar({ billetera, chico = false, textoGoogle = 'Entrar con Google' }: Props) {
   const { google } = billetera
-  const clase = chico ? 'boton chico' : 'boton principal'
-  const claseFreighter = google ? (chico ? 'boton chico' : 'boton') : clase
 
   if (google?.conectada && !google.direccion) {
     return (
       <span className="explica" role="status">
-        {google.creandoBilletera ? 'Creando tu billetera…' : (google.error ?? 'Preparando tu cuenta…')}
+        {google.creandoBilletera ? 'Creando tu cuenta…' : (google.error ?? 'Preparando tu cuenta…')}
       </span>
     )
   }
 
-  const freighter = billetera.instalada ? (
-    <button type="button" className={claseFreighter} onClick={billetera.conectar}>
-      {google ? 'Usar Freighter' : 'Conectar billetera'}
-    </button>
-  ) : (
-    <a className={claseFreighter} href="https://freighter.app" target="_blank" rel="noreferrer">
-      Instalar Freighter
-    </a>
-  )
+  // Sin Google configurado, Freighter es la única forma de entrar: va como botón principal.
+  if (!google) {
+    const clase = chico ? 'boton chico' : 'boton principal'
+    return billetera.instalada ? (
+      <button type="button" className={clase} onClick={billetera.conectar}>
+        Conectar billetera Stellar
+      </button>
+    ) : (
+      <a className={clase} href="https://freighter.app" target="_blank" rel="noreferrer">
+        Instalar Freighter
+      </a>
+    )
+  }
 
-  if (!google) return freighter
+  const yaTengo = billetera.instalada ? (
+    <button type="button" className="enlace-boton" onClick={billetera.conectar}>
+      Ya tengo billetera Stellar
+    </button>
+  ) : null
 
   return (
-    <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-      <button type="button" className={clase} onClick={google.entrar} disabled={!google.lista}>
-        Entrar con Google
+    <span className={chico ? 'entrar entrar-chico' : 'entrar'}>
+      <button type="button" className={chico ? 'boton chico' : 'boton principal grande'} onClick={google.entrar} disabled={!google.lista}>
+        {textoGoogle}
       </button>
-      {/* Sin Freighter instalada no ofrecemos instalarla aquí: con Google basta. */}
-      {billetera.instalada && freighter}
+      {yaTengo}
     </span>
   )
 }

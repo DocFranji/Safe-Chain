@@ -1,13 +1,13 @@
 // Cerrar la ronda cuando vence (misión M1, opción C del "cerrador automático"). Cualquiera puede cerrarla,
-// pero a quien le toca cobrar se le muestra como lo que es para esa persona: "Tu bolsa está lista: cóbrala".
+// pero a quien le toca cobrar se le muestra como lo que es para esa persona: "Tu pozo está listo: cóbralo".
 // Así no hace falta que alguien se acuerde de cerrar: quien cobra es quien más ganas tiene de hacerlo.
 // Antes de firmar dice también si la bolsa sale incompleta porque a alguien no le alcanza la garantía.
 // (M1 v4) Si todos pagaron, se puede cerrar antes de que venza: "Todos pagaron: cerrar ya y pagarle a Carla".
 import type { MiembroConDireccion } from '../lib/lectura'
 import { faltantesAlCerrar } from '../lib/deudas'
-import { cuando, monto } from '../lib/formato'
+import { cuando } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
-import { useSimbolo } from '../hooks/useMoneda'
 
 type Props = {
   miembros: MiembroConDireccion[]
@@ -24,6 +24,8 @@ type Props = {
   ahora?: number
   /** Firma `cerrar_ronda` y, al terminar, muestra `textoListo`. */
   cerrar: (textoListo: string) => void
+  /** (UX) true si entregar el pozo es lo principal para quien mira (ya pagó o no participa). */
+  principal?: boolean
 }
 
 /** "Ana", "Ana y Beto", "Ana, Beto y Carla". */
@@ -43,8 +45,8 @@ export function CerrarRonda({
   siguienteVence,
   ahora,
   cerrar,
+  principal = false,
 }: Props) {
-  const SIMBOLO = useSimbolo()
   const soyYo = beneficiario !== undefined && beneficiario.direccion === yo
   const nombre = beneficiario ? nombreDe(beneficiario.direccion) : null
   const retenida = beneficiario?.moroso === true
@@ -56,39 +58,39 @@ export function CerrarRonda({
   const deben = soyYo ? `te ${quedan} debiendo` : `le ${quedan} debiendo a ${nombre ?? 'quien cobra'}`
   const cobertura =
     pagaron.length >= miembros.length
-      ? 'Todos pagaron: la bolsa sale completa.'
+      ? 'Todos pagaron: el pozo sale completo.'
       : faltan.length === 0
-        ? 'A quien no pagó, su garantía le cubre la cuota, así que la bolsa sale completa.'
-        : `A ${nombres(faltan.map((f) => f.direccion))} no ${varios ? 'les' : 'le'} alcanza la garantía: la bolsa sale con ${monto(total)} ${SIMBOLO} menos, que ${deben} y ${varios ? 'pueden' : 'puede'} pagar después.`
+        ? 'A quien no pagó, su depósito de seguridad le cubre la cuota, así que el pozo sale completo.'
+        : `A ${nombres(faltan.map((f) => f.direccion))} no ${varios ? 'les' : 'le'} alcanza el depósito: el pozo sale con ${dinero(total)} menos, que ${deben} y ${varios ? 'pueden' : 'puede'} pagar después.`
 
   if (antes) {
     const fechas =
       siguienteVence !== undefined
-        ? `Las fechas no cambian: la próxima ronda ya se puede pagar y vence ${cuando(siguienteVence, ahora ?? siguienteVence)}.`
+        ? `Las fechas no cambian: el próximo turno ya se puede pagar y vence ${cuando(siguienteVence, ahora ?? siguienteVence)}.`
         : 'Las fechas no cambian.'
     return (
       <>
         <button
-          className={soyYo ? 'boton principal' : 'boton secundario'}
+          className={soyYo || principal ? 'boton principal' : 'boton secundario'}
           disabled={ocupado}
           onClick={() =>
             cerrar(
               soyYo
-                ? 'Listo: cobraste tu bolsa.'
+                ? 'Listo: cobraste tu pozo.'
                 : nombre
-                  ? `Listo: la ronda se cerró y ${nombre} recibió la bolsa.`
-                  : 'Listo: la ronda se cerró.',
+                  ? `Listo: ${nombre} recibió el pozo.`
+                  : 'Listo: el turno terminó.',
             )
           }
         >
           {soyYo
-            ? 'Todos pagaron: cobra tu bolsa ya'
+            ? 'Todos pagaron: cobra tu pozo ya'
             : nombre
-              ? `Todos pagaron: cerrar ya y pagarle a ${nombre}`
-              : 'Todos pagaron: cerrar la ronda ya'}
+              ? `Todos pagaron: entregarle el pozo a ${nombre}`
+              : 'Todos pagaron: pasar al siguiente turno'}
         </button>
         <p className="explica">
-          No hace falta esperar a que venza{soyYo ? '' : ': cualquier persona puede cerrarla'}. {fechas}
+          No hace falta esperar a la fecha límite{soyYo ? '' : ': cualquier persona del grupo puede hacerlo'}. {fechas}
         </p>
       </>
     )
@@ -97,11 +99,11 @@ export function CerrarRonda({
   if (soyYo && !retenida) {
     return (
       <>
-        <button className="boton principal" disabled={ocupado} onClick={() => cerrar('Listo: cobraste tu bolsa.')}>
-          Tu bolsa está lista: cóbrala
+        <button className="boton principal" disabled={ocupado} onClick={() => cerrar('Listo: cobraste tu pozo.')}>
+          Tu pozo está listo: cóbralo
         </button>
         <p className="explica">
-          El plazo de esta ronda ya venció. Al cobrarla se cierra la ronda y empieza la siguiente. {cobertura}
+          El plazo de este turno ya venció. Al cobrar, empieza el turno siguiente. {cobertura}
         </p>
       </>
     )
@@ -110,24 +112,24 @@ export function CerrarRonda({
   return (
     <>
       <button
-        className="boton secundario"
+        className={principal && !retenida ? 'boton principal' : 'boton secundario'}
         disabled={ocupado}
         onClick={() =>
           cerrar(
             nombre && !retenida
-              ? `Listo: la ronda se cerró y ${nombre} recibió la bolsa.`
-              : 'Listo: la ronda se cerró.',
+              ? `Listo: ${nombre} recibió el pozo.`
+              : 'Listo: el turno terminó.',
           )
         }
       >
-        {nombre && !retenida ? `Cerrar la ronda y pagarle a ${nombre}` : 'Cerrar la ronda'}
+        {nombre && !retenida ? `Entregarle el pozo a ${nombre}` : 'Pasar al siguiente turno'}
       </button>
       <p className="explica">
-        Cualquier persona puede cerrar la ronda.{' '}
+        El turno terminó y cualquier persona del grupo puede hacer este paso.{' '}
         {retenida
           ? soyYo
-            ? 'Tu bolsa queda retenida hasta que saldes tu deuda: al pagarla, la recuperas.'
-            : `La bolsa de ${nombre} queda retenida hasta que salde su deuda.`
+            ? 'Tu pozo queda guardado hasta que te pongas al día: al pagar lo que debes, lo recuperas.'
+            : `El pozo de ${nombre} queda guardado hasta que se ponga al día.`
           : cobertura}
       </p>
     </>

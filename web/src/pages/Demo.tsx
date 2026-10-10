@@ -11,11 +11,11 @@ import { Rendimiento } from '../components/Rendimiento'
 import { Resultados } from '../components/Resultados'
 import { Mensaje } from '../components/Mensaje'
 import { elegirTanda, fraccionGarantia, reloj } from '../lib/demo'
-import { claseEstado, etiquetaEstado, monto } from '../lib/formato'
+import { claseEstado, etiquetaEstado } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
 import { RUTA_CREAR, RUTA_LOBBY, rutaDemo } from '../lib/rutas'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
-import { monedaDe } from '../lib/monedas'
 
 export function Demo({ idFijo }: { idFijo: number | null }) {
   return idFijo !== null ? <DemoTanda key={idFijo} id={idFijo} fijada /> : <DemoAutomatica />
@@ -113,7 +113,6 @@ function DemoTanda({ id, fijada }: { id: number; fijada: boolean }) {
 /** El bloque grande de la derecha: qué toca ahora, con la cuenta regresiva. */
 function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
   const { tanda, miembros, vence } = datos
-  const SIMBOLO = monedaDe(tanda.token).simbolo
   const n = tanda.n_miembros
   const restante = vence - ahora
   const beneficiario = miembros.find((m) => m.posicion === tanda.ronda_actual)
@@ -138,10 +137,10 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
       return (
         <div className="demo-ahora">
           <p className="demo-sub">
-            Ronda {tanda.ronda_actual + 1} de {n}
+            Turno {tanda.ronda_actual + 1} de {n}
           </p>
           <p className={vencida ? 'demo-reloj alerta' : 'demo-reloj'}>{vencida ? 'Plazo vencido' : reloj(restante)}</p>
-          <p className="demo-sub">{vencida ? 'Falta cerrar la ronda' : 'para que venza el plazo'}</p>
+          <p className="demo-sub">{vencida ? 'Falta entregar el pozo' : 'para que venza el plazo'}</p>
           <p className="demo-cobra">
             Cobra{' '}
             <strong>
@@ -151,9 +150,9 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
                   ? 'quien gane la subasta'
                   : '-'}
             </strong>{' '}
-            · bolsa de{' '}
+            · pozo de{' '}
             <strong>
-              {monto(bolsa)} {SIMBOLO}
+              {dinero(bolsa)}
             </strong>
           </p>
         </div>
@@ -162,7 +161,7 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
     case 'PorLiquidar':
       return (
         <div className="demo-ahora">
-          <p className="demo-grande">Rondas listas</p>
+          <p className="demo-grande">Turnos listos</p>
           <p className="demo-sub">Falta repartir el dinero final</p>
         </div>
       )
@@ -177,7 +176,7 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
       return (
         <div className="demo-ahora">
           <p className="demo-grande">Cancelada</p>
-          <p className="demo-sub">Se devolvieron las garantías</p>
+          <p className="demo-sub">Se devolvieron los depósitos</p>
         </div>
       )
   }
@@ -186,7 +185,6 @@ function Ahora({ datos, ahora }: { datos: DatosTanda; ahora: number }) {
 /** Una tarjeta por persona: quién es, si ya pagó y cuánto le queda de garantía. */
 function Personas({ datos }: { datos: DatosTanda }) {
   const { tanda, miembros, pagaron } = datos
-  const SIMBOLO = monedaDe(tanda.token).simbolo
   const estado = tanda.estado.tag
   const activa = estado === 'Activa'
   const verGarantia = estado === 'Abierta' || activa || estado === 'PorLiquidar'
@@ -231,8 +229,8 @@ function Personas({ datos }: { datos: DatosTanda }) {
                 </span>
                 <span className="sub">
                   {m.colateral > m.colateral_inicial
-                    ? `Garantía: ${monto(m.colateral)} ${SIMBOLO} (con dividendos de la subasta)`
-                    : `Garantía: ${monto(m.colateral)} de ${monto(m.colateral_inicial)} ${SIMBOLO}`}
+                    ? `Depósito: ${dinero(m.colateral)} (con dividendos de la subasta)`
+                    : `Depósito: ${dinero(m.colateral)} de ${dinero(m.colateral_inicial)}`}
                 </span>
               </div>
             )}

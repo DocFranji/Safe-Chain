@@ -7,7 +7,7 @@ import * as SDK from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 const { xdr, StrKey, nativeToScVal, TransactionBuilder, Address, scValToNative, SorobanDataBuilder } = SDK
 
 export const PASS = 'Test SDF Network ; September 2015'
-export const TANDA_ID = 'CADFZFJDRFSM4WT6VO3F4IXM2Z4ZKKD3VLOELAMJMUFDCXZ2I2E3BYMC'
+export const TANDA_ID = 'CAUT2PXKDEKE4ZWNXULA23SYRCK25FLQBXO3IV2HYVVY5JIKVKXURQ2Q'
 export const TOKEN_ID = 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ5'
 export const BOVEDA_ID = StrKey.encodeContract(Buffer.alloc(32, 7))
 /** M1: bóveda "real" (sin acelerar) para tandas de días, semanas o meses. La de arriba es la rápida. */

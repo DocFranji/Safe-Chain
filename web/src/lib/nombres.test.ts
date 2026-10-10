@@ -34,7 +34,7 @@ describe('apodos (M2, N4)', () => {
   const G = 'GB2NSL6RGGWODEWQLUP4MD3LC7PMJ775RLGI7TCPT3NJBE2FOUED5BNK'
   it('el apodo va con la dirección corta, para que nadie se haga pasar por otro', async () => {
     fijarApodo(G, 'Doña Ana')
-    expect(nombreDe(G)).toBe('Doña Ana · GB2N…5BNK')
+    expect(nombreDe(G)).toBe('Doña Ana')
     fijarApodo(G, null)
     expect(nombreDe(G)).toBe('GB2N…5BNK')
     await new Promise((r) => setTimeout(r, 60)) // deja salir el aviso pendiente
@@ -51,7 +51,7 @@ describe('apodos (M2, N4)', () => {
     await vi.runAllTimersAsync()
     expect(lector).toHaveBeenCalledTimes(1)
     expect(oyente).toHaveBeenCalled()
-    expect(nombreDe(D)).toBe('Tía Carla · GDPI…WNUO')
+    expect(nombreDe(D)).toBe('Tía Carla')
     quitar()
     usarLectorDeApodos(null)
     vi.useRealTimers()

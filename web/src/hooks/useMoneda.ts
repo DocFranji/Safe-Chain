@@ -55,5 +55,5 @@ export function useSaldoEn(moneda: Moneda, direccion: string | null, saldoTusd: 
 
 /** Cómo conseguir más de esta moneda (el botón de la barra de la cuenta). */
 export function comoConseguir(moneda: Moneda): string {
-  return moneda.real ? 'Usa el botón "Recibir USDC de prueba" de arriba' : `Usa el botón "Pedir ${moneda.simbolo} de prueba" de arriba`
+  return moneda.real ? 'Usa el botón "Recibir USDC de prueba" de arriba' : 'Usa el botón "Recibir más dólares de práctica" de arriba'
 }
