@@ -411,7 +411,7 @@ fn sorteo_moroso_antes_de_su_turno_pierde_su_bolsa() {
     }
     let m = c.miembro(id, &ultimo);
     assert!(m.moroso && !m.cobro);
-    assert_eq!(m.deuda, 300 * U); // las tres cuotas: su garantía (una) no alcanza y no se usa mientras la tanda sigue
+    assert_eq!(m.deuda, 200 * U); // las cuotas de las rondas 2 y 3 que su garantía no cubrió
     assert_eq!(c.tanda.get_tanda(&id).retenido, 200 * U);
     c.al_final(id, &gente);
     assert_eq!(c.saldo(&ultimo), SALDO_INICIAL - CUOTA); // pierde su garantía
@@ -541,15 +541,13 @@ fn precio_por_turno_con_moroso_el_fondo_cuadra() {
     c.tanda.unirse_en_turno(&id, &c.beto, &1);
     c.tanda.unirse_en_turno(&id, &c.carla, &2);
     let cumplen = [c.ana.clone(), c.beto.clone()];
-    // Ronda 1: Carla no paga y su garantía (una cuota) no alcanza para las 3: cae en mora. Ana cobra
-    // 200 − 30 de prima.
+    // Ronda 1: Carla no paga (su garantía cubre). Ana cobra 300 − 30 de prima.
     let ana0 = c.saldo(&c.ana);
     c.pagan_todos(id, &cumplen);
     c.cerrar(id);
-    assert_eq!(c.saldo(&c.ana), ana0 - CUOTA + 170 * U);
+    assert_eq!(c.saldo(&c.ana), ana0 - CUOTA + 270 * U);
     assert_eq!(c.tanda.get_estado_turnos(&id).fondo_primas, 30 * U);
-    assert!(c.miembro(id, &c.carla).moroso);
-    // Ronda 2: sigue sin pagar: Beto cobra 200.
+    // Ronda 2: Carla no paga y cae en mora: Beto cobra 200.
     c.pagan_todos(id, &cumplen);
     c.cerrar(id);
     assert!(c.miembro(id, &c.carla).moroso);

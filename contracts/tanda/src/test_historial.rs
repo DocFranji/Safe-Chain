@@ -252,7 +252,8 @@ fn dos_tandas_no_se_mezclan() {
     let gente = [c.ana.clone(), c.beto.clone(), c.carla.clone()];
     let uno = c.crear_y_llenar(10_000);
     let dos = c.crear_y_llenar(10_000);
-    // Ronda 0 de ambas, intercalada: en la 1 nadie paga (todos quedan morosos); en la 2 todos pagan.
+    // Ronda 0 de ambas, intercalada: en la 1 nadie paga (Ana, que cobra esa ronda, queda morosa; a Beto
+    // y a Carla los cubre su garantía); en la 2 todos pagan.
     for p in &gente {
         c.tanda.pagar_cuota(&dos, p);
     }
@@ -260,11 +261,21 @@ fn dos_tandas_no_se_mezclan() {
     c.tanda.cerrar_ronda(&uno);
     c.tanda.cerrar_ronda(&dos);
     for p in &gente {
-        // Cada uno: en la tanda 1, solo "moroso" (negativo); en la 2, una cuota a tiempo.
+        // Cada uno: en la tanda 1, solo un hecho negativo; en la 2, una cuota a tiempo.
         assert_eq!(h.puntos_en_tanda(&c.tanda_addr, &uno, p), 0);
         assert_eq!(h.puntos_en_tanda(&c.tanda_addr, &dos, p), 10);
         let x = h.historial(p);
-        assert_eq!((x.veces_moroso, x.cuotas_a_tiempo), (1, 1));
+        if *p == c.ana {
+            assert_eq!(
+                (x.veces_moroso, x.cuotas_cubiertas, x.cuotas_a_tiempo),
+                (1, 0, 1)
+            );
+        } else {
+            assert_eq!(
+                (x.veces_moroso, x.cuotas_cubiertas, x.cuotas_a_tiempo),
+                (0, 1, 1)
+            );
+        }
     }
     // Los búferes quedaron vacíos.
     c.env.as_contract(&c.tanda_addr, || {

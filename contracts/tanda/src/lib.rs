@@ -382,8 +382,10 @@ impl TandaContract {
     }
 
     /// Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
-    /// - Quien no pagó: su colateral cubre la cuota si alcanza para todas las que le quedan (v5). Si no,
-    ///   la cuota queda como deuda, su colateral no se toca y queda moroso.
+    /// - Quien no pagó: antes de su turno (fijo), su colateral cubre la cuota si alcanza para esa cuota
+    ///   (como en la v4: lo respalda su pozo). En los demás casos (ya cobró, es su ronda o subasta), solo si
+    ///   alcanza para todas las que le quedan (v5). Si no, la cuota queda como deuda, su colateral no se
+    ///   toca y queda moroso.
     /// - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
     /// - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
     ///   fechas no se mueven: la ronda siguiente vence cuando le tocaba.
@@ -429,8 +431,20 @@ impl TandaContract {
             // cobra justo después se llevaría todo y los últimos nada): cada falta queda como deuda a
             // favor de quien cobró de menos, y al finalizar la garantía se reparte entre los afectados
             // en proporción a lo que le faltó a cada uno (`deudas::repartir_garantias`).
+            // Excepción (revisión del ORQ): quien se atrasa ANTES de su turno (turno fijo y futuro, todavía
+            // no cobró, sin deuda) lo respalda su propio pozo, y al cobrar `completar_garantia` le repone la
+            // garantía de su turno. A esa persona le basta con que la garantía cubra esta cuota, como en la
+            // v4: un olvido con garantía suficiente no es mora. La regla estricta sigue para quien ya cobró
+            // ("cobra y se va"), para quien no paga la ronda en la que cobra (no se lleva el pozo sin pagar)
+            // y en la subasta, donde el turno se decide al cerrar (`SIN_TURNO`).
             let le_quedan = t.cuota * (t.n_miembros - ronda) as i128;
-            let cubierto = if m.deuda == 0 && m.colateral >= le_quedan {
+            let antes_de_su_turno = !m.cobro && m.posicion != SIN_TURNO && m.posicion > ronda;
+            let necesita = if antes_de_su_turno {
+                t.cuota
+            } else {
+                le_quedan
+            };
+            let cubierto = if m.deuda == 0 && m.colateral >= necesita {
                 // Alcanza. Se cubre la cuota y se anota la multa (se cobra al final).
                 m.multas_pendientes += multa(&t);
                 t.cuota

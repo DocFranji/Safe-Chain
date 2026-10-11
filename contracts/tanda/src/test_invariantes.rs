@@ -1872,8 +1872,16 @@ impl Mundo {
                 // (M1 v5) La garantía cubre al instante solo si alcanza para TODAS las cuotas que le
                 // quedan (esta y las siguientes) y no debe nada de antes. Si no, la cuota es deuda y
                 // la garantía no se toca: se reparte entre los afectados al finalizar.
+                // Antes de su turno (fijo), solo necesita cubrir esta cuota: lo respalda su pozo.
                 let le_quedan = t0.cuota * (t0.n_miembros - ronda) as i128;
-                let cubierto = if m0.deuda == 0 && m0.colateral >= le_quedan {
+                let antes_de_su_turno =
+                    !m0.cobro && m0.posicion != SIN_TURNO && m0.posicion > ronda;
+                let necesita = if antes_de_su_turno {
+                    t0.cuota
+                } else {
+                    le_quedan
+                };
+                let cubierto = if m0.deuda == 0 && m0.colateral >= necesita {
                     e.multas_pendientes += multa;
                     t0.cuota
                 } else {

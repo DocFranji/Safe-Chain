@@ -419,11 +419,20 @@ una persona que cobra en el turno 2 y no paga nunca dejaba la garantía de 100 p
 
 | Situación | Qué pasa |
 | --- | --- |
-| No debe nada de antes **y** su garantía alcanza para **todas** las cuotas que le quedan (esta y las siguientes: `n_miembros − ronda`) | **Igual que antes**: la garantía cubre la cuota al instante, quien cobra recibe el pozo completo y se anota su multa. Nadie sale perjudicado, así que no hay por qué esperar |
+| **Antes de su turno** (turno fijo y futuro, todavía no cobró), no debe nada de antes **y** su garantía alcanza para **esta** cuota | **Igual que en la v4**: la garantía cubre la cuota al instante, quien cobra recibe el pozo completo y se anota su multa. Un olvido con garantía suficiente no es mora. Lo respalda su propio pozo, y al cobrar `completar_garantia` le repone la garantía de su turno (revisión del ORQ, sábado 10 en la noche) |
+| En los demás casos (ya cobró, es la ronda en la que cobra, o subasta), no debe nada de antes **y** su garantía alcanza para **todas** las cuotas que le quedan (esta y las siguientes: `n_miembros − ronda`) | Igual: la garantía cubre al instante. Nadie sale perjudicado, así que no hay por qué esperar |
 | Si no | La garantía **no se usa**. La cuota entera es deuda (`Faltante` a favor de quien cobró de menos) y la persona queda en mora |
 
-Una vez que la garantía alcanza, siempre alcanza (cada cuota cubierta baja la garantía y las cuotas que quedan en lo
-mismo). Y una vez en mora, sigue en mora hasta pagar. Por eso nadie pasa de "cubierto" a "en mora" a mitad de camino.
+Por qué la excepción: la garantía escalonada solo cubre, por diseño, lo que se debe **después** de cobrar. Con la regla de
+"todas las cuotas que le quedan" sin excepción, cualquier atraso antes del propio turno era mora al instante, aunque la
+garantía fuera del 100 % (en la ronda 0 nadie tiene garantía de `n` cuotas): la persona perdía 100 puntos y quedaba
+bloqueada en otras tandas por un olvido. La regla estricta se mantiene donde importa:
+- para quien **ya cobró** (el caso del pedido: "cobra y se va");
+- para quien **no paga la ronda en la que cobra**: no se lleva el pozo sin pagar, su pozo se retiene;
+- en la **subasta**, porque el turno se decide al cerrar (`SIN_TURNO`) y alguien que no pagó podría ganarla.
+
+Después de cobrar, una vez que la garantía alcanza, siempre alcanza (cada cuota cubierta baja la garantía y las cuotas
+que quedan en lo mismo). Y una vez en mora, sigue en mora hasta pagar.
 
 **Al `finalizar`**, a cada moroso que todavía tiene garantía (`deudas::repartir_garantias`):
 

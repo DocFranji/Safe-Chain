@@ -666,12 +666,16 @@ fn una_tanda_no_se_traba_por_redondeo_de_la_boveda() {
         c.tanda.unirse(&id, p);
     }
     pasar(&c, 60); // mismo precio que al depositar
-    c.tanda.cerrar_ronda(&id); // nadie pagó: ninguna garantía alcanza, no se toca (v5) y los tres quedan morosos
-    for p in [&c.ana, &c.beto, &c.carla] {
-        assert_eq!(c.miembro(id, p).colateral, CUOTA);
-        assert!(c.miembro(id, p).moroso);
+                   // Nadie pagó. Ana cobra esta ronda y no pagó: queda morosa y su garantía no se toca (v5). A Beto y a
+                   // Carla (antes de su turno) los cubre su garantía, que se saca de la bóveda.
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.miembro(id, &c.ana).colateral, CUOTA);
+    assert!(c.miembro(id, &c.ana).moroso);
+    for p in [&c.beto, &c.carla] {
+        assert_eq!(c.miembro(id, p).colateral, 0);
+        assert!(!c.miembro(id, p).moroso);
     }
-    // La tanda sigue y termina: sacar las tres garantías completas de la bóveda al final no se traba.
+    // La tanda sigue y termina: sacar el resto de las garantías de la bóveda al final no se traba.
     for _ in 0..2 {
         pasar(&c, 60);
         c.tanda.cerrar_ronda(&id);
