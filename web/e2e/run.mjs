@@ -48,13 +48,17 @@ const browser = await chromium.launch(opcionesNavegador())
   // El saldo llega en otra consulta que las tandas: se espera como en las demás pruebas de la cuenta.
   await page.waitForSelector('text=Tienes:', { timeout: 15000 }).catch(() => {})
   const t = await texto(page)
-  check('Lobby: muestra las 5 tandas', (await page.locator('.tarjeta').count()) === 5, `tarjetas=${await page.locator('.tarjeta').count()}`)
+  // Plan v5: las canceladas no se muestran si no se piden ("Mostrar canceladas", en "Más filtros").
+  check('Lobby: muestra las 4 tandas que no están canceladas', (await page.locator('.tarjeta').count()) === 4, `tarjetas=${await page.locator('.tarjeta').count()}`)
   check('Lobby: la más nueva va primero', (await page.locator('.tarjeta h2').first().innerText()) === 'Tanda 5')
-  check('Lobby: etiqueta Terminada y Cancelada y En curso', /Terminada/.test(t) && /Cancelada/.test(t) && /En curso/.test(t))
+  check('Lobby: etiqueta Terminada y En curso, sin canceladas', /Terminada/.test(t) && !/Cancelada/.test(t) && /En curso/.test(t))
   check('Lobby: tarjeta abierta muestra la garantía de entrada', /Entras con \$100 de depósito \(turno 2\)/.test(t), t.slice(0, 300))
   check('Lobby: marca "La creaste tú" en la tanda 3', /La creaste tú/.test(t))
   check('Lobby: la barra de cuenta muestra el saldo', /Tienes:\s*\$1[\s.,]?000/.test(t.replace(/ /g, ' ')), t.slice(0, 200))
   await shot(page, '01-lobby')
+  await page.getByRole('button', { name: /Más filtros/ }).click()
+  await page.getByLabel('Mostrar canceladas').check()
+  check('Lobby: "Mostrar canceladas" agrega la cancelada', (await page.locator('.tarjeta').count()) === 5 && /Cancelada/.test(await texto(page)))
   await page.getByRole('button', { name: 'Mis tandas' }).click()
   check('Filtro "Mis tandas": solo la tanda 3', (await page.locator('.tarjeta').count()) === 1)
   await page.getByRole('button', { name: 'Abiertas' }).click()
@@ -62,6 +66,94 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.getByRole('button', { name: 'Terminadas' }).click()
   check('Filtro "Terminadas": tandas 1 y 4', (await page.locator('.tarjeta').count()) === 2)
   check('Lobby: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+
+// ---------------------------------------------------------------- 1b. Buscar y filtrar (plan v5, pedidos 5 y 4)
+{
+  const est = nuevoEstado()
+  // Carla tiene un pago pendiente en otra tanda (lo dice su reputación): marca en las tandas 2 y 5, que siguen.
+  est.historiales[CARLA] = historial({ cuotas_a_tiempo: 4, veces_moroso: 2, deudas_saldadas: 1, puntos_positivos: 100, puntos_negativos: 115 })
+  const { page, errores } = await nuevaPagina(browser, { est, conectado: false })
+  const tarjetas = async () => (await page.locator('.tarjeta h2').allInnerTexts()).join()
+  const buscar = async (q) => {
+    await page.locator('#buscar-tandas').fill(q)
+    await page.waitForTimeout(150)
+  }
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  check('Buscar: sin sesión empieza en "Todas" y sin canceladas', (await tarjetas()) === 'Tanda 5,Tanda 3,Tanda 2,Tanda 1', await tarjetas())
+  await buscar('Beto')
+  check('Buscar: por nombre de una persona (Beto está en las tandas 1, 2 y 5)', (await tarjetas()) === 'Tanda 5,Tanda 2,Tanda 1', await tarjetas())
+  check('Buscar: lo buscado queda en la URL', /#\/tandas\?q=Beto$/.test(page.url()), page.url())
+  await buscar('#3')
+  check('Buscar: por número', (await tarjetas()) === 'Tanda 3', await tarjetas())
+  await buscar('GDPIB76')
+  check('Buscar: por un pedazo de la dirección (la de Carla)', (await tarjetas()) === 'Tanda 5,Tanda 2,Tanda 1', await tarjetas())
+  await buscar('nadie se llama así')
+  check('Buscar: sin resultados lo dice', (await page.locator('.tarjeta').count()) === 0 && /Ninguna tanda coincide/.test(await texto(page)))
+  await page.getByRole('button', { name: 'Quitar filtros' }).click()
+  check('Buscar: "Quitar filtros" vuelve a mostrar todo', (await page.locator('.tarjeta').count()) === 4 && (await page.locator('#buscar-tandas').inputValue()) === '' && /#\/tandas$/.test(page.url()), page.url())
+
+  // Pedido 4: la marca de pagos pendientes (solo en tandas que siguen)
+  await page.waitForFunction(() => document.querySelectorAll('.tarjeta-pendiente').length === 2, null, { timeout: 8000 }).catch(() => {})
+  const marcadas = (await page.locator('.tarjeta:has(.tarjeta-pendiente) h2').allInnerTexts()).join()
+  check('Pagos pendientes: marca en las tandas que siguen con Carla (5 y 2), no en la terminada', marcadas === 'Tanda 5,Tanda 2', marcadas)
+  check('Pagos pendientes: la marca dice cuántas personas', /1 persona con un pago pendiente/.test(await texto(page)))
+  check('Tarjeta: dice cuánto dura la tanda completa', /dura 5 semanas/.test(await page.locator('.tarjeta', { hasText: 'Tanda 5' }).innerText()))
+
+  // Más filtros
+  const mas = page.getByRole('button', { name: /Más filtros/ })
+  await mas.click()
+  await page.getByLabel('Sin personas con pagos pendientes').check()
+  check('Filtro: sin personas con pagos pendientes (quedan la 3 y la 1)', (await tarjetas()) === 'Tanda 3,Tanda 1', await tarjetas())
+  check('Filtro: el botón cuenta los filtros puestos', /Más filtros \(1\)/.test(await mas.innerText()), await mas.innerText())
+  await page.getByLabel('Sin personas con pagos pendientes').uncheck()
+  await page.getByLabel('Cuota hasta, en dólares').fill('60')
+  check('Filtro: cuota hasta $60 (solo la 5, de $50)', (await tarjetas()) === 'Tanda 5', await tarjetas())
+  check('Filtro: la cuota queda en la URL', /[?&]cuota=-60(&|$)/.test(page.url()), page.url())
+  await page.getByLabel('Cuota hasta, en dólares').fill('')
+  await page.getByLabel('Duración').selectOption('semanas')
+  check('Filtro: dura de una semana a dos meses (la 5: 5 turnos semanales)', (await tarjetas()) === 'Tanda 5', await tarjetas())
+  await page.getByLabel('Duración').selectOption('')
+  await page.getByLabel('Reputación de quien la creó').selectOption('Plata')
+  await page.waitForFunction(() => document.querySelectorAll('.tarjeta').length === 1, null, { timeout: 8000 }).catch(() => {})
+  check('Filtro: reputación Plata o más (solo Ana, que creó la 1)', (await tarjetas()) === 'Tanda 1', await tarjetas())
+  await page.getByLabel('Reputación de quien la creó').selectOption('')
+  await page.getByLabel('Turnos').selectOption('Subasta')
+  check('Filtro: turnos por subasta (ninguna en este escenario)', (await page.locator('.tarjeta').count()) === 0)
+  await page.getByLabel('Turnos').selectOption('')
+  await page.getByLabel('Mostrar canceladas').check()
+  check('Filtro: "Mostrar canceladas" agrega la 4', (await page.locator('.tarjeta').count()) === 5)
+
+  // Se recuerdan en el navegador y se comparten por la URL
+  await page.getByRole('button', { name: 'Abiertas' }).click()
+  await page.goto(BASE + '#/crear')
+  await page.waitForSelector('h1', { timeout: 8000 }).catch(() => {})
+  await page.goto(BASE + '#/tandas')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(200)
+  check('Filtros: se recuerdan al volver a la lista', (await tarjetas()) === 'Tanda 5,Tanda 3' && /estado=abiertas/.test(page.url()) && /canceladas=1/.test(page.url()), `${await tarjetas()} ${page.url()}`)
+  await page.goto(BASE + '#/tandas?cuota=-60')
+  await page.waitForTimeout(300)
+  check('Filtros: un enlace con filtros, abierto en la lista, se aplica', (await tarjetas()) === 'Tanda 5' && (await page.getByRole('button', { name: 'Todas', exact: true }).getAttribute('aria-pressed')) === 'true', await tarjetas())
+  check('Buscar y filtrar: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Un enlace compartido abre la lista ya filtrada; a 390 px el panel no se sale
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est, conectado: false, viewport: { width: 390, height: 844 } })
+  await page.goto(BASE + '#/tandas?q=Ana&estado=todas&duracion=dias')
+  await page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(300)
+  const lista = (await page.locator('.tarjeta h2').allInnerTexts()).join()
+  check('Enlace compartido: abre la lista filtrada (Ana, tandas cortas: 3, 2 y 1)', lista === 'Tanda 3,Tanda 2,Tanda 1', lista)
+  check('Enlace compartido: "Más filtros" se abre solo si trae filtros', (await page.locator('#panel-filtros').count()) === 1 && (await page.getByLabel('Duración').inputValue()) === 'dias')
+  const desborde = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+  check('Buscar y filtrar (390 px): nada se sale de la pantalla', !desborde)
+  await shot(page, 'v5-filtros-390')
+  check('Enlace compartido: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 
@@ -767,6 +859,62 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForTimeout(800)
   check('Modo: la demo (siempre oscura) no muestra el botón', (await page.locator('.boton-modo').count()) === 0)
   check('Modo: sin errores de consola', errores.length === 0, errores.join(' | '))
+  await page.close()
+}
+{
+  // Buscadores y redes (docs/seo.md): metadatos de la portada, robots.txt, sitemap e imagen para compartir
+  const est = nuevoEstado()
+  const { page, errores } = await nuevaPagina(browser, { est, conectado: false })
+  await page.goto(BASE + '#/')
+  await page.waitForSelector('.ln', { timeout: 15000 }).catch(() => {})
+  const meta = await page.evaluate(() => {
+    const atributo = (sel, attr = 'content') => document.querySelector(sel)?.getAttribute(attr) ?? ''
+    let ld = null
+    try {
+      ld = JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '')
+    } catch {
+      ld = null
+    }
+    return {
+      lang: document.documentElement.lang,
+      titulo: document.title,
+      descripcion: atributo('meta[name="description"]'),
+      canonical: atributo('link[rel="canonical"]', 'href'),
+      ogUrl: atributo('meta[property="og:url"]'),
+      ogImagen: atributo('meta[property="og:image"]'),
+      ogAncho: atributo('meta[property="og:image:width"]'),
+      ogAlto: atributo('meta[property="og:image:height"]'),
+      tarjeta: atributo('meta[name="twitter:card"]'),
+      ld,
+      head: document.head.innerHTML,
+    }
+  })
+  check('Buscadores: idioma español y título con tanda, ahorro, Costa Rica y Stellar', meta.lang === 'es' && /tanda/i.test(meta.titulo) && /ahorro/.test(meta.titulo) && /Costa Rica/.test(meta.titulo) && /Stellar/.test(meta.titulo), meta.titulo)
+  check('Buscadores: descripción de 160 caracteres o menos que habla de tandas', meta.descripcion.length > 50 && meta.descripcion.length <= 160 && /Tandas de ahorro/.test(meta.descripcion), `${meta.descripcion.length}`)
+  check('Buscadores: canonical y og:url en https://rounda.net/', meta.canonical === 'https://rounda.net/' && meta.ogUrl === 'https://rounda.net/', `${meta.canonical} ${meta.ogUrl}`)
+  check('Buscadores: ninguna URL apunta a rounda-phi.vercel.app', !/rounda-phi/.test(meta.head))
+  check('Buscadores: imagen para redes de 1200×630 y tarjeta grande', meta.ogImagen === 'https://rounda.net/og.jpg' && meta.ogAncho === '1200' && meta.ogAlto === '630' && meta.tarjeta === 'summary_large_image')
+  check('Buscadores: JSON-LD de WebApplication en rounda.net', meta.ld?.['@type'] === 'WebApplication' && meta.ld?.url === 'https://rounda.net/' && meta.ld?.inLanguage === 'es-CR', JSON.stringify(meta.ld)?.slice(0, 120))
+  const imagen = await page.evaluate(
+    (ruta) =>
+      new Promise((listo) => {
+        const img = new Image()
+        img.onload = () => listo({ w: img.naturalWidth, h: img.naturalHeight })
+        img.onerror = () => listo(null)
+        img.src = ruta
+      }),
+    new URL(meta.ogImagen).pathname,
+  )
+  check('Buscadores: la imagen para redes existe en el sitio y mide 1200×630', imagen?.w === 1200 && imagen?.h === 630, JSON.stringify(imagen))
+  const raiz = BASE.replace(/[#?].*$/, '').replace(/\/?$/, '/')
+  const robots = await page.request.get(raiz + 'robots.txt')
+  const textoRobots = await robots.text()
+  // La compilación de las pruebas no es producción (VERCEL_ENV vacío): no se deja indexar
+  check('Buscadores: robots.txt fuera de producción dice Disallow: /', robots.ok() && /User-agent: \*/.test(textoRobots) && /Disallow: \//.test(textoRobots), textoRobots)
+  const sitemap = await page.request.get(raiz + 'sitemap.xml')
+  const textoSitemap = await sitemap.text()
+  check('Buscadores: sitemap.xml con la portada de rounda.net', sitemap.ok() && /<loc>https:\/\/rounda\.net\/<\/loc>/.test(textoSitemap) && !/<loc>[^<]*#/.test(textoSitemap), textoSitemap.slice(0, 200))
+  check('Buscadores: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
 

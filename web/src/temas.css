@@ -154,6 +154,12 @@
   background: var(--marca);
   color: var(--sobre-marca);
 }
+/* En oscuro el marino casi no se distingue del fondo: el filtro elegido de la lista va en azul. */
+:root[data-modo='oscuro'] .filtros .filtro.activo {
+  border-color: var(--acento);
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
 :root :is(.modo, .moneda) {
   border: 1px solid var(--linea);
   border-radius: var(--radio-chico);
