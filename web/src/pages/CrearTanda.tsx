@@ -2,7 +2,7 @@
 // Todo lo demás (moneda, otra duración, multa, depósito, turnos e historial) tiene valores por defecto
 // sensatos y queda plegado en "Opciones avanzadas". El resumen en palabras, con fechas reales, es lo que
 // la persona lee antes de confirmar.
-// Flujo de firmas: crear_tanda (o crear_tanda_avanzada), los requisitos de historial si se eligieron (M2) y,
+// Flujo de firmas: crear_tanda (o crear_tanda_avanzada; con nombre, crear_tanda_con_nombre), los requisitos de historial si se eligieron (M2) y,
 // si la persona quiere (viene marcado), unirse como primera. Al terminar va a la página de la tanda, que la
 // recibe con la invitación lista para WhatsApp.
 import { useState } from 'react'
@@ -12,6 +12,9 @@ import { OpcionesTurnos } from '../components/OpcionesTurnos'
 import { OpcionesHistorial } from '../components/OpcionesHistorial'
 import { SIN_REQUISITOS, hayRequisitos, puntajeDe } from '../lib/historial'
 import { useHistorialCacheado } from '../hooks/useHistorial'
+import { useSoportaNombres } from '../hooks/useSoportaNombres'
+import { clienteConNombres } from '../lib/contratoNombres'
+import { NOMBRE_MAX, idDeCreacion, limpiarNombre, problemaDeNombre } from '../lib/nombreTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
@@ -81,6 +84,9 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const [turnos, setTurnos] = useState<OpcionesForm>(OPCIONES_CLASICAS)
   const [requisitos, setRequisitos] = useState(SIN_REQUISITOS)
   const [progreso, setProgreso] = useState<Progreso>({ tipo: 'ninguno' })
+  // (v5, pedido 5) El nombre es opcional y solo se ofrece si el contrato desplegado lo guarda.
+  const aceptaNombres = useSoportaNombres() === true
+  const [nombreEscrito, setNombreEscrito] = useState('')
   // M4: moneda de la tanda (TUSD simulado o USDC de Blend con rendimiento real).
   const [moneda, setMoneda] = useState<Moneda>(TUSD)
   // "Opciones avanzadas" se abre solo si la persona lo pide (o si una plantilla usa una duración propia).
@@ -104,6 +110,8 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const valido = Object.keys(errores).length === 0
   const params = valido ? (parciales as ParametrosTanda) : null
   const trabajando = progreso.tipo === 'trabajando'
+  const nombre = aceptaNombres ? limpiarNombre(nombreEscrito) : ''
+  const problemaNombre = problemaDeNombre(nombre)
   // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
   // Si los primeros turnos piden un historial que no tiene, queda en el primero que no lo pide (M2 + M3).
   const miHistorial = useHistorialCacheado(yo ?? '')
@@ -142,12 +150,23 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
         cobertura_bps: params.coberturaBps,
       }
       // Por orden de llegada y sin intercambios: la tanda de siempre. Si no, con sus opciones de turnos.
-      const tx = esClasica(turnos)
-        ? await clienteFirma(yo).crear_tanda(datos)
-        : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) })
-      const resultado = await enviar(tx)
-      if (resultado.isErr()) throw new Error('El contrato rechazó los datos de la tanda.')
-      id = resultado.unwrap()
+      // Con nombre se usan las dos funciones "con_nombre" del contrato nuevo; sin nombre, las de siempre.
+      let resultado: unknown
+      if (nombre) {
+        const c = await clienteConNombres(yo)
+        resultado = await enviar(
+          esClasica(turnos)
+            ? await c.crear_tanda_con_nombre({ ...datos, nombre })
+            : await c.crear_tanda_avanzada_con_nombre({ ...datos, opciones: aContrato(turnos), nombre }),
+        )
+      } else {
+        resultado = await enviar(
+          esClasica(turnos)
+            ? await clienteFirma(yo).crear_tanda(datos)
+            : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) }),
+        )
+      }
+      id = idDeCreacion(resultado)
     } catch (e) {
       setProgreso({ tipo: 'error', texto: traducirError(e) })
       return
@@ -305,6 +324,25 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               </p>
             </fieldset>
 
+            {aceptaNombres && (
+              <div className="campo">
+                <label htmlFor="nombre-tanda">Nombre de la tanda (opcional)</label>
+                <input
+                  id="nombre-tanda"
+                  autoComplete="off"
+                  placeholder="Por ejemplo: Tanda de la oficina"
+                  value={nombreEscrito}
+                  onChange={(e) => setNombreEscrito(e.target.value)}
+                  aria-invalid={problemaNombre ? true : undefined}
+                  aria-describedby="nombre-tanda-ayuda"
+                />
+                <p id="nombre-tanda-ayuda" className={problemaNombre ? 'ayuda error' : 'ayuda'}>
+                  {problemaNombre ??
+                    `De 2 a ${NOMBRE_MAX} caracteres${nombre ? ` (llevas ${[...nombre].length})` : ''}. Lo verá cualquiera que vea la tanda y no se podrá cambiar después. Sin nombre se llama «Tanda 5», con su número.`}
+                </p>
+              </div>
+            )}
+
             <details className="avanzadas" open={avanzadas} onToggle={(e) => setAvanzadas(e.currentTarget.open)}>
               <summary>Opciones avanzadas</summary>
               <p className="ayuda">Ya vienen con valores pensados para la mayoría de los grupos. No hace falta tocarlas.</p>
@@ -416,7 +454,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 <button
                   type="submit"
                   className="boton principal grande"
-                  disabled={!valido || errorTurnos !== null || trabajando || faltaSaldo > 0n}
+                  disabled={!valido || errorTurnos !== null || problemaNombre !== null || trabajando || faltaSaldo > 0n}
                 >
                   {trabajando ? 'Un momento…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
                 </button>
