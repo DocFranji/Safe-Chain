@@ -59,8 +59,10 @@ export interface Client {
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
      * Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
-     * - Quien no pagó: su colateral cubre la cuota si alcanza para todas las que le quedan (v5). Si no,
-     * la cuota queda como deuda, su colateral no se toca y queda moroso.
+     * - Quien no pagó: antes de su turno (fijo), su colateral cubre la cuota si alcanza para esa cuota
+     * (como en la v4: lo respalda su pozo). En los demás casos (ya cobró, es su ronda o subasta), solo si
+     * alcanza para todas las que le quedan (v5). Si no, la cuota queda como deuda, su colateral no se
+     * toca y queda moroso.
      * - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
      * - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
      * fechas no se mueven: la ronda siguiente vence cuando le tocaba.
