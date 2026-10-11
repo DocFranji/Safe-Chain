@@ -39,3 +39,14 @@ describe('resumen', () => {
     expect(mensajeInvitacion({ ...t, link: 'x' })).toMatch(/^¡Hola! Te invito/)
   })
 })
+
+describe('mensajeInvitacion: para un amigo', () => {
+  const base = { cuota: 20n * 10_000_000n, n: 5, periodoSeg: 7 * 86_400, link: 'https://x/#/tanda/3' }
+  it('lo saluda por su nombre', () => {
+    expect(mensajeInvitacion({ ...base, quien: 'Ana', para: 'Beto' }).split('\n')[0]).toMatch(/^¡Hola, Beto! Soy Ana\. Te invito a mi tanda/)
+    expect(mensajeInvitacion({ ...base, para: 'Beto' }).split('\n')[0]).toMatch(/^¡Hola, Beto! Te invito/)
+  })
+  it('sin nombre queda como siempre', () => {
+    expect(mensajeInvitacion({ ...base, quien: 'Ana' }).split('\n')[0]).toMatch(/^¡Hola! Soy Ana\./)
+  })
+})

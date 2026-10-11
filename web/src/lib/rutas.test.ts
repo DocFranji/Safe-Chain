@@ -67,3 +67,12 @@ describe('ruta del perfil (M2, N4)', () => {
     expect(parsearRuta('#/perfil/')).toEqual({ tipo: 'perfil' })
   })
 })
+
+describe('ruta de amigos (pedido 6)', () => {
+  it('reconoce #/perfil/amigos y no cambia #/perfil', () => {
+    expect(parsearRuta('#/perfil/amigos')).toEqual({ tipo: 'amigos' })
+    expect(parsearRuta('#/perfil/amigos/')).toEqual({ tipo: 'amigos' })
+    expect(parsearRuta('#/perfil')).toEqual({ tipo: 'perfil' })
+    expect(parsearRuta('#/perfil/otra')).toEqual({ tipo: 'desconocida' })
+  })
+})

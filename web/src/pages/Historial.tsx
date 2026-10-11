@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { useDireccionHistorial, useHistorial } from '../hooks/useHistorial'
 import { BotonesEntrar } from '../components/BotonesEntrar'
+import { BotonAmigo } from '../components/BotonAmigo'
 import { Insignia } from '../components/InsigniaNivel'
 import { Mensaje } from '../components/Mensaje'
 import {
@@ -66,6 +67,12 @@ export function Historial({ dir, billetera }: Props) {
         </p>
       ) : (
         <FichaHistorial dir={quien} h={estado.historial} esMio={esMio} esGoogle={esMio && billetera.tipo === 'google'} />
+      )}
+
+      {quien && !esMio && esDireccion(quien) && (
+        <div className="perfil-amigo">
+          <BotonAmigo dir={quien} yo={billetera.direccion} />
+        </div>
       )}
 
       <Buscar />

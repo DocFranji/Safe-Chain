@@ -17,9 +17,12 @@ import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { BotonesEntrar } from './components/BotonesEntrar'
 import { BotonModo } from './components/BotonModo'
+import { Campanita } from './components/Campanita'
 import { nombreConocido, suscribirApodos, usarLectorDeApodos, versionApodos } from './lib/nombres'
 import { leerApodo } from './lib/historial'
-import { useSyncExternalStore } from 'react'
+import { almacenLocal } from './lib/almacen'
+import { guardarInvitacion, invitacionDeEntrada } from './lib/invitaciones'
+import { useEffect, useSyncExternalStore } from 'react'
 import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_PERFIL } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
 
@@ -33,12 +36,19 @@ export default function App() {
   const ruta = useRuta()
   const cuenta = useCuenta(billetera.direccion, billetera.redCorrecta)
 
+  // Pedido 3 del plan v5: si lo primero que abre la persona es la página de una tanda (el enlace que le mandaron), se
+  // anota la invitación: la campanita se la recuerda mientras no se una (lib/invitaciones.ts).
+  useEffect(() => {
+    const id = invitacionDeEntrada(window.location.hash)
+    if (id !== null) guardarInvitacion(almacenLocal(), id, Math.floor(Date.now() / 1000))
+  }, [])
+
   // La landing trae su propio encabezado y pie: no se le pone el de la app.
   if (ruta.tipo === 'inicio') return <Landing />
 
   // Cada página se viste según su función (paginas.css): elegir, pagar y cobrar, crear, proyectar, leer, revisar.
   return (
-    <div className="app" data-pagina={ruta.tipo}>
+    <div className="app" data-pagina={ruta.tipo === 'amigos' ? 'perfil' : ruta.tipo}>
       <header className="barra">
         <a className="marca" href={RUTA_INICIO}>
           <span className="logo" aria-hidden="true">
@@ -54,11 +64,13 @@ export default function App() {
           <a href={RUTA_CREAR} aria-current={ruta.tipo === 'crear' ? 'page' : undefined}>
             Crear
           </a>
-          <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' ? 'page' : undefined}>
+          <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' || ruta.tipo === 'amigos' ? 'page' : undefined}>
             Perfil
           </a>
         </nav>
         <div className="barra-lado">
+          {/* Los avisos (pedido 3 del plan v5): con sesión, y no en la demo, que se proyecta. */}
+          {billetera.direccion && ruta.tipo !== 'demo' && <Campanita yo={billetera.direccion} />}
           {/* La demo siempre va en oscuro (se proyecta): ahí el botón no haría nada. */}
           {ruta.tipo !== 'demo' && <BotonModo />}
           <BotonBilletera billetera={billetera} />
@@ -84,8 +96,8 @@ export default function App() {
           <Estado billetera={billetera} />
         ) : ruta.tipo === 'historial' ? (
           <Historial key={ruta.dir ?? 'mio'} dir={ruta.dir} billetera={billetera} />
-        ) : ruta.tipo === 'perfil' ? (
-          <Perfil billetera={billetera} />
+        ) : ruta.tipo === 'perfil' || ruta.tipo === 'amigos' ? (
+          <Perfil billetera={billetera} pestana={ruta.tipo === 'amigos' ? 'amigos' : 'cuenta'} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>
