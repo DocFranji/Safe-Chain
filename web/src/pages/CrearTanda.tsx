@@ -2,16 +2,20 @@
 // Todo lo demás (moneda, otra duración, multa, depósito, turnos e historial) tiene valores por defecto
 // sensatos y queda plegado en "Opciones avanzadas". El resumen en palabras, con fechas reales, es lo que
 // la persona lee antes de confirmar.
-// Flujo de firmas: crear_tanda (o crear_tanda_avanzada), los requisitos de historial si se eligieron (M2) y,
+// Flujo de firmas: crear_tanda (o crear_tanda_avanzada; con nombre, crear_tanda_con_nombre), los requisitos de historial si se eligieron (M2) y,
 // si la persona quiere (viene marcado), unirse como primera. Al terminar va a la página de la tanda, que la
 // recibe con la invitación lista para WhatsApp.
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from '../components/BotonesEntrar'
+import { Info } from '../components/Info'
 import { OpcionesTurnos } from '../components/OpcionesTurnos'
 import { OpcionesHistorial } from '../components/OpcionesHistorial'
 import { SIN_REQUISITOS, hayRequisitos, puntajeDe } from '../lib/historial'
 import { useHistorialCacheado } from '../hooks/useHistorial'
+import { useSoportaNombres } from '../hooks/useSoportaNombres'
+import { clienteConNombres } from '../lib/contratoNombres'
+import { NOMBRE_MAX, idDeCreacion, limpiarNombre, problemaDeNombre } from '../lib/nombreTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
@@ -81,6 +85,9 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const [turnos, setTurnos] = useState<OpcionesForm>(OPCIONES_CLASICAS)
   const [requisitos, setRequisitos] = useState(SIN_REQUISITOS)
   const [progreso, setProgreso] = useState<Progreso>({ tipo: 'ninguno' })
+  // (v5, pedido 5) El nombre es opcional y solo se ofrece si el contrato desplegado lo guarda.
+  const aceptaNombres = useSoportaNombres() === true
+  const [nombreEscrito, setNombreEscrito] = useState('')
   // M4: moneda de la tanda (TUSD simulado o USDC de Blend con rendimiento real).
   const [moneda, setMoneda] = useState<Moneda>(TUSD)
   // "Opciones avanzadas" se abre solo si la persona lo pide (o si una plantilla usa una duración propia).
@@ -104,6 +111,8 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const valido = Object.keys(errores).length === 0
   const params = valido ? (parciales as ParametrosTanda) : null
   const trabajando = progreso.tipo === 'trabajando'
+  const nombre = aceptaNombres ? limpiarNombre(nombreEscrito) : ''
+  const problemaNombre = problemaDeNombre(nombre)
   // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
   // Si los primeros turnos piden un historial que no tiene, queda en el primero que no lo pide (M2 + M3).
   const miHistorial = useHistorialCacheado(yo ?? '')
@@ -142,12 +151,23 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
         cobertura_bps: params.coberturaBps,
       }
       // Por orden de llegada y sin intercambios: la tanda de siempre. Si no, con sus opciones de turnos.
-      const tx = esClasica(turnos)
-        ? await clienteFirma(yo).crear_tanda(datos)
-        : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) })
-      const resultado = await enviar(tx)
-      if (resultado.isErr()) throw new Error('El contrato rechazó los datos de la tanda.')
-      id = resultado.unwrap()
+      // Con nombre se usan las dos funciones "con_nombre" del contrato nuevo; sin nombre, las de siempre.
+      let resultado: unknown
+      if (nombre) {
+        const c = await clienteConNombres(yo)
+        resultado = await enviar(
+          esClasica(turnos)
+            ? await c.crear_tanda_con_nombre({ ...datos, nombre })
+            : await c.crear_tanda_avanzada_con_nombre({ ...datos, opciones: aContrato(turnos), nombre }),
+        )
+      } else {
+        resultado = await enviar(
+          esClasica(turnos)
+            ? await clienteFirma(yo).crear_tanda(datos)
+            : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) }),
+        )
+      }
+      id = idDeCreacion(resultado)
     } catch (e) {
       setProgreso({ tipo: 'error', texto: traducirError(e) })
       return
@@ -224,9 +244,14 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
         >
           <div className="panel formulario">
             <div className="campo pregunta">
-              <label htmlFor="cuota">
-                <span className="pregunta-numero">1</span> ¿Cuánto pone cada quien?
-              </label>
+              <div className="etiqueta-info">
+                <label htmlFor="cuota">
+                  <span className="pregunta-numero">1</span> ¿Cuánto pone cada quien?
+                </label>
+                {!errores.cuota && (
+                  <Info etiqueta="Qué es la cuota">La cuota: lo mismo para todas las personas, en cada turno. Son dólares de práctica.</Info>
+                )}
+              </div>
               <div className="con-prefijo">
                 <span aria-hidden="true">$</span>
                 <input
@@ -235,18 +260,25 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   value={f.cuota}
                   onChange={(e) => cambiar('cuota', e.target.value)}
                   aria-invalid={errores.cuota ? true : undefined}
-                  aria-describedby="cuota-ayuda"
+                  aria-describedby={errores.cuota ? 'cuota-ayuda' : undefined}
                 />
               </div>
-              <p id="cuota-ayuda" className={errores.cuota ? 'ayuda error' : 'ayuda'}>
-                {errores.cuota ?? 'La cuota: lo mismo para todas las personas, en cada turno. Son dólares de práctica.'}
-              </p>
+              {errores.cuota && (
+                <p id="cuota-ayuda" className="ayuda error">
+                  {errores.cuota}
+                </p>
+              )}
             </div>
 
             <div className="campo pregunta">
-              <label htmlFor="n">
-                <span className="pregunta-numero">2</span> ¿Cuántas personas?
-              </label>
+              <div className="etiqueta-info">
+                <label htmlFor="n">
+                  <span className="pregunta-numero">2</span> ¿Cuántas personas?
+                </label>
+                <Info etiqueta="Cuántas personas">
+                  Contándote a ti. Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}: cada persona cobra una vez.
+                </Info>
+              </div>
               <div className="contador">
                 <button
                   type="button"
@@ -276,14 +308,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   +
                 </button>
               </div>
-              <p className="ayuda">
-                Contándote a ti. Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}: cada persona cobra una vez.
-              </p>
             </div>
 
             <fieldset className="campo pregunta">
               <legend>
                 <span className="pregunta-numero">3</span> ¿Cada cuánto?
+                {f.frecuencia !== 'otra' && <Info etiqueta="Cada cuánto">Cada cuánto paga cada quien su cuota.</Info>}
               </legend>
               <div className="frecuencias">
                 {FRECUENCIAS.map((x) => (
@@ -298,12 +328,31 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   </button>
                 ))}
               </div>
-              <p className={f.frecuencia === 'otra' && errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-                {f.frecuencia === 'otra'
-                  ? (errores.periodoSeg ?? `Otra duración: ${periodoSeg ? cadaCuanto(periodoSeg) : '-'} (en "Opciones avanzadas").`)
-                  : 'Cada cuánto paga cada quien su cuota.'}
-              </p>
+              {f.frecuencia === 'otra' && (
+                <p className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
+                  {errores.periodoSeg ?? `Otra duración: ${periodoSeg ? cadaCuanto(periodoSeg) : '-'} (en "Opciones avanzadas").`}
+                </p>
+              )}
             </fieldset>
+
+            {aceptaNombres && (
+              <div className="campo">
+                <label htmlFor="nombre-tanda">Nombre de la tanda (opcional)</label>
+                <input
+                  id="nombre-tanda"
+                  autoComplete="off"
+                  placeholder="Por ejemplo: Tanda de la oficina"
+                  value={nombreEscrito}
+                  onChange={(e) => setNombreEscrito(e.target.value)}
+                  aria-invalid={problemaNombre ? true : undefined}
+                  aria-describedby="nombre-tanda-ayuda"
+                />
+                <p id="nombre-tanda-ayuda" className={problemaNombre ? 'ayuda error' : 'ayuda'}>
+                  {problemaNombre ??
+                    `De 2 a ${NOMBRE_MAX} caracteres${nombre ? ` (llevas ${[...nombre].length})` : ''}. Lo verá cualquiera que vea la tanda y no se podrá cambiar después. Sin nombre se llama «Tanda 5», con su número.`}
+                </p>
+              </div>
+            )}
 
             <details className="avanzadas" open={avanzadas} onToggle={(e) => setAvanzadas(e.currentTarget.open)}>
               <summary>Opciones avanzadas</summary>
@@ -334,16 +383,30 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                     <option value="meses">meses</option>
                   </select>
                 </div>
-                <p id="periodo-ayuda" className={f.frecuencia === 'otra' && errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-                  {(f.frecuencia === 'otra' && errores.periodoSeg) ||
-                    `Reemplaza a "¿Cada cuánto?". Hasta 3 meses por turno${f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''}. Con minutos sirve para probar.`}
-                </p>
+                {f.frecuencia === 'otra' && errores.periodoSeg ? (
+                  <p id="periodo-ayuda" className="ayuda error">
+                    {errores.periodoSeg}
+                  </p>
+                ) : (
+                  <p id="periodo-ayuda" className="ayuda">
+                    Hasta 3 meses por turno{f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''}.
+                    <Info etiqueta="Sobre la otra duración">
+                      Reemplaza a «¿Cada cuánto?». Con minutos sirve para probar.
+                    </Info>
+                  </p>
+                )}
               </div>
 
               <div className="campo">
-                <label htmlFor="multa">
-                  Multa por pagar tarde: <strong>{f.multa} %</strong> de la cuota
-                </label>
+                <div className="etiqueta-info">
+                  <label htmlFor="multa">
+                    Multa por pagar tarde: <strong>{f.multa} %</strong> de la cuota
+                  </label>
+                  <Info etiqueta="Sobre la multa">
+                    Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron.
+                    {cuota !== null && f.multa > 0 && <> Con esta cuota son {dinero((cuota * BigInt(f.multa)) / 100n)}.</>}
+                  </Info>
+                </div>
                 <input
                   id="multa"
                   type="range"
@@ -352,16 +415,18 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   value={f.multa}
                   onChange={(e) => cambiar('multa', Number(e.target.value))}
                 />
-                <p className="ayuda">
-                  Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron.
-                  {cuota !== null && f.multa > 0 && <> Con esta cuota son {dinero((cuota * BigInt(f.multa)) / 100n)}.</>}
-                </p>
               </div>
 
               <div className="campo">
-                <label htmlFor="cobertura">
-                  Depósito de seguridad: <strong>{f.cobertura} %</strong> de lo que aún se debe
-                </label>
+                <div className="etiqueta-info">
+                  <label htmlFor="cobertura">
+                    Depósito de seguridad: <strong>{f.cobertura} %</strong> de lo que aún se debe
+                  </label>
+                  <Info etiqueta="Sobre el depósito de seguridad">
+                    Quien cobra antes deja más depósito. Con 100 % nadie gana nada desapareciendo; con menos es más barato entrar,
+                    pero el grupo asume algo de riesgo.
+                  </Info>
+                </div>
                 <input
                   id="cobertura"
                   type="range"
@@ -371,10 +436,6 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   value={f.cobertura}
                   onChange={(e) => cambiar('cobertura', Number(e.target.value))}
                 />
-                <p className="ayuda">
-                  Quien cobra antes deja más depósito. Con 100 % nadie gana nada desapareciendo; con menos es más barato
-                  entrar, pero el grupo asume algo de riesgo.
-                </p>
               </div>
 
               <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
@@ -416,7 +477,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                 <button
                   type="submit"
                   className="boton principal grande"
-                  disabled={!valido || errorTurnos !== null || trabajando || faltaSaldo > 0n}
+                  disabled={!valido || errorTurnos !== null || problemaNombre !== null || trabajando || faltaSaldo > 0n}
                 >
                   {trabajando ? 'Un momento…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
                 </button>
@@ -536,9 +597,11 @@ function Resumen({
             </tbody>
           </table>
         </div>
-        <p className="explica">
-          Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Si desaparece, su depósito paga por
-          él.
+        <p className="ayuda">
+          Quien cobra antes deja más.
+          <Info etiqueta="Por qué deja más">
+            Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Si desaparece, su depósito paga por él.
+          </Info>
         </p>
       </details>
     </>

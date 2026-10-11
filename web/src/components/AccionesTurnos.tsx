@@ -38,6 +38,7 @@ import {
 } from '../lib/ofertasSelladas'
 import { useHistorialCacheado } from '../hooks/useHistorial'
 import { BotonUnirse } from './BotonUnirse'
+import { Info } from './Info'
 import { EXPLORADOR, TANDA_ID } from '../config'
 import { comoConseguir, useMoneda } from '../hooks/useMoneda'
 
@@ -89,22 +90,30 @@ export function AccionesTurnos({ id, datos, billetera, saldo, ahora, alCambiar }
 
   return (
     <section className="turnos-acciones" aria-labelledby="turnos-titulo">
-      <h3 id="turnos-titulo">Turnos: {info?.titulo.toLowerCase() ?? modo}</h3>
-      {info && <p className="explica">{info.lema}.</p>}
+      <h3 id="turnos-titulo">
+        Turnos: {info?.titulo.toLowerCase() ?? modo}
+        {info && (
+          <Info etiqueta="Cómo funciona este mecanismo">
+            {info.lema}.
+            {estado === 'Abierta' && modo === 'Sorteo' && (
+              <>
+                {' '}
+                El orden se sortea cuando se llene la tanda. Todos dejan una cuota de depósito; a quien cobra se le aparta de su
+                pozo el resto de su depósito, que recupera al final con intereses.
+              </>
+            )}
+            {estado === 'Abierta' && modo === 'Subasta' && (
+              <>
+                {' '}
+                Cuando se llene, en cada turno quien necesite el dinero podrá ofrecer recibir un porcentaje menos (hasta{' '}
+                {porcentaje(turnos.opciones.descuento_max_bps)}). Todos dejan una cuota de depósito al unirse.
+              </>
+            )}
+          </Info>
+        )}
+      </h3>
 
       {estado === 'Abierta' && eligeTurno(modo) && !mio && <ElegirTurno {...comun} saldo={saldo} />}
-      {estado === 'Abierta' && modo === 'Sorteo' && (
-        <p className="explica">
-          El orden se sortea cuando se llene la tanda. Todos dejan una cuota de depósito; a quien cobra se le aparta de su
-          pozo el resto de su depósito, que recupera al final con intereses.
-        </p>
-      )}
-      {estado === 'Abierta' && modo === 'Subasta' && (
-        <p className="explica">
-          Cuando se llene, en cada turno quien necesite el dinero podrá ofrecer recibir un porcentaje menos (hasta{' '}
-          {porcentaje(turnos.opciones.descuento_max_bps)}). Todos dejan una cuota de depósito al unirse.
-        </p>
-      )}
       {estado !== 'Abierta' && modo === 'Sorteo' && (
         <p className="explica">
           El contrato sorteó el orden al llenarse la tanda.{' '}
@@ -334,8 +343,8 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
           ? `Si nadie ofrece más, ${nombreDe(mejor.quien)} cobra este turno.`
           : respaldo
             ? `Si nadie oferta, cobra ${nombreDe(respaldo)} (orden sorteado al empezar).`
-            : 'Si nadie oferta, cobra el siguiente del orden sorteado al empezar.'}{' '}
-        El descuento de quien gane se reparte entre los demás y se suma a su depósito.
+            : 'Si nadie oferta, cobra el siguiente del orden sorteado al empezar.'}
+        <Info etiqueta="Qué pasa con el descuento">El descuento de quien gane se reparte entre los demás y se suma a su depósito.</Info>
       </p>
 
       {puedeOfertar && abierta && puedeFirmar && yo && (
@@ -450,13 +459,15 @@ function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ah
         </div>
       </dl>
       <p className="explica">
-        Ofertas selladas: en la primera mitad del turno cada quien sella su oferta y nadie ve el porcentaje. En la
-        segunda mitad se revelan y gana la mayor (en empate, el orden sorteado al empezar).{' '}
         {mejor && fase !== 'sellar'
           ? `Si nadie revela una mayor, ${nombreDe(mejor.quien)} cobra este turno.`
           : respaldo
             ? `Si nadie revela una oferta, cobra ${nombreDe(respaldo)}.`
             : 'Si nadie revela una oferta, cobra el siguiente del orden sorteado al empezar.'}
+        <Info etiqueta="Cómo funcionan las ofertas selladas">
+          Ofertas selladas: en la primera mitad del turno cada quien sella su oferta y nadie ve el porcentaje. En la segunda
+          mitad se revelan y gana la mayor (en empate, el orden sorteado al empezar).
+        </Info>
       </p>
 
       {fase === 'sellar' && puedeOfertar && puedeFirmar && yo && (

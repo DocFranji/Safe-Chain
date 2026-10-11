@@ -6,6 +6,7 @@ import { resultadosDesdeEventos } from '../lib/rpc'
 import { dinero } from '../lib/glosario'
 import { nombreDe } from '../lib/nombres'
 import { EXPLORADOR, TANDA_ID } from '../config'
+import { Info } from './Info'
 
 type Props = {
   datos: DatosTanda
@@ -103,9 +104,12 @@ export function Resultados({ datos, yo, eventos, error }: Props) {
               </tbody>
             </table>
           </div>
-          <p className="explica">
-            "Recibió al final" es lo que se le devolvió al terminar: lo que sobró de su depósito, su parte de los intereses
-            y, si nunca se atrasó, su parte de las multas. El pozo de cada turno se entregó antes.
+          <p className="ayuda">
+            «Recibió al final»
+            <Info etiqueta="Qué es «Recibió al final»">
+              Es lo que se le devolvió al terminar: lo que sobró de su depósito, su parte de los intereses y, si nunca se
+              atrasó, su parte de las multas. El pozo de cada turno se entregó antes.
+            </Info>
           </p>
         </>
       )}

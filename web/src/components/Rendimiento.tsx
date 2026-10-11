@@ -6,6 +6,7 @@ import { aceleradorBoveda, valorBoveda } from '../lib/rpc'
 import { dinero, dineroFino } from '../lib/glosario'
 import { infoBlend, type InfoBlend } from '../lib/blend'
 import { monedaDe } from '../lib/monedas'
+import { Info } from './Info'
 import { LiquidezBlend } from './LiquidezBlend'
 import { BOVEDA_SIMULADA, EXPLORADOR } from '../config'
 
@@ -69,7 +70,16 @@ export function Rendimiento({ datos }: { datos: DatosTanda }) {
 
   return (
     <section className="panel rendimiento" aria-labelledby="rend-titulo">
-      <h2 id="rend-titulo">Intereses de los depósitos</h2>
+      <h2 id="rend-titulo">
+        Intereses de los depósitos
+        <Info etiqueta="Cómo ganan intereses los depósitos">
+          Mientras esperan, los depósitos de seguridad ganan intereses. Al final se reparten entre quienes los dejaron, en
+          proporción a lo que aportó cada uno.
+          {enBlend
+            ? ' Estos depósitos están en Blend, un servicio de préstamos: los intereses son reales. En minutos es muy poco, pero es de verdad.'
+            : BOVEDA_SIMULADA && textoBoveda(acelerador)}
+        </Info>
+      </h2>
       {rendimiento !== null ? (
         <dl className="datos">
           <div className="dato">
@@ -95,13 +105,6 @@ export function Rendimiento({ datos }: { datos: DatosTanda }) {
       ) : (
         <p className="explica">{fallo ? 'No pudimos leer los intereses ahora mismo.' : 'Calculando los intereses…'}</p>
       )}
-      <p className="explica">
-        Mientras esperan, los depósitos de seguridad ganan intereses. Al final se reparten entre quienes los dejaron, en
-        proporción a lo que aportó cada uno.
-        {enBlend
-          ? ' Estos depósitos están en Blend, un servicio de préstamos: los intereses son reales. En minutos es muy poco, pero es de verdad.'
-          : BOVEDA_SIMULADA && textoBoveda(acelerador)}
-      </p>
       {enBlend && (
         <>
           <LiquidezBlend pool={enBlend.pool} token={enBlend.token} simbolo={simbolo} necesario={garantia} />
