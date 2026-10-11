@@ -385,6 +385,14 @@ function valorSim(est, contrato, fn, args) {
       if (!est.historialActivo) return { error: { error: 'HostError: Error(WasmVm, MissingValue)', latestLedger: 1000 } }
       return addr(HISTORIAL_ID)
     }
+    // (UX, pedido 5) Crear: se anota qué se pidió (`est.creaciones`) y se responde con el número de la tanda nueva.
+    if (/^crear_tanda/.test(fn)) {
+      if (!est.conNombres && /con_nombre/.test(fn)) return { error: { error: `mock: no sé responder ${contrato}.${fn}`, latestLedger: 1000 } }
+      est.creaciones ??= []
+      est.creaciones.push({ fn, args: nativos })
+      return u32(Object.keys(est.tandas).length + 1)
+    }
+    if (fn === 'get_nombre') return nativeToScVal(est.tandas[nativos[0]]?.nombre ?? '', { type: 'string' })
     const id = nativos[0]
     const t = est.tandas[id]
     if (!t) return { error: erroresContrato(2) }
@@ -652,6 +660,25 @@ export function respuestaRpc(est, cuerpo) {
       return ok({ id: 'a', protocolVersion: 25, sequence: ULTIMO_LEDGER })
     case 'getLedgerEntries': {
       const lk = xdr.LedgerKey.fromXDR(params.keys[0], 'base64')
+      // (UX, pedido 5) Con `est.cuentaFirma`, la cuenta de quien firma existe en la red: así el SDK llega a simular la
+      // llamada (arma la transacción con su número de secuencia). Sin esto se queda en "tu cuenta no está preparada".
+      if (lk.type === 'account' && est.cuentaFirma) {
+        const cuenta = xdr.LedgerEntryData.account(
+          new xdr.AccountEntry({
+            accountId: lk.account.accountId,
+            balance: 100000000000n,
+            seqNum: 12345n,
+            numSubEntries: 0,
+            inflationDest: null,
+            flags: 0,
+            homeDomain: '',
+            thresholds: Buffer.from([1, 0, 0, 0]),
+            signers: [],
+            ext: xdr.AccountEntryExt.v0(),
+          }),
+        )
+        return ok({ entries: [{ key: params.keys[0], xdr: cuenta.toXDR('base64'), lastModifiedLedgerSeq: 900 }], latestLedger: 1000 })
+      }
       // (M3) El código del contrato (lo baja `contract.Client.from` en #/estado): un WASM con su spec.
       if (lk.type === 'contractCode') {
         const codigo = xdr.LedgerEntryData.contractCode(
@@ -709,6 +736,36 @@ const leb128 = (n) => {
   return Buffer.from(b)
 }
 /**
+ * (UX, pedido 5) La interfaz del contrato v5 con nombres, según lo que publicó M1: `crear_tanda_con_nombre` y
+ * `crear_tanda_avanzada_con_nombre` (las de siempre más `nombre: String`, al final) y `get_nombre(id)`.
+ * Se activa con `est.conNombres = true`; así se prueba la web sin esperar el cliente regenerado.
+ */
+function entradasConNombres() {
+  const funcion = (n) => spec.entries.map((e) => e.value).find((v) => v && v.name && v.name.toString() === n)
+  const nueva = (original, nombre) =>
+    xdr.ScSpecEntry.scSpecEntryFunctionV0(
+      new xdr.ScSpecFunctionV0({
+        doc: '',
+        name: nombre,
+        inputs: [...original.inputs, new xdr.ScSpecFunctionInputV0({ doc: '', name: 'nombre', type: xdr.ScSpecTypeDef.scSpecTypeString() })],
+        outputs: original.outputs,
+      }),
+    )
+  return [
+    nueva(funcion('crear_tanda'), 'crear_tanda_con_nombre'),
+    nueva(funcion('crear_tanda_avanzada'), 'crear_tanda_avanzada_con_nombre'),
+    xdr.ScSpecEntry.scSpecEntryFunctionV0(
+      new xdr.ScSpecFunctionV0({
+        doc: '',
+        name: 'get_nombre',
+        inputs: [new xdr.ScSpecFunctionInputV0({ doc: '', name: 'id', type: xdr.ScSpecTypeDef.scSpecTypeU32() })],
+        outputs: [xdr.ScSpecTypeDef.scSpecTypeString()],
+      }),
+    ),
+  ]
+}
+
+/**
  * WASM mínimo con solo la sección `contractspecv0` (la interfaz del contrato), armada con el mismo spec
  * del cliente generado. `est.interfazSin`: nombres de funciones o tipos que le faltan (contrato viejo).
  */
@@ -718,6 +775,7 @@ function wasmConSpec(est) {
     const v = e.value
     return !quitar.has(v && v.name ? v.name.toString() : '')
   })
+  if (est.conNombres) entradas.push(...entradasConNombres())
   const nombre = Buffer.from('contractspecv0')
   const datos = Buffer.concat([leb128(nombre.length), nombre, ...entradas.map((e) => Buffer.from(e.toXdr()))])
   return Buffer.concat([Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00]), leb128(datos.length), datos])

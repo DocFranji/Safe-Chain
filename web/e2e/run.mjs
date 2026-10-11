@@ -1991,6 +1991,108 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
   }
 }
 
+// ---------------------------------------------------------------- UX (plan v5, pedido 5): nombre de la tanda (opcional)
+{
+  // El campo solo aparece si el contrato DESPLEGADO tiene nombres (`est.conNombres`): se mira su interfaz, no el cliente.
+  const json = (x) => JSON.stringify(x, (_, v) => (typeof v === 'bigint' ? String(v) : v))
+  const enviar = async (page) => {
+    await page.getByRole('button', { name: /^Crear la tanda/ }).click()
+    await page.waitForSelector('.aviso.error', { timeout: 15000 }).catch(() => {}) // el mock no firma: aquí termina
+  }
+
+  // A. Contrato v4 (sin nombres): ni rastro del campo, y crear sigue siendo `crear_tanda`.
+  {
+    const est = nuevoEstado()
+    est.cuentaFirma = true
+    const { page, errores } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/crear')
+    await page.waitForSelector('.vista-previa .resumen-frase')
+    await page.waitForTimeout(1500)
+    check('Nombre (contrato v4): no se ofrece el campo', (await page.locator('#nombre-tanda').count()) === 0 && !/Nombre de la tanda/.test(await texto(page)))
+    await enviar(page)
+    check('Nombre (contrato v4): crear usa crear_tanda de siempre', est.creaciones?.length === 1 && est.creaciones[0].fn === 'crear_tanda', json(est.creaciones))
+    await page.close()
+    void errores
+  }
+
+  // B. Contrato con nombres.
+  {
+    const est = nuevoEstado()
+    est.conNombres = true
+    est.cuentaFirma = true
+    const { page, errores } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/crear')
+    await page.waitForSelector('#nombre-tanda', { timeout: 15000 })
+    const ayuda = async () => (await page.locator('#nombre-tanda-ayuda').innerText()).replace(/\s+/g, ' ')
+    const crear = page.getByRole('button', { name: /^Crear la tanda/ })
+    check('Nombre: el campo se llama "Nombre de la tanda (opcional)"', (await page.getByLabel('Nombre de la tanda (opcional)').count()) === 1)
+    check('Nombre: dice el límite, que es público y que no se puede cambiar', /De 2 a 40 caracteres/.test(await ayuda()) && /no se podrá cambiar/.test(await ayuda()), await ayuda())
+    check('Nombre: vacío no estorba (es opcional)', (await crear.isEnabled()) && (await page.locator('#nombre-tanda').getAttribute('aria-invalid')) === null)
+    await shot(page, 'ux5-nombre-crear')
+
+    const campo = page.locator('#nombre-tanda')
+    await campo.fill('A')
+    check('Nombre: con 1 carácter avisa y no deja crear', /al menos 2/.test(await ayuda()) && (await crear.isDisabled()) && (await campo.getAttribute('aria-invalid')) === 'true', await ayuda())
+    await campo.fill('Tanda #1')
+    check('Nombre: dice qué carácter no se puede', /«#»/.test(await ayuda()) && (await crear.isDisabled()), await ayuda())
+    await campo.fill('Fiesta 🎉')
+    check('Nombre: un emoji no se acepta', /«🎉»/.test(await ayuda()) && (await crear.isDisabled()), await ayuda())
+    await campo.fill('x'.repeat(41))
+    check('Nombre: más de 40 caracteres no se acepta y cuenta cuántos lleva', /máximo 40.*41/.test(await ayuda()) && (await crear.isDisabled()), await ayuda())
+    await campo.fill('ñ'.repeat(40))
+    check('Nombre: 40 caracteres con ñ sí (se cuentan caracteres, no bytes)', (await crear.isEnabled()) && /llevas 40/.test(await ayuda()), await ayuda())
+    await campo.fill('   ')
+    check('Nombre: solo espacios cuenta como vacío', (await crear.isEnabled()) && (await campo.getAttribute('aria-invalid')) === null)
+    check('Nombre: sin errores de consola mientras se escribe', errores.length === 0, errores.join(' | '))
+
+    // Vacío -> la función de siempre.
+    await campo.fill('')
+    await enviar(page)
+    check('Nombre (vacío): crear usa crear_tanda', est.creaciones?.length === 1 && est.creaciones[0].fn === 'crear_tanda', json(est.creaciones))
+
+    // Con nombre -> crear_tanda_con_nombre, con el nombre limpio como último argumento.
+    await campo.fill('  Tanda   de la oficina ')
+    await enviar(page)
+    const c = est.creaciones?.[1]
+    check('Nombre: con nombre llama a crear_tanda_con_nombre', c?.fn === 'crear_tanda_con_nombre', json(est.creaciones))
+    check('Nombre: manda el nombre limpio (sin espacios de más) al final', c?.args.length === 8 && c.args[7] === 'Tanda de la oficina', json(c?.args))
+    check('Nombre: lo demás (cuota y personas) va igual que siempre', c?.args[2] === 200_000_000n && c?.args[3] === 5, json(c?.args))
+    await page.close()
+  }
+
+  // C. Con turnos elegidos (subasta) y nombre: crear_tanda_avanzada_con_nombre (nombre al final, tras las opciones).
+  {
+    const est = nuevoEstadoTurnos()
+    est.conNombres = true
+    est.cuentaFirma = true
+    const { page } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/crear')
+    await page.waitForSelector('#nombre-tanda', { timeout: 15000 })
+    await crearDePrueba(page)
+    await page.waitForSelector('.modos')
+    await page.locator('.modo', { hasText: 'Subasta' }).click()
+    await page.locator('#nombre-tanda').fill('Casa nueva 2027')
+    await enviar(page)
+    const c = est.creaciones?.[0]
+    check('Nombre (subasta): llama a crear_tanda_avanzada_con_nombre con el nombre al final', c?.fn === 'crear_tanda_avanzada_con_nombre' && c.args.length === 9 && c.args[8] === 'Casa nueva 2027', json(c?.args))
+    await page.close()
+  }
+
+  // D. En el celular el campo no desborda la página.
+  {
+    const est = nuevoEstado()
+    est.conNombres = true
+    const { page } = await nuevaPagina(browser, { est, viewport: { width: 375, height: 800 } })
+    await page.goto(BASE + '#/crear')
+    await page.waitForSelector('#nombre-tanda', { timeout: 15000 })
+    await page.locator('#nombre-tanda').fill('Tanda con un nombre bastante largo, ¿sí?')
+    const desborda = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
+    check('Nombre (375 px): el campo no desborda la página', !desborda)
+    await shot(page, 'ux5-nombre-375')
+    await page.close()
+  }
+}
+
 await browser.close()
 const fallos = resultados.filter((r) => !r.ok)
 console.log(`\n${resultados.length - fallos.length}/${resultados.length} comprobaciones correctas`)
