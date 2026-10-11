@@ -2286,6 +2286,8 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
     await apodo.fill('  Beto  ')
     await guardar.click()
     await page.waitForSelector('.lista-amigos .amigo', { timeout: 5000 })
+    // La reputación llega de la red un momento después: se espera en vez de adivinar cuánto tarda.
+    await page.waitForFunction(() => /Bronce/.test(document.querySelector('.lista-amigos .amigo')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {})
     const fila = limpio(await page.locator('.lista-amigos .amigo').first().innerText())
     check('Amigos: queda en la lista con su apodo y su reputación', /^B Beto Bronce/.test(fila) && /Invitar a una tanda/.test(fila) && /Quitar/.test(fila), fila)
     check('Amigos: dice que ya quedó', /Listo: Beto quedó en tus amigos\./.test(await texto(page)))
