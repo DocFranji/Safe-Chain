@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { TANDA_ID } from '../config'
 import { almacenLocal } from '../lib/almacen'
+import { leerAmigos, type Amigo } from '../lib/amigos'
 import { leerInvitaciones, type Invitacion } from '../lib/invitaciones'
 import { crearLector, type Lectura } from '../lib/lecturaNotificaciones'
 import { nombreDe, suscribirApodos, versionApodos } from '../lib/nombres'
@@ -15,6 +16,7 @@ import {
   guardarLeidas,
   marcarLeidas,
   notificacionesDeAccion,
+  notificacionesDeAmigos,
   notificacionesDeEventos,
   notificacionesDeInvitacion,
   notificacionesDePendientes,
@@ -27,7 +29,7 @@ import { useConMora } from './useMora'
 
 const INTERVALO_MS = 15_000
 
-type Leyo = { yo: string; lectura: Lectura; invitaciones: Invitacion[]; ahora: number }
+type Leyo = { yo: string; lectura: Lectura; invitaciones: Invitacion[]; amigos: Amigo[]; ahora: number }
 type LeidasDe = { yo: string; leidas: Leidas }
 
 export function useNotificaciones(yo: string | null) {
@@ -46,11 +48,12 @@ export function useNotificaciones(yo: string | null) {
       try {
         const ahora = Math.floor(Date.now() / 1000)
         const invitaciones = leerInvitaciones(almacenLocal())
+        const amigos = leerAmigos(almacenLocal(), cuenta)
         const lectura = await lector.leer(
           ahora,
           invitaciones.map((i) => i.id),
         )
-        if (vivo) setLeyo({ yo: cuenta, lectura, invitaciones, ahora })
+        if (vivo) setLeyo({ yo: cuenta, lectura, invitaciones, amigos, ahora })
       } catch {
         // Sin red por ahora: se sigue con lo último que se leyó y se reintenta en la próxima vuelta.
       }
@@ -92,6 +95,7 @@ export function useNotificaciones(yo: string | null) {
       ...vigente.lectura.mias.flatMap((t) => [...notificacionesDeAccion(t, c), ...notificacionesDePendientes(t, conPendiente, c)]),
       ...[...vigente.lectura.eventos].flatMap(([id, eventos]) => notificacionesDeEventos(id, eventos, c)),
       ...notificacionesDeInvitacion(vigente.invitaciones, vigente.lectura.porId, c),
+      ...notificacionesDeAmigos(vigente.amigos, vigente.lectura.porId, c),
     ])
   }
 

@@ -48,7 +48,7 @@ export default function App() {
 
   // Cada página se viste según su función (paginas.css): elegir, pagar y cobrar, crear, proyectar, leer, revisar.
   return (
-    <div className="app" data-pagina={ruta.tipo}>
+    <div className="app" data-pagina={ruta.tipo === 'amigos' ? 'perfil' : ruta.tipo}>
       <header className="barra">
         <a className="marca" href={RUTA_INICIO}>
           <span className="logo" aria-hidden="true">
@@ -64,7 +64,7 @@ export default function App() {
           <a href={RUTA_CREAR} aria-current={ruta.tipo === 'crear' ? 'page' : undefined}>
             Crear
           </a>
-          <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' ? 'page' : undefined}>
+          <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' || ruta.tipo === 'amigos' ? 'page' : undefined}>
             Perfil
           </a>
         </nav>
@@ -96,8 +96,8 @@ export default function App() {
           <Estado billetera={billetera} />
         ) : ruta.tipo === 'historial' ? (
           <Historial key={ruta.dir ?? 'mio'} dir={ruta.dir} billetera={billetera} />
-        ) : ruta.tipo === 'perfil' ? (
-          <Perfil billetera={billetera} />
+        ) : ruta.tipo === 'perfil' || ruta.tipo === 'amigos' ? (
+          <Perfil billetera={billetera} pestana={ruta.tipo === 'amigos' ? 'amigos' : 'cuenta'} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>

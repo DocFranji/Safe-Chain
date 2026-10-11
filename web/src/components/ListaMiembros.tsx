@@ -8,6 +8,7 @@ import { saldoSuDeuda } from '../lib/deudas'
 import { nombreDe } from '../lib/nombres'
 import { rutaHistorial } from '../lib/rutas'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
+import { BotonAmigo } from './BotonAmigo'
 import { InsigniaNivel } from './InsigniaNivel'
 import './mora.css'
 
@@ -85,6 +86,7 @@ export function ListaMiembros({ datos, yo }: Props) {
                 {marcarMora && !m.moroso && conMora.has(m.direccion) && (
                   <span className="marca-mora">Pago pendiente en otra tanda</span>
                 )}
+                <BotonAmigo dir={m.direccion} yo={yo} />
               </span>
               <em className="persona-estado">{estadoMiembro(m, estado, pago)}</em>
             </li>
