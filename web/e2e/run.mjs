@@ -2447,10 +2447,12 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
     await page.waitForSelector('.aviso.error', { timeout: 15000 }).catch(() => {}) // el mock no firma: aquí termina
   }
 
-  // A. Contrato v4 (sin nombres): ni rastro del campo, y crear sigue siendo `crear_tanda`.
+  // A. Contrato v4 (sin nombres): ni rastro del campo, y crear sigue siendo `crear_tanda`. El cliente generado ya es
+  // el de la v5 (PR #35): para imitar un contrato v4 desplegado se le quitan a la interfaz las funciones de nombres.
   {
     const est = nuevoEstado()
     est.cuentaFirma = true
+    est.interfazSin = ['get_nombre', 'get_nombres', 'crear_tanda_con_nombre', 'crear_tanda_avanzada_con_nombre']
     const { page, errores } = await nuevaPagina(browser, { est })
     await page.goto(BASE + '#/crear')
     await page.waitForSelector('.vista-previa .resumen-frase')

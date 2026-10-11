@@ -775,7 +775,11 @@ function wasmConSpec(est) {
     const v = e.value
     return !quitar.has(v && v.name ? v.name.toString() : '')
   })
-  if (est.conNombres) entradas.push(...entradasConNombres())
+  if (est.conNombres) {
+    // Si el cliente generado ya trae las funciones de nombres (v5), no se repiten.
+    const hay = new Set(entradas.map((e) => (e.value && e.value.name ? e.value.name.toString() : '')))
+    entradas.push(...entradasConNombres().filter((e) => !hay.has(e.value.name.toString())))
+  }
   const nombre = Buffer.from('contractspecv0')
   const datos = Buffer.concat([leb128(nombre.length), nombre, ...entradas.map((e) => Buffer.from(e.toXdr()))])
   return Buffer.concat([Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00]), leb128(datos.length), datos])
