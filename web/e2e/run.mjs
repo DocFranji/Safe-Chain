@@ -1855,7 +1855,8 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
     const filas = (await page.locator('.lista-personas .persona').allInnerTexts()).map(limpio)
     check('Pago pendiente: la marca va junto a Carla y no junto a Beto', /Beto/.test(filas[0]) && !/Pago pendiente/.test(filas[0]) && /Carla.*Pago pendiente en otra tanda/.test(filas[1]), JSON.stringify(filas))
     const historiales = est.llamadas.filter((l) => l.endsWith('.historial')).length
-    check('Pago pendiente: no suma consultas (usa la lectura de las insignias: una por persona)', historiales <= 3, `lecturas del historial: ${historiales}`)
+    // Una lectura por persona distinta: "yo", Beto y Carla (las de la tanda 5) y Ana (miembro de la tanda 3, que creé: la lee la campanita).
+    check('Pago pendiente: no suma consultas (comparte la lectura de las insignias: una por persona distinta)', historiales <= 4, `lecturas del historial: ${historiales}`)
 
     const unirse = page.getByRole('button', { name: /^Unirme y dejar/ })
     await unirse.click()
