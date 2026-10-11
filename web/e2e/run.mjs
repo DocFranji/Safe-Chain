@@ -2440,19 +2440,18 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
 
 // ---------------------------------------------------------------- UX (plan v5, pedido 5): nombre de la tanda (opcional)
 {
-  // El campo solo aparece si el contrato DESPLEGADO tiene nombres (`est.conNombres`): se mira su interfaz, no el cliente.
+  // El campo solo aparece si el contrato DESPLEGADO tiene nombres (`est.sinNombres` = un contrato v4): se mira su interfaz, no el cliente.
   const json = (x) => JSON.stringify(x, (_, v) => (typeof v === 'bigint' ? String(v) : v))
   const enviar = async (page) => {
     await page.getByRole('button', { name: /^Crear la tanda/ }).click()
     await page.waitForSelector('.aviso.error', { timeout: 15000 }).catch(() => {}) // el mock no firma: aquí termina
   }
 
-  // A. Contrato v4 (sin nombres): ni rastro del campo, y crear sigue siendo `crear_tanda`. El cliente generado ya es
-  // el de la v5 (PR #35): para imitar un contrato v4 desplegado se le quitan a la interfaz las funciones de nombres.
+  // A. Contrato v4 (sin nombres): ni rastro del campo, y crear sigue siendo `crear_tanda`.
   {
     const est = nuevoEstado()
     est.cuentaFirma = true
-    est.interfazSin = ['get_nombre', 'get_nombres', 'crear_tanda_con_nombre', 'crear_tanda_avanzada_con_nombre']
+    est.sinNombres = true
     const { page, errores } = await nuevaPagina(browser, { est })
     await page.goto(BASE + '#/crear')
     await page.waitForSelector('.vista-previa .resumen-frase')
@@ -2467,7 +2466,6 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
   // B. Contrato con nombres.
   {
     const est = nuevoEstado()
-    est.conNombres = true
     est.cuentaFirma = true
     const { page, errores } = await nuevaPagina(browser, { est })
     await page.goto(BASE + '#/crear')
@@ -2487,7 +2485,7 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
     await campo.fill('Fiesta 🎉')
     check('Nombre: un emoji no se acepta', /«🎉»/.test(await ayuda()) && (await crear.isDisabled()), await ayuda())
     await campo.fill('x'.repeat(41))
-    check('Nombre: más de 40 caracteres no se acepta y cuenta cuántos lleva', /máximo 40.*41/.test(await ayuda()) && (await crear.isDisabled()), await ayuda())
+    check('Nombre: más de 40 caracteres no se acepta y cuenta cuántos lleva', /hasta 40/.test(await ayuda()) && (await crear.isDisabled()), await ayuda())
     await campo.fill('ñ'.repeat(40))
     check('Nombre: 40 caracteres con ñ sí (se cuentan caracteres, no bytes)', (await crear.isEnabled()) && /llevas 40/.test(await ayuda()), await ayuda())
     await campo.fill('   ')
@@ -2512,7 +2510,6 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
   // C. Con turnos elegidos (subasta) y nombre: crear_tanda_avanzada_con_nombre (nombre al final, tras las opciones).
   {
     const est = nuevoEstadoTurnos()
-    est.conNombres = true
     est.cuentaFirma = true
     const { page } = await nuevaPagina(browser, { est })
     await page.goto(BASE + '#/crear')
@@ -2530,7 +2527,6 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
   // D. En el celular el campo no desborda la página.
   {
     const est = nuevoEstado()
-    est.conNombres = true
     const { page } = await nuevaPagina(browser, { est, viewport: { width: 375, height: 800 } })
     await page.goto(BASE + '#/crear')
     await page.waitForSelector('#nombre-tanda', { timeout: 15000 })
