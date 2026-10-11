@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from '../components/BotonesEntrar'
+import { Info } from '../components/Info'
 import { OpcionesTurnos } from '../components/OpcionesTurnos'
 import { OpcionesHistorial } from '../components/OpcionesHistorial'
 import { SIN_REQUISITOS, hayRequisitos, puntajeDe } from '../lib/historial'
@@ -224,9 +225,14 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
         >
           <div className="panel formulario">
             <div className="campo pregunta">
-              <label htmlFor="cuota">
-                <span className="pregunta-numero">1</span> ¿Cuánto pone cada quien?
-              </label>
+              <div className="etiqueta-info">
+                <label htmlFor="cuota">
+                  <span className="pregunta-numero">1</span> ¿Cuánto pone cada quien?
+                </label>
+                {!errores.cuota && (
+                  <Info etiqueta="Qué es la cuota">La cuota: lo mismo para todas las personas, en cada turno. Son dólares de práctica.</Info>
+                )}
+              </div>
               <div className="con-prefijo">
                 <span aria-hidden="true">$</span>
                 <input
@@ -235,18 +241,25 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   value={f.cuota}
                   onChange={(e) => cambiar('cuota', e.target.value)}
                   aria-invalid={errores.cuota ? true : undefined}
-                  aria-describedby="cuota-ayuda"
+                  aria-describedby={errores.cuota ? 'cuota-ayuda' : undefined}
                 />
               </div>
-              <p id="cuota-ayuda" className={errores.cuota ? 'ayuda error' : 'ayuda'}>
-                {errores.cuota ?? 'La cuota: lo mismo para todas las personas, en cada turno. Son dólares de práctica.'}
-              </p>
+              {errores.cuota && (
+                <p id="cuota-ayuda" className="ayuda error">
+                  {errores.cuota}
+                </p>
+              )}
             </div>
 
             <div className="campo pregunta">
-              <label htmlFor="n">
-                <span className="pregunta-numero">2</span> ¿Cuántas personas?
-              </label>
+              <div className="etiqueta-info">
+                <label htmlFor="n">
+                  <span className="pregunta-numero">2</span> ¿Cuántas personas?
+                </label>
+                <Info etiqueta="Cuántas personas">
+                  Contándote a ti. Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}: cada persona cobra una vez.
+                </Info>
+              </div>
               <div className="contador">
                 <button
                   type="button"
@@ -276,14 +289,12 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   +
                 </button>
               </div>
-              <p className="ayuda">
-                Contándote a ti. Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}: cada persona cobra una vez.
-              </p>
             </div>
 
             <fieldset className="campo pregunta">
               <legend>
                 <span className="pregunta-numero">3</span> ¿Cada cuánto?
+                {f.frecuencia !== 'otra' && <Info etiqueta="Cada cuánto">Cada cuánto paga cada quien su cuota.</Info>}
               </legend>
               <div className="frecuencias">
                 {FRECUENCIAS.map((x) => (
@@ -298,11 +309,11 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   </button>
                 ))}
               </div>
-              <p className={f.frecuencia === 'otra' && errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-                {f.frecuencia === 'otra'
-                  ? (errores.periodoSeg ?? `Otra duración: ${periodoSeg ? cadaCuanto(periodoSeg) : '-'} (en "Opciones avanzadas").`)
-                  : 'Cada cuánto paga cada quien su cuota.'}
-              </p>
+              {f.frecuencia === 'otra' && (
+                <p className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
+                  {errores.periodoSeg ?? `Otra duración: ${periodoSeg ? cadaCuanto(periodoSeg) : '-'} (en "Opciones avanzadas").`}
+                </p>
+              )}
             </fieldset>
 
             <details className="avanzadas" open={avanzadas} onToggle={(e) => setAvanzadas(e.currentTarget.open)}>
@@ -334,16 +345,30 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                     <option value="meses">meses</option>
                   </select>
                 </div>
-                <p id="periodo-ayuda" className={f.frecuencia === 'otra' && errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-                  {(f.frecuencia === 'otra' && errores.periodoSeg) ||
-                    `Reemplaza a "¿Cada cuánto?". Hasta 3 meses por turno${f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''}. Con minutos sirve para probar.`}
-                </p>
+                {f.frecuencia === 'otra' && errores.periodoSeg ? (
+                  <p id="periodo-ayuda" className="ayuda error">
+                    {errores.periodoSeg}
+                  </p>
+                ) : (
+                  <p id="periodo-ayuda" className="ayuda">
+                    Hasta 3 meses por turno{f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''}.
+                    <Info etiqueta="Sobre la otra duración">
+                      Reemplaza a «¿Cada cuánto?». Con minutos sirve para probar.
+                    </Info>
+                  </p>
+                )}
               </div>
 
               <div className="campo">
-                <label htmlFor="multa">
-                  Multa por pagar tarde: <strong>{f.multa} %</strong> de la cuota
-                </label>
+                <div className="etiqueta-info">
+                  <label htmlFor="multa">
+                    Multa por pagar tarde: <strong>{f.multa} %</strong> de la cuota
+                  </label>
+                  <Info etiqueta="Sobre la multa">
+                    Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron.
+                    {cuota !== null && f.multa > 0 && <> Con esta cuota son {dinero((cuota * BigInt(f.multa)) / 100n)}.</>}
+                  </Info>
+                </div>
                 <input
                   id="multa"
                   type="range"
@@ -352,16 +377,18 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   value={f.multa}
                   onChange={(e) => cambiar('multa', Number(e.target.value))}
                 />
-                <p className="ayuda">
-                  Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron.
-                  {cuota !== null && f.multa > 0 && <> Con esta cuota son {dinero((cuota * BigInt(f.multa)) / 100n)}.</>}
-                </p>
               </div>
 
               <div className="campo">
-                <label htmlFor="cobertura">
-                  Depósito de seguridad: <strong>{f.cobertura} %</strong> de lo que aún se debe
-                </label>
+                <div className="etiqueta-info">
+                  <label htmlFor="cobertura">
+                    Depósito de seguridad: <strong>{f.cobertura} %</strong> de lo que aún se debe
+                  </label>
+                  <Info etiqueta="Sobre el depósito de seguridad">
+                    Quien cobra antes deja más depósito. Con 100 % nadie gana nada desapareciendo; con menos es más barato entrar,
+                    pero el grupo asume algo de riesgo.
+                  </Info>
+                </div>
                 <input
                   id="cobertura"
                   type="range"
@@ -371,10 +398,6 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
                   value={f.cobertura}
                   onChange={(e) => cambiar('cobertura', Number(e.target.value))}
                 />
-                <p className="ayuda">
-                  Quien cobra antes deja más depósito. Con 100 % nadie gana nada desapareciendo; con menos es más barato
-                  entrar, pero el grupo asume algo de riesgo.
-                </p>
               </div>
 
               <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
@@ -536,9 +559,11 @@ function Resumen({
             </tbody>
           </table>
         </div>
-        <p className="explica">
-          Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Si desaparece, su depósito paga por
-          él.
+        <p className="ayuda">
+          Quien cobra antes deja más.
+          <Info etiqueta="Por qué deja más">
+            Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Si desaparece, su depósito paga por él.
+          </Info>
         </p>
       </details>
     </>

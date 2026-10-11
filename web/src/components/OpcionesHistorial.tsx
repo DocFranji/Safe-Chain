@@ -4,6 +4,7 @@
 import { useDireccionHistorial, useHistorialCacheado } from '../hooks/useHistorial'
 import { NIVELES, hayRequisitos, nivelDePuntaje, puntajeDe, type OpcionesDeHistorial } from '../lib/historial'
 import { RUTA_PERFIL } from '../lib/rutas'
+import { Info } from './Info'
 import './historial.css'
 
 type Props = {
@@ -30,21 +31,20 @@ function Opciones({ valor, alCambiar, yo, unirmeYo }: Props) {
     <fieldset className="campo opciones-historial">
       <legend>Historial crediticio (opcional)</legend>
 
-      <label className="casilla">
-        <input
-          type="checkbox"
-          checked={valor.descuento}
-          onChange={(e) => alCambiar({ ...valor, descuento: e.target.checked })}
-        />
-        <span>
-          Dar descuento de depósito por buen historial
-          <span className="ayuda">
-            {' '}
-            (Bronce 10 %, Plata 25 %, Oro 50 % menos; nunca menos de una cuota). Quien cumple deja menos dinero
-            inmovilizado, y el grupo asume un poco más de riesgo.
-          </span>
-        </span>
-      </label>
+      <div className="casilla-info">
+        <label className="casilla">
+          <input
+            type="checkbox"
+            checked={valor.descuento}
+            onChange={(e) => alCambiar({ ...valor, descuento: e.target.checked })}
+          />
+          <span>Dar descuento de depósito por buen historial</span>
+        </label>
+        <Info etiqueta="Cómo es el descuento">
+          Bronce 10 %, Plata 25 %, Oro 50 % menos; nunca menos de una cuota. Quien cumple deja menos dinero inmovilizado, y el
+          grupo asume un poco más de riesgo.
+        </Info>
+      </div>
 
       <label className="casilla">
         <input
