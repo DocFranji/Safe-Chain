@@ -9,8 +9,9 @@
 #   WEB       dirección de la web, para imprimir el enlace completo de la demo (por defecto, la de `npm run dev`)
 #   PAUSAR=1  espera un ENTER antes de empezar, para abrir primero la pantalla proyectada
 #   PERIODO   segundos que dura cada ronda (por defecto 60, el mínimo que acepta el contrato)
-#   DEUDA=1   variante con deuda (misión M1): garantía mínima, así Ana queda en mora en la ronda 3 y
-#             Carla cobra 100 de menos; al final Ana vuelve, paga su deuda y Carla recibe lo que le faltaba
+#   DEUDA=1   variante con deuda (misión M1): garantía mínima (una cuota), que no alcanza para las 2 cuotas que
+#             le quedan a Ana: desde la ronda 2 queda en mora y su garantía no se usa (v5). Beto y Carla cobran
+#             100 de menos; al final Ana vuelve, paga sus 200 y ellos reciben lo que les faltaba
 set -euo pipefail
 
 if [ ! -f scripts/.contratos ]; then
@@ -45,7 +46,7 @@ cerrar() {
 
 DEUDA="${DEUDA:-0}"
 COBERTURA=10000
-[ "$DEUDA" = "1" ] && COBERTURA=0 # garantía mínima (una cuota): la de Ana se acaba en la ronda 2
+[ "$DEUDA" = "1" ] && COBERTURA=0 # garantía mínima (una cuota): no alcanza para las 2 cuotas que le quedan a Ana
 
 echo "== Crear tanda: 3 miembros, cuota 100 TUSD, rondas de $PERIODO s, multa 10%, cobertura $((COBERTURA / 100))% =="
 ID=$(T --source admin -- crear_tanda --creador "$(stellar keys address admin)" --token "$TOKEN" \
@@ -69,18 +70,22 @@ echo "== Ronda 1: todos pagan; Ana cobra 300 =="
 for p in ana beto carla; do T --source "$p" -- pagar_cuota --id "$ID" --miembro "$(stellar keys address "$p")"; done
 sleep "$PERIODO"; cerrar
 
-echo "== Ronda 2: Ana desaparece. Su colateral cubre su cuota; Beto cobra 300 completos =="
+if [ "$DEUDA" = "1" ]; then
+  echo "== Ronda 2: Ana desaparece. Su garantía (100) no alcanza para las 2 cuotas que le quedan: no se usa y queda en mora (debe 100). Beto cobra 200 =="
+else
+  echo "== Ronda 2: Ana desaparece. Su colateral cubre su cuota; Beto cobra 300 completos =="
+fi
 for p in beto carla; do T --source "$p" -- pagar_cuota --id "$ID" --miembro "$(stellar keys address "$p")"; done
 sleep "$PERIODO"; cerrar
 
 if [ "$DEUDA" = "1" ]; then
-  echo "== Ronda 3: Ana sigue sin pagar y ya no le queda garantía: queda en mora (debe 100). Carla cobra 200 =="
+  echo "== Ronda 3: Ana sigue sin pagar (ahora debe 200). Carla cobra 200 =="
   for p in beto carla; do T --source "$p" -- pagar_cuota --id "$ID" --miembro "$(stellar keys address "$p")"; done
   sleep "$PERIODO"; cerrar
 
-  echo "== Ana vuelve y paga su deuda: Carla recibe los 100 TUSD que le faltaban =="
+  echo "== Ana vuelve y paga su deuda de 200: Beto y Carla reciben los 100 TUSD que les faltaban, y ella recupera su garantía =="
   T --source ana -- pagar_deuda --id "$ID" --miembro "$(stellar keys address ana)" \
-    --pagador "$(stellar keys address ana)" --monto 1000000000
+    --pagador "$(stellar keys address ana)" --monto 2000000000
 else
   echo "== Ronda 3: Carla paga a tiempo; Beto paga TARDE; Carla cobra 300 =="
   T --source carla -- pagar_cuota --id "$ID" --miembro "$(stellar keys address carla)"

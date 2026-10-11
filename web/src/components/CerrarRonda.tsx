@@ -13,6 +13,8 @@ type Props = {
   miembros: MiembroConDireccion[]
   pagaron: string[]
   cuota: bigint
+  /** (v5) Cuotas que les quedan a todos: la de esta ronda y las siguientes (`n_miembros - ronda_actual`). */
+  restantes: number
   /** Quien cobra esta ronda (undefined si todavía no se sabe, por ejemplo en una subasta). */
   beneficiario: MiembroConDireccion | undefined
   yo: string | null
@@ -38,6 +40,7 @@ export function CerrarRonda({
   miembros,
   pagaron,
   cuota,
+  restantes,
   beneficiario,
   yo,
   ocupado,
@@ -51,7 +54,7 @@ export function CerrarRonda({
   const nombre = beneficiario ? nombreDe(beneficiario.direccion) : null
   const retenida = beneficiario?.moroso === true
 
-  const faltan = faltantesAlCerrar(miembros, pagaron, cuota)
+  const faltan = faltantesAlCerrar(miembros, pagaron, cuota, restantes)
   const total = faltan.reduce((s, f) => s + f.falta, 0n)
   const varios = faltan.length > 1
   const quedan = varios ? 'quedan' : 'queda'
@@ -61,7 +64,7 @@ export function CerrarRonda({
       ? 'Todos pagaron: el pozo sale completo.'
       : faltan.length === 0
         ? 'A quien no pagó, su depósito de seguridad le cubre la cuota, así que el pozo sale completo.'
-        : `A ${nombres(faltan.map((f) => f.direccion))} no ${varios ? 'les' : 'le'} alcanza el depósito: el pozo sale con ${dinero(total)} menos, que ${deben} y ${varios ? 'pueden' : 'puede'} pagar después.`
+        : `El depósito de ${nombres(faltan.map((f) => f.direccion))} no alcanza para todas las cuotas que ${varios ? 'les' : 'le'} quedan y no se usa ahora: el pozo sale con ${dinero(total)} menos, que ${deben}. ${varios ? 'Pueden' : 'Puede'} pagarlo después; si no, al terminar la tanda ${varios ? 'sus depósitos se reparten' : 'su depósito se reparte'} entre quienes cobraron de menos.`
 
   if (antes) {
     const fechas =

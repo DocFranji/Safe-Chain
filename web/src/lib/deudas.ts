@@ -63,18 +63,22 @@ export function errorMontoDeuda(monto: bigint | null, deuda: bigint): string | n
 }
 
 /**
- * Quiénes no alcanzan a cubrir su cuota si la ronda se cierra ahora, y cuánto falta de cada uno (como
- * `cerrar_ronda`): a quien no pagó, su garantía le cubre la cuota; si no le alcanza, entra lo que tiene y la
- * diferencia falta en la bolsa (esa persona queda debiéndosela a quien cobra).
+ * Quiénes dejan la cuota sin cubrir si la ronda se cierra ahora, y cuánto falta de cada uno (como
+ * `cerrar_ronda`, v5): a quien no pagó, su garantía le cubre la cuota solo si alcanza para TODAS las cuotas
+ * que le quedan (`restantes`: esta y las siguientes) y no debe nada de antes. Si no alcanza, su garantía no se
+ * toca: la cuota entera queda como deuda a favor de quien cobra, y al terminar la tanda esa garantía se reparte
+ * entre quienes cobraron de menos.
  */
 export function faltantesAlCerrar(
-  miembros: { direccion: string; colateral: bigint }[],
+  miembros: { direccion: string; colateral: bigint; deuda?: bigint }[],
   pagaron: string[],
   cuota: bigint,
+  restantes: number,
 ): { direccion: string; falta: bigint }[] {
+  const necesita = cuota * BigInt(restantes)
   return miembros
-    .filter((m) => !pagaron.includes(m.direccion) && m.colateral < cuota)
-    .map((m) => ({ direccion: m.direccion, falta: cuota - (m.colateral > 0n ? m.colateral : 0n) }))
+    .filter((m) => !pagaron.includes(m.direccion) && !((m.deuda ?? 0n) === 0n && m.colateral >= necesita))
+    .map((m) => ({ direccion: m.direccion, falta: cuota }))
 }
 
 /**

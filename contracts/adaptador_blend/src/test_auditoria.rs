@@ -301,24 +301,26 @@ fn sin_liquidez_la_tanda_se_traba_y_se_destraba() {
     let deudor = Address::generate(&c.env);
     c.pool().prestar(&deudor, &(libre - cuota / 2));
 
-    // Ronda 0: nadie paga -> hay que sacar colateral de Blend -> falla por liquidez.
+    // Rondas 0 y 1: todos pagan, no se toca Blend.
+    for _ in 0..2 {
+        ct.todos_pagan(id, &ct.miembros);
+        c.avanzar(120);
+        ct.tanda.cerrar_ronda(&id);
+    }
+    // Ronda 2 (la última): nadie paga y las garantías de quienes ya cobraron alcanzan para lo que les
+    // queda (v5), así que hay que sacarlas de Blend -> falla por liquidez.
     c.avanzar(120);
     assert_eq!(error_contrato(ct.tanda.try_cerrar_ronda(&id)), 1207);
     assert_eq!(
         ct.tanda.get_tanda(&id).ronda_actual,
-        0,
+        2,
         "la ronda sigue abierta"
     );
 
     // Mientras tanto, los miembros todavía pueden pagar (tarde): no se toca Blend.
     ct.todos_pagan(id, &ct.miembros);
     ct.tanda.cerrar_ronda(&id); // ya no necesita Blend
-    for _ in 1..3 {
-        ct.todos_pagan(id, &ct.miembros);
-        c.avanzar(120);
-        ct.tanda.cerrar_ronda(&id);
-    }
-    // Finalizar saca TODO de Blend: falla mientras no haya liquidez...
+                                // Finalizar saca TODO de Blend: falla mientras no haya liquidez...
     assert_eq!(error_contrato(ct.tanda.try_finalizar(&id)), 1207);
     // ...y funciona en cuanto el prestatario devuelve.
     c.pool().devolver(&deudor, &(libre - cuota / 2));
@@ -345,15 +347,15 @@ fn pool_congelado_bloquea_unirse_pero_no_retirar() {
         error_contrato(ct.tanda.try_unirse(&nueva, &ct.miembros[3])),
         1206
     );
-    // La tanda en curso: nadie paga en la ronda 0 (se RETIRA colateral de Blend) y luego
-    // todos pagan.
-    c.avanzar(120);
-    ct.tanda.cerrar_ronda(&id);
-    for _ in 1..3 {
+    // La tanda en curso: todos pagan las rondas 0 y 1, y en la última nadie paga (se RETIRA colateral
+    // de Blend para cubrir, porque las garantías alcanzan para lo que queda).
+    for _ in 0..2 {
         ct.todos_pagan(id, &ct.miembros[0..3]);
         c.avanzar(120);
         ct.tanda.cerrar_ronda(&id);
     }
+    c.avanzar(120);
+    ct.tanda.cerrar_ronda(&id);
     ct.tanda.finalizar(&id);
     assert_eq!(ct.tanda.get_tanda(&id).estado, Estado::Finalizada);
 
@@ -408,19 +410,21 @@ fn arreglado_perdida_en_blend_se_cubre_con_lo_que_hay() {
     };
     let inicial = total();
 
-    // Nadie paga la ronda 0: hay que cubrir 3 cuotas (30) con algo que vale ~20.
+    // Rondas 0 y 1: todos pagan. En la última nadie paga: sus garantías alcanzan para lo que les
+    // queda (v5) y hay que cubrir 3 cuotas (30) con algo que vale ~20.
+    for _ in 0..2 {
+        ct.todos_pagan(id, &ct.miembros);
+        c.avanzar(120);
+        ct.tanda.cerrar_ronda(&id);
+    }
     c.avanzar(120);
     ct.tanda.cerrar_ronda(&id);
-    assert_eq!(ct.tanda.get_tanda(&id).ronda_actual, 1, "la ronda avanzó");
+    assert_eq!(ct.tanda.get_tanda(&id).ronda_actual, 3, "la ronda avanzó");
     assert_eq!(
         ct.tanda.get_tanda(&id).shares_boveda,
         0,
         "se usó todo lo que había"
     );
-    for _ in 1..3 {
-        c.avanzar(120);
-        ct.tanda.cerrar_ronda(&id);
-    }
     ct.tanda.finalizar(&id);
     assert_eq!(ct.tanda.get_tanda(&id).estado, Estado::Finalizada);
     assert_eq!(c.adaptador.shares_de(&ct.tanda.address), 0);

@@ -181,7 +181,7 @@ function MiDeuda({
       <p className="explica">
         {terminada
           ? 'La tanda ya terminó, pero tu deuda sigue pendiente y no puedes unirte a otras tandas hasta pagarla. Si pagas, el dinero va directo a quien cobró de menos por tu atraso:'
-          : 'Tu depósito de seguridad ya no alcanzó a cubrir tus cuotas. Si pagas, el dinero le llega a quien cobró de menos por tu atraso:'}
+          : 'Tu depósito de seguridad no alcanza para todas las cuotas que te quedan, así que no se usó. Si pagas, el dinero le llega a quien cobró de menos por tu atraso y tu depósito sigue siendo tuyo. Si no pagas, al terminar la tanda tu depósito se reparte entre esas personas, según lo que le faltó a cada una:'}
       </p>
       {d && d.faltantes.length > 0 && (
         <ul className="lista-deudas">

@@ -39,5 +39,6 @@ export const Error = {
     56: { message: "BovedaDeOtroToken" },
     60: { message: "SubastaNoCierraAntes" },
     61: { message: "CierreMuyAdelantado" },
-    65: { message: "DeudaPendiente" }
+    65: { message: "DeudaPendiente" },
+    70: { message: "NombreInvalido" }
 };

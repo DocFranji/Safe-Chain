@@ -93,6 +93,42 @@ describe('narrar: la historia de la demo', () => {
     expect(h[4].detalle).toBe('intereses $8 · multas repartidas $10')
   })
 
+  it('(v5) cuenta el nombre de la tanda y cómo se repartió el depósito de quien no pagó', () => {
+    const [creada, una, varias, pozo] = narrar(
+      [
+        ev({ name: 'EvCreada', data: { id: 1, creador: 'GANA', cuota: 100n * U, n_miembros: 3, nombre: 'Tanda de la oficina' } }),
+        ev({
+          name: 'EvGarantiaRepartida',
+          data: { id: 1, deudor: 'GANA', repartido: 30n * U, deuda_restante: 0n, partes: [{ acreedor: 'GCARLA', monto: 30n * U, a_pozo: false }] },
+        }),
+        ev({
+          name: 'EvGarantiaRepartida',
+          data: {
+            id: 1,
+            deudor: 'GANA',
+            repartido: 100n * U,
+            deuda_restante: 40n * U,
+            partes: [
+              { acreedor: 'GBETO', monto: 60n * U, a_pozo: false },
+              { acreedor: 'GCARLA', monto: 40n * U, a_pozo: false },
+            ],
+          },
+        }),
+        ev({
+          name: 'EvGarantiaRepartida',
+          data: { id: 1, deudor: 'GANA', repartido: 50n * U, deuda_restante: 10n * U, partes: [{ acreedor: 'GBETO', monto: 50n * U, a_pozo: true }] },
+        }),
+      ],
+      f,
+    )
+    expect(creada.titulo).toBe('Se creó la tanda «Tanda de la oficina»')
+    expect(una).toMatchObject({ tipo: 'clave', titulo: 'Carla recibió $30 del depósito de Ana' })
+    expect(una.detalle).toContain('Con eso quedó al día')
+    expect(varias.titulo).toBe('El depósito de Ana ($100) se repartió entre quienes cobraron de menos')
+    expect(varias.detalle).toBe('Beto recibió $60 · Carla recibió $40. Todavía debe $40')
+    expect(pozo.detalle).toContain('$50 al pozo de quienes cumplieron (el de Beto estaba guardado)')
+  })
+
   it('ordena cronológicamente aunque lleguen desordenados', () => {
     const a = ev({ name: 'EvIniciada', data: { id: 1 } })
     const b = ev({ name: 'EvCancelada', data: { id: 1 } })

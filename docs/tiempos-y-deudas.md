@@ -380,3 +380,114 @@ Peor caso medido (WASM, límites de mainnet: 100 M instrucciones, 50 escrituras,
 | `cerrar_ronda` antes que falla (11 de 12) | 1,3 M | 17 | 0 |
 | `finalizar` con deudas (renueva al máximo, anota el reparto) | 15,2 M | 49 | 29 |
 | `pagar_deuda` después de finalizar (10 faltantes, reparto entre 11) | 9,8 M | 47 | 15 |
+
+## 9. Plan v5 (sábado 10 de octubre): la garantía se reparte al final y el nombre de la tanda
+
+Decisiones del equipo en `agentes/PLAN-V5.md`, pedidos 2 y 5. Es una **v5 del contrato**: solo entra a producción si
+se despliega a tiempo (`DESPLEGAR-V4.md`, paso 1); si no, queda en esta rama y la demo sigue con la v4.
+
+### 9.1 El nombre de la tanda (pedido 5)
+
+Interfaz publicada en el tablero (issue #4). **Todo es aditivo**: ninguna firma existente cambia.
+
+```
+crear_tanda_con_nombre(creador, token, cuota, n_miembros, periodo_seg, penalidad_bps, cobertura_bps, nombre) -> u32
+crear_tanda_avanzada_con_nombre(…, opciones, nombre) -> u32
+get_nombre(id) -> String                      // "" si no tiene
+get_nombres(desde, cuantos) -> Vec<String>    // hasta 50 por llamada, para la lista
+```
+
+| Decisión | Qué se hizo y por qué |
+| --- | --- |
+| Dónde va el nombre | En **funciones nuevas** y no en `OpcionesTanda` ni como parámetro de `crear_tanda`: `crear_tanda` y `crear_tanda_avanzada` ya las usan 62 pruebas, `demo.sh`, la web y el trabajo de otras misiones. Quien crea firma **una sola vez**, con o sin nombre |
+| Cómo se guarda | Clave propia `ClaveM1::Nombre(id)`, no dentro de `Tanda` (`get_tanda` queda igual). Se renueva con la tanda (`renovar_tanda_con_vida`) |
+| Sin nombre | `nombre = ""` es válido y equivale a `crear_tanda`: no se guarda nada y la web muestra "Tanda N". Así la web llama siempre a las funciones con nombre |
+| Reglas | De **2 a 40 caracteres** (se cuentan caracteres, no bytes). Permitidos: A–Z, a–z, 0–9, espacio, `. , - _ ! ?`, `¿ ¡` y las letras de Latin-1 con tilde (`á é í ó ú ü ñ ç à…`; no `×` ni `÷`). **Sin espacio al principio ni al final.** Todo lo demás (emojis, saltos de línea, `#`, `@`, otros alfabetos, espacios raros, acentos sueltos sin normalizar) da `NombreInvalido = 70` |
+| Normalización | La web debe mandar `nombre.normalize('NFC')`: una `e` más un acento suelto no pasa |
+| Cambiarlo | No se puede. Es público e inmutable, como el resto de la tanda |
+| Repetidos | Se permiten: el nombre no identifica (el número sí) |
+| Evento | `creada` trae el campo nuevo `nombre` (vacío si no tiene). El RPC guarda eventos pocos días: la lista usa `get_nombres` |
+| Cómo detecta la web si el contrato tiene nombres | Por la interfaz del WASM desplegado (`interfazDe` en `lib/estado.ts`): busca `get_nombre` |
+
+### 9.2 La garantía de quien se va sin pagar se reparte al final, en proporción (pedido 2)
+
+**Antes (v4):** cuando alguien no pagaba, su garantía cubría cuotas completas **en orden**. Si la garantía era menor al
+100 %, quien cobraba justo después recibía todo y los siguientes nada (por ejemplo, con 4 personas y garantía de 50 %,
+una persona que cobra en el turno 2 y no paga nunca dejaba la garantía de 100 para el primero de los afectados).
+
+**Ahora (v5):** al cerrar una ronda, a quien no pagó:
+
+| Situación | Qué pasa |
+| --- | --- |
+| No debe nada de antes **y** su garantía alcanza para **todas** las cuotas que le quedan (esta y las siguientes: `n_miembros − ronda`) | **Igual que antes**: la garantía cubre la cuota al instante, quien cobra recibe el pozo completo y se anota su multa. Nadie sale perjudicado, así que no hay por qué esperar |
+| Si no | La garantía **no se usa**. La cuota entera es deuda (`Faltante` a favor de quien cobró de menos) y la persona queda en mora |
+
+Una vez que la garantía alcanza, siempre alcanza (cada cuota cubierta baja la garantía y las cuotas que quedan en lo
+mismo). Y una vez en mora, sigue en mora hasta pagar. Por eso nadie pasa de "cubierto" a "en mora" a mitad de camino.
+
+**Al `finalizar`**, a cada moroso que todavía tiene garantía (`deudas::repartir_garantias`):
+
+1. Su parte del dinero que devolvió la bóveda es `total × su garantía / suma de garantías` (su capital **y** su parte
+   del rendimiento).
+2. Se reparte entre quienes cobraron de menos **en proporción a lo que le falta a cada uno**, sin pasar de lo que se
+   debe (nunca se paga de más). Su propia ronda no cuenta: no hay a quién pagarle.
+3. Se descuenta de su deuda y de esos faltantes (del más viejo al más nuevo), y se anota en `pagado`.
+4. Si un afectado **también era moroso y su bolsa quedó retenida**, su parte no va a él: va al fondo `retenido` que se
+   reparte entre quienes cumplieron (igual que `abonar` mientras la tanda sigue).
+5. Lo que sobre de su garantía (porque alguien pagó parte de su deuda por otro lado) **se le devuelve**, después de
+   cobrar sus multas pendientes.
+6. Si su garantía saldó **toda** su deuda, queda al día (`moroso = false`) y se anota `DeudaSaldada` en el historial
+   (en lote, junto con los demás hechos). No cuenta como "terminó la tanda": su mora ya quedó registrada.
+
+| Decisión | Qué se hizo y por qué |
+| --- | --- |
+| Primero los afectados, después las multas | Quien perdió dinero cobra antes que el fondo de multas |
+| Redondeo | Parte entera para cada afectado y las unidades sueltas, de una en una, a los primeros (en el orden del mapa). Nadie recibe más de lo que se le debe y no se pierde ninguna unidad |
+| Rendimiento | La garantía de un moroso gana rendimiento como la de los demás y va con ella. Si le sobra, se lo queda quien sobra |
+| Ejemplo del pedido (garantía de 50 %, cobra en el turno 1 y no paga nunca) | Su garantía se queda quieta; al final se reparte entre los 3 afectados a partes iguales, en vez de pagar al primero y dejar sin nada a los últimos |
+| Si paga su deuda antes del final (`pagar_deuda`) | Su garantía **nunca se tocó**: sigue siendo suya. Al saldar ya no hace falta reponerla (la reposición de `pagar_deuda` solo actúa cuando una garantía quedó por debajo de la fórmula, como en el sorteo y la subasta) |
+| Todos en mora | Lo que no tiene a quién repartirse queda sin repartir en el contrato (`sin_repartir`), como siempre. Antes pasaba solo con las bolsas retenidas; ahora también con las partes de garantía que le tocan al fondo |
+| Eventos | `garantia_rep` por moroso (`EvGarantiaRepartida { id, deudor, repartido, deuda_restante, partes }`). Cada parte (`{ acreedor, monto, a_pozo }`) pesa ~125 bytes y la red rechaza las transacciones con más de 16 KiB de eventos; con 11 morosos y 11 afectados serían ~120 partes. Por eso **solo las primeras 24 partes de un `finalizar` van detalladas**; el resto de los eventos trae el total repartido y `partes` vacío |
+| `cerrar_ronda` | Ya no mueve la bóveda cuando nadie puede cubrir: menos lecturas y escrituras. La cuota completa es la deuda |
+
+**Qué cambia en la demo.** La demo normal no cambia (Ana cobra primero y su garantía de 200 alcanza para las 2 cuotas
+que le quedan). La variante `DEUDA=1` (garantía mínima) ahora deja a Ana en mora desde la ronda 2.
+
+### 9.3 Pruebas v5
+
+- `test_nombres.rs`: reglas (válidos con tildes y signos, 40 caracteres de 1 y de 2 bytes; inválidos de todo tipo),
+  vacío, con y sin opciones de turnos, `get_nombres` en lote, evento `creada`, que un nombre inválido no deje nada a
+  medias y la vida del dato.
+- `test.rs`: `impago_sin_colateral_suficiente_queda_moroso` (reparto 50/50 entre dos afectados),
+  `impago_con_garantia_suficiente_se_cubre_al_instante`, `beneficiario_moroso_su_bolsa_se_retiene_y_se_reparte_al_final`.
+- `test_deudas.rs`: los escenarios pasan a "la garantía no alcanza"; el reparto de un moroso con dos afectados,
+  moroso que paga a medias, todos en mora, y el peor caso con 12.
+- `test_invariantes.rs`: el modelo de `cerrar` sigue la regla nueva, y el de `finalizar` calcula **aparte** el
+  reparto (por afectado, al fondo, lo que sobra, la deuda que queda) y lo compara con lo que hizo el contrato.
+  `INVARIANTES_SEMILLAS=400 cargo test -p tanda --release invariantes_al_azar`.
+
+### 9.4 Peor caso medido (v5)
+
+12 personas, garantía mínima, casi nadie paga (11 morosos con garantía), contratos en WASM, contra los límites de mainnet
+(100 M instrucciones, 100 lecturas, **50 escrituras**, 16 384 B de eventos; las pruebas fallan si se pasa cualquiera):
+
+| Operación | Instrucciones | Lecturas | Escrituras |
+| --- | --- | --- | --- |
+| `cerrar_ronda` | 10,0 M | 51 | 26 |
+| `finalizar` con 11 morosos (reparte sus garantías) | 28,3 M | 41 | 31 |
+| `finalizar` con 11 morosos e historial | 29,9 M | 46 | 34 |
+| `pagar_deuda` | 6,9 M | 38 | 17 |
+| `finalizar` (la deudora cobra la última ronda) + `pagar_deuda` tras finalizar | 17,2 M + 10,6 M | 50 + 48 | 30 + 15 |
+
+`tanda.wasm`: 95 459 bytes (límite de la red: 128 KB). El peor caso de todo el conjunto (subasta + M1 + M2) llega a 41 escrituras en `cerrar_ronda` y 34 en `finalizar`. Invariantes al azar con 400 semillas
+(`INVARIANTES_SEMILLAS=400 cargo test -p tanda --release invariantes_al_azar`): en verde.
+
+Primer intento de `finalizar` con un evento por afectado: **20 108 B de eventos en el peor caso (límite 16 384)**. Por eso
+el evento es uno por moroso y solo las primeras 24 partes van detalladas (ver §9.2).
+
+### 9.5 Hallazgo al actualizar las pruebas del adaptador de Blend
+
+`adaptador_blend/test_auditoria.rs` (pérdida en Blend) dejó al descubierto un error que ya existía: si la bóveda pierde valor
+y alguien tiene **multas pendientes**, `finalizar` cobraba las multas de una garantía anotada que ya no tenía dinero detrás y
+repartía de más: la transferencia fallaba por saldo insuficiente y la tanda quedaba trabada. Ahora el déficit lo absorbe el
+fondo de multas (`lib.rs::finalizar`). Con rendimiento ≥ 0, que es lo normal, no cambia nada.
