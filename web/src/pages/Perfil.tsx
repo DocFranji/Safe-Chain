@@ -6,10 +6,11 @@ import { BotonesEntrar } from '../components/BotonesEntrar'
 import { EditarApodo } from '../components/EditarApodo'
 import { MisDeudas } from '../components/MisDeudas'
 import { FichaHistorial } from './Historial'
-import { RUTA_LOBBY, rutaHistorial } from '../lib/rutas'
+import { Amigos } from '../components/Amigos'
+import { RUTA_AMIGOS, RUTA_LOBBY, RUTA_PERFIL, rutaHistorial } from '../lib/rutas'
 import '../components/historial.css'
 
-export function Perfil({ billetera }: { billetera: Billetera }) {
+export function Perfil({ billetera, pestana = 'cuenta' }: { billetera: Billetera; pestana?: 'cuenta' | 'amigos' }) {
   const yo = billetera.direccion
   const contrato = useDireccionHistorial()
   const historial = useHistorial(yo)
@@ -32,52 +33,66 @@ export function Perfil({ billetera }: { billetera: Billetera }) {
         <a href={RUTA_LOBBY}>← Todas las tandas</a>
       </p>
       <h1 id="perfil-titulo">Tu perfil</h1>
+      <nav className="perfil-pestanas" aria-label="Secciones del perfil">
+        <a href={RUTA_PERFIL} aria-current={pestana === 'cuenta' ? 'page' : undefined}>
+          Mi cuenta
+        </a>
+        <a href={RUTA_AMIGOS} aria-current={pestana === 'amigos' ? 'page' : undefined}>
+          Amigos
+        </a>
+      </nav>
 
-      <section className="perfil-cuenta" aria-labelledby="cuenta-titulo">
-        <h2 id="cuenta-titulo">Tu cuenta</h2>
-        {contrato ? (
-          <EditarApodo yo={yo} contrato={contrato} />
-        ) : (
-          <p className="explica">El apodo estará disponible cuando esta versión tenga el historial conectado.</p>
-        )}
-        <p className="historial-dir">{yo}</p>
-        <p className="explica">
-          {google
-            ? `Entraste con Google${google.correo ? ` (${google.correo})` : ''}: Rounda creó esta billetera para tu cuenta.`
-            : 'Entraste con Freighter.'}
-        </p>
-      </section>
-
-      <MisDeudas yo={yo} />
-
-      <section aria-labelledby="historial-titulo">
-        {historial.tipo === 'listo' ? (
-          <>
-            <FichaHistorial dir={yo} h={historial.historial} esMio esGoogle={!!google} enPerfil />
-            <p>
-              <a href={rutaHistorial(yo)}>Ver tu página pública de historial</a> (puedes compartir el enlace)
+      {pestana === 'amigos' ? (
+        <Amigos yo={yo} />
+      ) : (
+        <>
+          <section className="perfil-cuenta" aria-labelledby="cuenta-titulo">
+            <h2 id="cuenta-titulo">Tu cuenta</h2>
+            {contrato ? (
+              <EditarApodo yo={yo} contrato={contrato} />
+            ) : (
+              <p className="explica">El apodo estará disponible cuando esta versión tenga el historial conectado.</p>
+            )}
+            <p className="historial-dir">{yo}</p>
+            <p className="explica">
+              {google
+                ? `Entraste con Google${google.correo ? ` (${google.correo})` : ''}: Rounda creó esta billetera para tu cuenta.`
+                : 'Entraste con Freighter.'}
             </p>
-          </>
-        ) : historial.tipo === 'error' ? (
-          <p className="aviso error">{historial.texto}</p>
-        ) : historial.tipo === 'cargando' ? (
-          <p className="cargando" role="status">
-            Leyendo tu historial…
-          </p>
-        ) : null}
-      </section>
+          </section>
 
-      <section className="perfil-salir" aria-labelledby="salir-titulo">
-        <h2 id="salir-titulo">Cerrar sesión</h2>
-        <p className="explica">
-          {google
-            ? 'Sales de tu cuenta de Google en este navegador.'
-            : 'Este navegador deja de usar tu cuenta de Freighter hasta que vuelvas a pulsar «Conectar billetera Stellar» (o «Ya tengo billetera Stellar»). Para quitarle el permiso a Rounda del todo, hazlo desde Freighter (Configuración → Sitios conectados).'}
-        </p>
-        <button type="button" className="boton secundario" onClick={() => void billetera.salir()}>
-          Cerrar sesión
-        </button>
-      </section>
+          <MisDeudas yo={yo} />
+
+          <section aria-labelledby="historial-titulo">
+            {historial.tipo === 'listo' ? (
+              <>
+                <FichaHistorial dir={yo} h={historial.historial} esMio esGoogle={!!google} enPerfil />
+                <p>
+                  <a href={rutaHistorial(yo)}>Ver tu página pública de historial</a> (puedes compartir el enlace)
+                </p>
+              </>
+            ) : historial.tipo === 'error' ? (
+              <p className="aviso error">{historial.texto}</p>
+            ) : historial.tipo === 'cargando' ? (
+              <p className="cargando" role="status">
+                Leyendo tu historial…
+              </p>
+            ) : null}
+          </section>
+
+          <section className="perfil-salir" aria-labelledby="salir-titulo">
+            <h2 id="salir-titulo">Cerrar sesión</h2>
+            <p className="explica">
+              {google
+                ? 'Sales de tu cuenta de Google en este navegador.'
+                : 'Este navegador deja de usar tu cuenta de Freighter hasta que vuelvas a pulsar «Conectar billetera Stellar» (o «Ya tengo billetera Stellar»). Para quitarle el permiso a Rounda del todo, hazlo desde Freighter (Configuración → Sitios conectados).'}
+            </p>
+            <button type="button" className="boton secundario" onClick={() => void billetera.salir()}>
+              Cerrar sesión
+            </button>
+          </section>
+        </>
+      )}
     </section>
   )
 }
