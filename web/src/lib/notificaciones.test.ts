@@ -11,6 +11,7 @@ import {
   marcarLeidas,
   MAX_LEIDAS,
   notificacionesDeAccion,
+  notificacionesDeAmigos,
   notificacionesDeEventos,
   notificacionesDeInvitacion,
   notificacionesDePendientes,
@@ -347,5 +348,32 @@ describe('lo ya leído (se guarda en el navegador)', () => {
     const roto = { getItem: () => null, setItem: () => { throw new Error('lleno') } }
     expect(() => guardarLeidas(roto, 'GYO', { base: 1, ids: [] })).not.toThrow()
     expect(abrirLeidas(roto, 'GYO', AHORA)).toEqual({ base: AHORA, ids: [] })
+  })
+})
+
+describe('notificacionesDeAmigos: tu amigo creó una tanda', () => {
+  const amigos = [{ dir: 'GBETO', apodo: 'Beto' }]
+  const abierta = (o: Parameters<typeof tanda>[0] = {}) => tanda({ estado: 'Abierta', creador: 'GBETO', miembros: [miembro('GBETO', 0)], ...o })
+  const porId = (t: TandaParaAvisos) => new Map([[t.id, t]])
+
+  it('avisa con el apodo con el que guardaste a tu amigo y la tanda en una línea', () => {
+    const [a, ...otras] = notificacionesDeAmigos(amigos, porId(abierta()), c)
+    expect(otras).toEqual([])
+    expect(a).toMatchObject({
+      id: 'amigo:5',
+      tipo: 'amigo',
+      titulo: 'Tu amigo Beto creó una tanda',
+      detalle: 'Tanda 5: 3 personas · $20 por semana. Entra para unirte.',
+      href: '#/tanda/5',
+      accion: true,
+    })
+  })
+
+  it('no avisa si la creó otra persona, si ya estás, si se llenó o si ya empezó', () => {
+    expect(notificacionesDeAmigos(amigos, porId(abierta({ creador: 'GANA' })), c)).toEqual([])
+    expect(notificacionesDeAmigos(amigos, porId(abierta({ miembros: [miembro('GBETO', 0), miembro('GYO', 1)] })), c)).toEqual([])
+    expect(notificacionesDeAmigos(amigos, porId(abierta({ miembros: [miembro('GBETO', 0), miembro('GANA', 1), miembro('GCARLA', 2)] })), c)).toEqual([])
+    expect(notificacionesDeAmigos(amigos, porId(abierta({ estado: 'Activa' })), c)).toEqual([])
+    expect(notificacionesDeAmigos([], porId(abierta()), c)).toEqual([])
   })
 })

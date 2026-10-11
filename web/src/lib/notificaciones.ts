@@ -16,6 +16,7 @@ import type { EventoTanda } from './historia'
 import { lineaTanda } from './resumen'
 import { rutaTanda } from './rutas'
 import { siguienteAccion } from './siguiente'
+import type { Amigo } from './amigos'
 import type { Invitacion } from './invitaciones'
 
 export type TipoNotificacion =
@@ -25,6 +26,7 @@ export type TipoNotificacion =
   | 'deuda'
   | 'pendiente'
   | 'invitacion'
+  | 'amigo'
   | 'abono'
   | 'empezo'
   | 'termino'
@@ -155,6 +157,29 @@ export function notificacionesDeInvitacion(invitaciones: Invitacion[], porId: Re
   return salida
 }
 
+/**
+ * "Tu amigo Beto creó una tanda" (pedido 6): una tanda abierta con lugares libres que creó alguien de tus amigos, si
+ * todavía no estás en ella. Usa el apodo con el que guardaste a tu amigo.
+ */
+export function notificacionesDeAmigos(amigos: Amigo[], porId: ReadonlyMap<number, TandaParaAvisos>, c: Contexto): Notificacion[] {
+  const salida: Notificacion[] = []
+  for (const t of porId.values()) {
+    const amigo = amigos.find((a) => a.dir === t.tanda.creador)
+    if (!amigo || t.tanda.estado.tag !== 'Abierta' || esMia(t, c.yo) || t.miembros.length >= t.tanda.n_miembros) continue
+    const linea = lineaTanda({ cuota: t.tanda.cuota, n: t.tanda.n_miembros, periodoSeg: Number(t.tanda.periodo_seg) })
+    salida.push({
+      id: `amigo:${t.id}`,
+      tipo: 'amigo',
+      titulo: `Tu amigo ${amigo.apodo} creó una tanda`,
+      detalle: `${c.tanda(t.id)}: ${linea}. Entra para unirte.`,
+      href: rutaTanda(t.id),
+      cuando: c.ahora,
+      accion: true,
+    })
+  }
+  return salida
+}
+
 // ---------------------------------------------------------------------------
 // Lo que pasó (eventos de la red)
 // ---------------------------------------------------------------------------
@@ -249,9 +274,10 @@ const URGENCIA: Record<TipoNotificacion, number> = {
   deuda: 3,
   pendiente: 4,
   invitacion: 5,
-  abono: 6,
-  empezo: 7,
-  termino: 8,
+  amigo: 6,
+  abono: 7,
+  empezo: 8,
+  termino: 9,
 }
 
 /** Une los avisos de varias fuentes, sin repetir ninguno (por id) y en el orden en que se muestran. */
