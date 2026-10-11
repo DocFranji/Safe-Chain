@@ -2225,6 +2225,205 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
   }
 }
 
+// ---------------------------------------------------------------- UX (plan v5, pedido 6): amigos
+// Se guardan solo en el navegador (rounda:amigos:<cuenta>): se agregan pegando una dirección, desde la lista de quiénes
+// participan o desde el perfil público; se les invita a una tanda abierta propia y se quitan. Los de la campanita:
+// "Tu amigo Beto creó una tanda".
+{
+  const limpio = (s) => s.replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim()
+  const CLAVE = (cuenta) => `rounda:amigos:${cuenta}`
+  const sembrarAmigos = (page, cuenta, lista) => page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v) }, [CLAVE(cuenta), JSON.stringify(lista)])
+  const guardados = (page, cuenta) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '[]'), CLAVE(cuenta))
+  const JERGA_AMIGOS = /(?<![\p{L}])(TUSD|garantías?|colateral|bolsas?|rondas?|morosos?|mora|XLM|Friendbot|trustline|bóvedas?)(?![\p{L}])/iu
+  const BETO_DIR = BETO
+  const dirMala = BETO.slice(0, -1) + 'A'
+
+  // A. Las pestañas del Perfil.
+  {
+    const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await page.goto(BASE + '#/perfil')
+    await page.waitForSelector('.perfil-pestanas', { timeout: 15000 })
+    const tabs = (await page.locator('.perfil-pestanas a').allInnerTexts()).join('|')
+    check('Amigos: el Perfil tiene dos pestañas, "Mi cuenta" y "Amigos"', tabs === 'Mi cuenta|Amigos' && (await page.locator('.perfil-pestanas a[aria-current="page"]').innerText()) === 'Mi cuenta', tabs)
+    await page.locator('.perfil-pestanas a', { hasText: 'Amigos' }).click()
+    await page.waitForSelector('.amigos', { timeout: 5000 })
+    check('Amigos: la pestaña tiene su propia dirección (#/perfil/amigos) y el menú sigue en "Perfil"', /#\/perfil\/amigos$/.test(page.url()) && (await page.locator('.menu a[aria-current="page"]').innerText()) === 'Perfil' && (await page.locator('.perfil-pestanas a[aria-current="page"]').innerText()) === 'Amigos')
+    const t = limpio(await page.locator('.amigos').innerText())
+    check('Amigos: avisa que se guardan solo en este teléfono o computadora', /se guardan solo en este teléfono o computadora/.test(t), t)
+    check('Amigos: sin amigos, lo dice y cómo agregarlos', /Todavía no tienes amigos guardados/.test(t))
+    check('Amigos: sin jerga', !JERGA_AMIGOS.test(t), t)
+    await page.close()
+    const sin = await nuevaPagina(browser, { est: nuevoEstado(), conectado: false })
+    await sin.page.goto(BASE + '#/perfil/amigos')
+    await sin.page.waitForTimeout(1500)
+    check('Amigos: sin sesión pide entrar', /Entra para ver tu perfil/.test(await texto(sin.page)) && (await sin.page.locator('.amigos').count()) === 0)
+    await sin.page.close()
+  }
+
+  // B. Agregar pegando una dirección, con sus validaciones; y que quede guardado.
+  {
+    const { page, errores } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await page.goto(BASE + '#/perfil/amigos')
+    await page.waitForSelector('.amigos', { timeout: 15000 })
+    await page.getByRole('button', { name: 'Agregar un amigo' }).click()
+    const dir = page.getByLabel('Dirección de tu amigo')
+    const apodo = page.getByLabel('¿Cómo le dices?')
+    const guardar = page.getByRole('button', { name: 'Guardar amigo' })
+    const problema = async () => limpio(await page.locator('.form-amigo [role="alert"]').first().innerText().catch(() => ''))
+    await guardar.click()
+    check('Amigos: sin dirección, pide pegarla', /Pega la dirección de tu amigo/.test(await problema()), await problema())
+    await dir.fill(dirMala)
+    await apodo.fill('Beto')
+    await guardar.click()
+    check('Amigos: una dirección con un error de tipeo se explica', /no es válida/.test(await problema()), await problema())
+    await dir.fill(ME)
+    await guardar.click()
+    check('Amigos: tu propia dirección no vale', /es la tuya/.test(await problema()), await problema())
+    await dir.fill(BETO_DIR)
+    await apodo.fill('')
+    await guardar.click()
+    check('Amigos: sin apodo, pide cómo le dices', /Escribe cómo le dices/.test(await problema()), await problema())
+    await apodo.fill('  Beto  ')
+    await guardar.click()
+    await page.waitForSelector('.lista-amigos .amigo', { timeout: 5000 })
+    const fila = limpio(await page.locator('.lista-amigos .amigo').first().innerText())
+    check('Amigos: queda en la lista con su apodo y su reputación', /^B Beto Bronce/.test(fila) && /Invitar a una tanda/.test(fila) && /Quitar/.test(fila), fila)
+    check('Amigos: dice que ya quedó', /Listo: Beto quedó en tus amigos\./.test(await texto(page)))
+    const g = await guardados(page, ME)
+    check('Amigos: se guarda en el navegador (rounda:amigos:<cuenta>)', g.length === 1 && g[0].dir === BETO_DIR && g[0].apodo === 'Beto', JSON.stringify(g))
+    await page.getByRole('button', { name: 'Agregar un amigo' }).click()
+    await page.getByLabel('Dirección de tu amigo').fill(BETO_DIR)
+    await page.getByLabel('¿Cómo le dices?').fill('Otro')
+    await page.getByRole('button', { name: 'Guardar amigo' }).click()
+    check('Amigos: no se repite la misma dirección', /Ya tienes a Beto en tus amigos/.test(await problema()), await problema())
+    check('Amigos: sin errores de consola', errores.length === 0, errores.join(' | '))
+    await page.reload()
+    await page.waitForSelector('.lista-amigos .amigo', { timeout: 15000 })
+    check('Amigos: siguen ahí al recargar', (await page.locator('.lista-amigos .amigo').count()) === 1)
+    await page.close()
+    // Cada cuenta tiene su lista: Carla en este navegador no ve a los amigos de "yo".
+    const otra = await nuevaPagina(browser, { est: nuevoEstado(), direccion: CARLA })
+    await otra.page.goto(BASE + '#/perfil/amigos')
+    await otra.page.waitForSelector('.amigos', { timeout: 15000 })
+    check('Amigos: cada cuenta tiene su propia lista', (await otra.page.locator('.lista-amigos .amigo').count()) === 0)
+    await otra.page.close()
+  }
+
+  // C. Invitar a una tanda: elegir una de mis tandas abiertas y compartir el enlace con el nombre del amigo.
+  {
+    const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await sembrarAmigos(page, ME, [{ dir: BETO_DIR, apodo: 'Beto' }])
+    await page.goto(BASE + '#/perfil/amigos')
+    await page.waitForSelector('.lista-amigos .amigo', { timeout: 15000 })
+    await page.getByRole('button', { name: 'Invitar a una tanda' }).click()
+    await page.waitForSelector('.elegir-tanda', { timeout: 15000 })
+    const opciones = (await page.locator('.opcion-tanda').allInnerTexts()).map(limpio)
+    check('Amigos (invitar): ofrece mis tandas abiertas con lugar libre (la 3, que creé)', opciones.length === 1 && /^Tanda 3 3 personas · \$100 cada 2 min · faltan 2$/.test(opciones[0]), JSON.stringify(opciones))
+    check('Amigos (invitar): con una sola, ya viene elegida', await page.locator('.opcion-tanda input').first().isChecked())
+    const wa = (await page.getByRole('link', { name: 'Invitar por WhatsApp' }).getAttribute('href')) ?? ''
+    const mensaje = decodeURIComponent(wa.replace('https://wa.me/?text=', ''))
+    check('Amigos (invitar): el mensaje de WhatsApp lo saluda por su nombre y lleva el enlace de la tanda', wa.startsWith('https://wa.me/?text=') && /^¡Hola, Beto!/.test(mensaje) && /#\/tanda\/3/.test(mensaje), mensaje)
+    check('Amigos (invitar): el enlace para copiar lleva a la tanda 3', /#\/tanda\/3$/.test(await page.getByLabel('Enlace de invitación').inputValue()))
+    check('Amigos (invitar): sin jerga', !JERGA_AMIGOS.test(limpio(await page.locator('.amigos').innerText())))
+    await page.setViewportSize({ width: 375, height: 800 })
+    check('Amigos (375 px): sin desborde horizontal con la lista y la invitación abierta', await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    await shot(page, 'ux-amigos-375')
+    await page.close()
+    // Sin tandas abiertas propias: lo dice y lleva a crear una.
+    const est = nuevoEstado()
+    est.tandas[3].tanda.estado = { tag: 'Cancelada', values: undefined }
+    const v = await nuevaPagina(browser, { est, direccion: ME })
+    await sembrarAmigos(v.page, ME, [{ dir: BETO_DIR, apodo: 'Beto' }])
+    await v.page.goto(BASE + '#/perfil/amigos')
+    await v.page.waitForSelector('.lista-amigos .amigo', { timeout: 15000 })
+    await v.page.getByRole('button', { name: 'Invitar a una tanda' }).click()
+    await v.page.waitForSelector('.invitar-amigo, .amigo .explica', { timeout: 15000 })
+    check('Amigos (invitar): sin tandas abiertas, lo dice y ofrece crear una', /No tienes tandas abiertas con lugar libre/.test(await v.page.locator('.amigo').innerText()) && (await v.page.locator('.amigo a[href="#/crear"]').count()) === 1)
+    await v.page.close()
+  }
+
+  // D. Quitar un amigo (con confirmación).
+  {
+    const { page } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await sembrarAmigos(page, ME, [{ dir: BETO_DIR, apodo: 'Beto' }, { dir: CARLA, apodo: 'Carla' }])
+    await page.goto(BASE + '#/perfil/amigos')
+    await page.waitForSelector('.lista-amigos .amigo', { timeout: 15000 })
+    await page.locator('.amigo', { hasText: 'Beto' }).getByRole('button', { name: 'Quitar' }).click()
+    check('Amigos (quitar): pregunta antes y dice que solo se borra de este teléfono o computadora', /¿Quitar a Beto de tus amigos\? Solo se borra de este teléfono o computadora\./.test(limpio(await page.locator('.confirmar-quitar').innerText())))
+    await page.getByRole('button', { name: 'No', exact: true }).click()
+    check('Amigos (quitar): "No" lo deja como estaba', (await page.locator('.lista-amigos .amigo').count()) === 2)
+    await page.locator('.amigo', { hasText: 'Beto' }).getByRole('button', { name: 'Quitar' }).click()
+    await page.getByRole('button', { name: 'Sí, quitar' }).click()
+    await page.waitForTimeout(300)
+    const g = await guardados(page, ME)
+    check('Amigos (quitar): "Sí, quitar" lo borra de la lista y del navegador', (await page.locator('.lista-amigos .amigo').count()) === 1 && g.length === 1 && g[0].apodo === 'Carla', JSON.stringify(g))
+    await page.close()
+  }
+
+  // E. Desde la lista de quiénes participan (tanda 5: Beto y Carla) y desde el perfil público.
+  {
+    const { page, errores } = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await page.goto(BASE + '#/tanda/5')
+    await page.waitForSelector('.lista-personas', { timeout: 15000 })
+    await page.waitForTimeout(1200)
+    check('Amigos (lista): "Agregar a mis amigos" junto a cada persona de la tanda', (await page.locator('.persona .boton-amigo').count()) === 2)
+    await page.locator('.persona', { hasText: 'Beto' }).locator('.boton-amigo').click()
+    check('Amigos (lista): el formulario viene con su apodo público', (await page.getByLabel('¿Cómo le dices?').inputValue()) === 'Beto')
+    await page.getByRole('button', { name: 'Guardar amigo' }).click()
+    await page.waitForTimeout(300)
+    check('Amigos (lista): queda "Amigo: Beto" y ya no ofrece agregarlo', /Amigo: Beto/.test(await page.locator('.persona', { hasText: 'Beto' }).innerText()) && (await page.locator('.persona', { hasText: 'Beto' }).locator('.boton-amigo').count()) === 0)
+    check('Amigos (lista): se guardó', (await guardados(page, ME)).some((a) => a.dir === BETO_DIR))
+    check('Amigos (lista): sin errores de consola', errores.length === 0, errores.join(' | '))
+    await page.close()
+    // Donde "yo" estoy (tanda 9), no se ofrece agregarme a mí.
+    const dentro = await nuevaPagina(browser, { est: nuevoEstadoTurnos(), direccion: ME })
+    await dentro.page.goto(BASE + '#/tanda/9')
+    await dentro.page.waitForSelector('.lista-personas', { timeout: 15000 })
+    await dentro.page.waitForTimeout(1200)
+    check('Amigos (lista): no se ofrece agregarte a ti mismo', (await dentro.page.locator('.persona.yo .boton-amigo').count()) === 0 && (await dentro.page.locator('.persona .boton-amigo').count()) === 2)
+    await dentro.page.close()
+    // Sin sesión, nada.
+    const sin = await nuevaPagina(browser, { est: nuevoEstado(), conectado: false })
+    await sin.page.goto(BASE + '#/tanda/5')
+    await sin.page.waitForSelector('.lista-personas', { timeout: 15000 })
+    check('Amigos (lista): sin sesión no se ofrece', (await sin.page.locator('.boton-amigo').count()) === 0)
+    await sin.page.close()
+    // Perfil público.
+    const perfil = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await perfil.page.goto(BASE + '#/historial/' + CARLA)
+    await perfil.page.waitForSelector('.perfil-amigo .boton-amigo', { timeout: 15000 })
+    await perfil.page.locator('.perfil-amigo .boton-amigo').click()
+    await perfil.page.getByRole('button', { name: 'Guardar amigo' }).click()
+    await perfil.page.waitForTimeout(300)
+    check('Amigos (perfil público): se agrega desde ahí', /Amigo: Carla/.test(await perfil.page.locator('.perfil-amigo').innerText()) && (await guardados(perfil.page, ME)).some((a) => a.dir === CARLA))
+    await perfil.page.goto(BASE + '#/historial')
+    await perfil.page.waitForTimeout(1500)
+    check('Amigos (perfil público): en el tuyo no se ofrece', (await perfil.page.locator('.perfil-amigo').count()) === 0)
+    await perfil.page.close()
+  }
+
+  // F. La campanita avisa cuando un amigo crea una tanda (la 5 la creó Beto y "yo" no estoy en ella).
+  {
+    const con = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await sembrarAmigos(con.page, ME, [{ dir: BETO_DIR, apodo: 'Mi socio' }])
+    await con.page.goto(BASE + '#/tandas')
+    await con.page.waitForSelector('.campana-numero', { timeout: 15000 }).catch(() => {})
+    await con.page.locator('.boton-campana').click()
+    await con.page.waitForSelector('.campana-panel', { timeout: 5000 })
+    const d = (await con.page.locator('.campana-item').allInnerTexts()).map(limpio)
+    check('Amigos (campanita): "Tu amigo Mi socio creó una tanda", con la tanda en una línea', d.some((x) => /^Tu amigo Mi socio creó una tanda/.test(x) && /Tanda 5: 5 personas · \$50 por semana\. Entra para unirte\./.test(x)), JSON.stringify(d))
+    await con.page.close()
+    const sin = await nuevaPagina(browser, { est: nuevoEstado(), direccion: ME })
+    await sin.page.goto(BASE + '#/tandas')
+    await sin.page.waitForSelector('.tarjeta', { timeout: 15000 }).catch(() => {})
+    await sin.page.waitForTimeout(2500)
+    await sin.page.locator('.boton-campana').click()
+    await sin.page.waitForSelector('.campana-panel', { timeout: 5000 })
+    check('Amigos (campanita): sin amigos guardados no avisa de tandas ajenas', !(await sin.page.locator('.campana-panel').innerText()).includes('Tu amigo'))
+    await sin.page.close()
+  }
+}
+
 await browser.close()
 const fallos = resultados.filter((r) => !r.ok)
 console.log(`\n${resultados.length - fallos.length}/${resultados.length} comprobaciones correctas`)
