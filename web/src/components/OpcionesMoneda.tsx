@@ -3,6 +3,7 @@
 // Tarjetas con el mismo aspecto que las opciones de turnos de M3 (clases propias para no mezclarse).
 import { useEffect, useState } from 'react'
 import { TUSD, monedasDisponibles, type Moneda } from '../lib/monedas'
+import { Info } from './Info'
 
 const LEMA: Record<string, string> = {
   simulado: 'Intereses simulados y rápidos: ideal para probar',
@@ -25,7 +26,14 @@ export function OpcionesMoneda({ valor, alCambiar }: { valor: Moneda; alCambiar:
   if (monedas.length < 2) return null
   return (
     <fieldset className="campo opciones-moneda">
-      <legend>¿En qué moneda?</legend>
+      <legend>
+        ¿En qué moneda?
+        <Info etiqueta="Sobre la moneda">
+          {valor.real
+            ? 'El depósito se guarda en Blend y gana intereses de verdad (en minutos es muy poco). Pide tus USDC de prueba en la barra de arriba.'
+            : 'Los intereses son simulados y corren más rápido, para que se noten en una demo.'}
+        </Info>
+      </legend>
       <div className="monedas" role="radiogroup" aria-label="Moneda de la tanda">
         {monedas.map((m) => (
           <label key={m.token} className={m.token === valor.token ? 'moneda elegida' : 'moneda'}>
@@ -35,11 +43,6 @@ export function OpcionesMoneda({ valor, alCambiar }: { valor: Moneda; alCambiar:
           </label>
         ))}
       </div>
-      <p className="ayuda">
-        {valor.real
-          ? 'El depósito se guarda en Blend y gana intereses de verdad (en minutos es muy poco). Pide tus USDC de prueba en la barra de arriba.'
-          : 'Los intereses son simulados y corren más rápido, para que se noten en una demo.'}
-      </p>
     </fieldset>
   )
 }

@@ -21,6 +21,7 @@ import { cadaCuanto, lineaTanda } from '../lib/resumen'
 import { siguienteAccion } from '../lib/siguiente'
 import { SIN_TURNO, eligeTurno, type Modo } from '../lib/turnos'
 import { comoConseguir, useMoneda } from '../hooks/useMoneda'
+import { Info } from './Info'
 
 type Props = {
   id: number
@@ -206,26 +207,30 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
 
             {estado === 'Activa' && !vencida && !antes && pagaron.length === tanda.n_miembros && (
               <p className="explica">
-                Todos pagaron.{' '}
-                {modo === 'Subasta'
-                  ? 'En la subasta el pozo se entrega cuando termina el plazo: hasta entonces se puede ofertar.'
-                  : 'Ya se adelantaron varios turnos, así que el pozo se puede entregar cuando falten menos de 4 meses para la próxima fecha límite.'}
+                Todos pagaron.
+                <Info etiqueta="Cuándo se entrega el pozo">
+                  {modo === 'Subasta'
+                    ? 'En la subasta el pozo se entrega cuando termina el plazo: hasta entonces se puede ofertar.'
+                    : 'Ya se adelantaron varios turnos, así que el pozo se puede entregar cuando falten menos de 4 meses para la próxima fecha límite.'}
+                </Info>
               </p>
             )}
 
             {estado === 'PorLiquidar' && (
               <>
-                <button
-                  className="boton principal"
-                  disabled={ocupado}
-                  onClick={() => ejecutar((c) => c.finalizar({ id }), 'Listo: se repartió lo que quedaba.')}
-                >
-                  Repartir lo que queda
-                </button>
-                <p className="explica">
-                  Devuelve a cada persona su depósito con los intereses, y reparte las multas entre quienes siempre
-                  pagaron a tiempo.
-                </p>
+                <div className="boton-con-info">
+                  <button
+                    className="boton principal"
+                    disabled={ocupado}
+                    onClick={() => ejecutar((c) => c.finalizar({ id }), 'Listo: se repartió lo que quedaba.')}
+                  >
+                    Repartir lo que queda
+                  </button>
+                  <Info etiqueta="Qué hace este botón">
+                    Devuelve a cada persona su depósito con los intereses, y reparte las multas entre quienes siempre pagaron a
+                    tiempo.
+                  </Info>
+                </div>
               </>
             )}
 
@@ -320,12 +325,12 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <Dato etiqueta="Cuota por turno" valor={`${dinero(tanda.cuota)}`} />
           <Dato etiqueta="Cada cuánto se paga" valor={duracion(Number(tanda.periodo_seg))} />
           <Dato etiqueta="Multa por atraso" valor={`${porcentaje(tanda.penalidad_bps)} de la cuota`} />
-          <Dato etiqueta="Depósito de seguridad" valor={`${porcentaje(tanda.cobertura_bps)} de las cuotas que faltan`} />
+          <Dato
+            etiqueta="Depósito de seguridad"
+            valor={`${porcentaje(tanda.cobertura_bps)} de las cuotas que faltan`}
+            info="Quien cobra antes deja un depósito más grande, porque después de cobrar todavía debe más cuotas. Si alguien desaparece, su depósito paga por él."
+          />
         </dl>
-        <p className="explica">
-          Quien cobra antes deja un depósito más grande, porque después de cobrar todavía debe más cuotas. Si alguien
-          desaparece, su depósito paga por él.
-        </p>
       </details>
     </section>
   )
@@ -340,10 +345,13 @@ function FaltaSaldo({ falta }: { falta: bigint }) {
   )
 }
 
-function Dato({ etiqueta, valor, alerta = false }: { etiqueta: string; valor: string; alerta?: boolean }) {
+function Dato({ etiqueta, valor, alerta = false, info }: { etiqueta: string; valor: string; alerta?: boolean; info?: string }) {
   return (
     <div className="dato">
-      <dt>{etiqueta}</dt>
+      <dt>
+        {etiqueta}
+        {info && <Info etiqueta={`Sobre «${etiqueta.toLowerCase()}»`}>{info}</Info>}
+      </dt>
       <dd className={alerta ? 'alerta' : undefined}>{valor}</dd>
     </div>
   )

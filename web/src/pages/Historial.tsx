@@ -27,6 +27,7 @@ import { dinero } from '../lib/glosario'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { RUTA_LOBBY, irA, rutaHistorial } from '../lib/rutas'
 import { EXPLORADOR } from '../config'
+import { Info } from '../components/Info'
 import '../components/historial.css'
 
 type Props = { dir: string | null; billetera: Billetera }
@@ -155,16 +156,21 @@ export function FichaHistorial({ dir, h, esMio, esGoogle, enPerfil = false }: Pr
             {fechaLarga(Number(h.primera_actividad))} · última: {fechaLarga(Number(h.ultima_actividad))}.
           </p>
           <p className="explica">
-            Puntos ganados: {h.puntos_positivos} · puntos perdidos: {h.puntos_negativos}. Lo negativo no se borra:
-            saldar una deuda suma puntos, pero la mora queda registrada.
+            Puntos ganados: {h.puntos_positivos} · puntos perdidos: {h.puntos_negativos}.
+            <Info etiqueta="Sobre los puntos perdidos">
+              Lo negativo no se borra: saldar una deuda suma puntos, pero la mora queda registrada.
+            </Info>
           </p>
         </>
       )}
 
       {esGoogle && (
         <p className="explica">
-          Entraste con Google: tu historial es el de la billetera que Rounda creó para tu cuenta. Si un día usas otra
-          billetera, su historial empieza en cero.
+          Entraste con Google.
+          <Info etiqueta="Sobre tu historial con Google">
+            Tu historial es el de la billetera que Rounda creó para tu cuenta. Si un día usas otra billetera, su historial
+            empieza en cero.
+          </Info>
         </p>
       )}
 

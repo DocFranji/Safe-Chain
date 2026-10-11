@@ -15,6 +15,18 @@ const check = (nombre, ok, extra = '') => {
 }
 
 const texto = (page) => page.locator('body').innerText()
+/** El texto de los globos de los botones "i" de una zona (se pasa el cursor por cada uno): la letra pequeña ya no está a la vista. */
+const globos = async (page, zona) => {
+  const botones = page.locator(`${zona} .boton-info`)
+  const salida = []
+  for (let i = 0; i < (await botones.count()); i++) {
+    if (!(await botones.nth(i).isVisible())) continue // dentro de un plegable cerrado
+    await botones.nth(i).hover()
+    salida.push((await page.locator('.globo-info').last().innerText()).replace(/\u00a0/g, ' '))
+  }
+  await page.mouse.move(0, 0)
+  return salida.join(' ')
+}
 const shot = (page, nombre) => page.screenshot({ path: SHOTS + nombre + '.png', fullPage: true })
 /** UX: en "Crear", lo que no es una de las 3 preguntas está plegado en "Opciones avanzadas". */
 const abrirAvanzadas = async (page) => {
@@ -245,7 +257,7 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.goto(BASE + '#/tanda/3')
   await page.waitForSelector('.rendimiento dl', { timeout: 15000 }).catch(() => {})
   const rend = (await page.locator('.rendimiento').innerText()).replace(/\u00a0/g, ' ')
-  check('M1: tanda de prueba (rondas de 2 min) dice que su bóveda corre más rápido', /1 minuto equivale a 36,5 días/.test(rend), rend.slice(-300))
+  check('M1: tanda de prueba (rondas de 2 min) dice que su bóveda corre más rápido', /1 minuto equivale a 36,5 días/.test(rend + (await globos(page, '.rendimiento'))), rend.slice(-300))
   check('M1: tanda de prueba sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
@@ -323,7 +335,7 @@ const browser = await chromium.launch(opcionesNavegador())
   check('Historia: "Carla pagó \$50 y se puso al día"', /Carla pagó \$50 y se puso al día/.test(hist), hist.slice(0, 500))
   check('Historia: "Beto recibió los $50 que le faltaban" (momento clave)', /Beto recibió los \$50 que le faltaban/.test(hist) && (await page.locator('.historia-item.clave').count()) >= 2)
   await page.waitForSelector('.rendimiento dl', { timeout: 15000 }).catch(() => {})
-  check('M1: tanda mensual dice que su bóveda rinde al ritmo de la vida real', /al ritmo de la vida real/.test(await page.locator('.rendimiento').innerText()))
+  check('M1: tanda mensual dice que su bóveda rinde al ritmo de la vida real', /al ritmo de la vida real/.test(await globos(page, '.rendimiento')))
   await shot(page, '06b-tanda-deuda')
   check('Deuda: sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
@@ -387,7 +399,7 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForTimeout(500)
   const panel = (await page.locator('.panel-ronda').innerText()).replace(/\u00a0/g, ' ')
   check('Subasta: aunque todos pagaron, no ofrece cerrar antes', !/Todos pagaron: c/.test(panel) && !/Pasar al siguiente turno|Entregarle el pozo/.test(panel), panel.slice(0, 500))
-  check('Subasta: explica que se entrega al terminar el plazo', /En la subasta el pozo se entrega cuando termina el plazo/.test(panel), panel.slice(0, 600))
+  check('Subasta: explica que se entrega al terminar el plazo', /En la subasta el pozo se entrega cuando termina el plazo/.test(await globos(page, '.panel-ronda')), panel.slice(0, 600))
   check('Subasta (todos pagaron): sin errores de consola', errores.length === 0, errores.join(' | '))
   await page.close()
 }
@@ -959,7 +971,7 @@ const browser = await chromium.launch(opcionesNavegador())
   await page.waitForSelector('.rueda svg', { timeout: 15000 })
   await page.waitForSelector('.turnos-acciones', { timeout: 15000 }).catch(() => {})
   const t = await texto(page)
-  check('Turnos/sorteo abierta: "El orden se sortea cuando se llene"', /El orden se sortea cuando se llene/.test(t))
+  check('Turnos/sorteo abierta: "El orden se sortea cuando se llene"', /El orden se sortea cuando se llene/.test(await globos(page, '.turnos-acciones')))
   check('Turnos/sorteo abierta: unirse pide una cuota', /Unirme y dejar \$100 de depósito/.test(t))
   check('Turnos/sorteo abierta: "Tu turno se sorteará"', /Tu turno se sorteará cuando se llene la tanda/.test(t))
   check('Turnos/sorteo abierta: Ana con turno por decidir', /Turno por decidir/.test(t) && (await page.locator('.nodo-turno', { hasText: '?' }).count()) === 1)
@@ -1111,7 +1123,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   const casilla = page.getByLabel(/Ofertas selladas/)
   check('Sellada/crear: la subasta ofrece ofertas selladas (apagadas por defecto)', (await casilla.count()) === 1 && !(await casilla.isChecked()))
   await casilla.check()
-  check('Sellada/crear: explica que se revela desde el mismo navegador', /Se revela desde el mismo navegador/.test(await texto(page)))
+  check('Sellada/crear: explica que se revela desde el mismo navegador', /Se revela desde el mismo navegador/.test(await globos(page, '.turnos-opciones')))
   await page.locator('.modo', { hasText: 'Precio por turno' }).click()
   check('Sellada/crear: en otros modos no aparece', (await page.getByLabel(/Ofertas selladas/).count()) === 0)
   check('Sellada/crear: sin errores de consola', errores.length === 0, errores.join(' | '))
@@ -1425,7 +1437,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   await page.goto(BASE + '#/tanda/12')
   await page.waitForSelector('.liquidez-blend', { timeout: 20000 }).catch(() => {})
   const t = await texto(page)
-  check('M4: tanda USDC dice que el rendimiento es real (Blend)', /los intereses son reales/.test(t), t.slice(0, 600))
+  check('M4: tanda USDC dice que el rendimiento es real (Blend)', /los intereses son reales/.test(await globos(page, '.rendimiento')), t.slice(0, 600))
   check('M4: tanda USDC muestra el rendimiento en USDC', /Ganado hasta ahora\s*\+\$0,0000039/.test(t) && /Depósitos guardados\s*\$400/.test(t))
   check('M4: tanda USDC muestra la liquidez libre de Blend', /Blend tiene 28[\s.\u00a0\u202f]?453(,\d+)? USDC libres/.test(t))
   check('M4: enlace a la garantía en Blend (stellar.expert)', (await page.locator(`a[href$="/contract/${ADAPTADOR_USDC}"]`).count()) === 1)
@@ -1529,7 +1541,7 @@ for (const [ruta, nombre] of [['#/crear', 'm3-06-crear-movil'], ['#/tanda/9', 'm
   const t = await texto(page)
   check('M4: con USDC queda elegida esa moneda', await page.locator('.opciones-moneda input[value="USDC"]').isChecked())
   check('M4: con USDC, la tabla dice "Garantía (USDC)"', /Depósito/.test(t))
-  check('M4: con USDC explica el rendimiento real en Blend', /gana intereses de verdad/.test(t))
+  check('M4: con USDC explica el rendimiento real en Blend', /gana intereses de verdad/.test(await globos(page, '.opciones-moneda')))
   check('M4: con USDC revisa el saldo en USDC (te faltan $200)', /te faltan \$200/.test(t), t.slice(0, 1500))
   await shot(page, 'm4-04-crear-usdc')
   check('M4: crear con USDC sin errores de consola', errores.length === 0, errores.join(' | '))
@@ -2522,6 +2534,118 @@ for (const [hash, direccion, que] of [['#/tanda/2', CARLA, 'en curso'], ['#/tand
     const desborda = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
     check('Nombre (375 px): el campo no desborda la página', !desborda)
     await shot(page, 'ux5-nombre-375')
+    await page.close()
+  }
+}
+
+// ---------------------------------------------------------------- UX: botón "i" de información (la letra pequeña, a pedido)
+{
+  // A. Pasar el cursor despliega el globo; quitarlo lo cierra. Mientras tanto la letra pequeña no ocupa la pantalla.
+  {
+    const est = nuevoEstado()
+    const { page, errores } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/crear')
+    await page.waitForSelector('.vista-previa .resumen-frase')
+    const botones = page.locator('.pregunta .boton-info')
+    check('Info: las 3 preguntas de Crear tienen su "i"', (await botones.count()) === 3, String(await botones.count()))
+    check('Info: la letra pequeña ya no está a la vista', !/Son dólares de práctica|cada persona cobra una vez|Cada cuánto paga cada quien/.test(await texto(page)))
+    check('Info: el botón se llama por lo que explica y dice que está cerrado', (await botones.first().getAttribute('aria-label')) === 'Qué es la cuota' && (await botones.first().getAttribute('aria-expanded')) === 'false')
+    await botones.first().hover()
+    await page.waitForSelector('.globo-info', { timeout: 3000 })
+    const globo = page.locator('.globo-info')
+    check('Info: al pasar el cursor se despliega el globo con la explicación', /lo mismo para todas las personas, en cada turno/.test(await globo.innerText()))
+    check('Info: el globo es un tooltip enlazado al botón (lectores de pantalla)', (await globo.getAttribute('role')) === 'tooltip' && (await botones.first().getAttribute('aria-describedby')) === (await globo.getAttribute('id')) && (await botones.first().getAttribute('aria-expanded')) === 'true')
+    const caja = await globo.boundingBox()
+    const vp = page.viewportSize()
+    check('Info: el globo cabe en la pantalla', caja && caja.x >= 0 && caja.x + caja.width <= vp.width && caja.y >= 0 && caja.y + caja.height <= vp.height, JSON.stringify(caja))
+    await shot(page, 'ux-info-globo')
+    await page.mouse.move(0, 0)
+    await page.waitForTimeout(150)
+    check('Info: al quitar el cursor se cierra', (await page.locator('.globo-info').count()) === 0)
+
+    // B. Con teclado: Tab llega a la "i", la abre; Escape la cierra.
+    await page.locator('#cuota').focus()
+    await page.keyboard.press('Shift+Tab') // la "i" va justo después de la pregunta, antes de la respuesta
+    check('Info: con el teclado se llega a la "i" y se despliega', (await botones.first().evaluate((b) => document.activeElement === b)) && (await page.locator('.globo-info').count()) === 1)
+    await page.keyboard.press('Escape')
+    check('Info: Escape la cierra', (await page.locator('.globo-info').count()) === 0 && (await botones.first().evaluate((b) => document.activeElement === b)))
+
+    // C. Un toque la deja fija (en el celular no hay cursor); tocar fuera la cierra.
+    await page.mouse.move(0, 0)
+    await page.locator('#cuota').focus()
+    await botones.nth(1).click()
+    await page.mouse.move(0, 0)
+    await page.locator('h1').click()
+    await page.waitForTimeout(150)
+    check('Info: tocar fuera la cierra', (await page.locator('.globo-info').count()) === 0)
+    await botones.nth(1).click()
+    await page.mouse.move(0, 0)
+    await page.locator('#cuota').focus()
+    await page.locator('h1').click()
+    await page.waitForTimeout(150)
+    check('Info: sin errores de consola', errores.length === 0, errores.join(' | '))
+
+    // D. Un error no se esconde: se ve y la "i" de esa pregunta no tapa nada.
+    await page.locator('#cuota').fill('abc')
+    check('Info: el error de la cuota sigue a la vista (y esa pregunta no ofrece "i" a la vez)', /mayor que cero/.test(await texto(page)) && (await page.locator('.pregunta .boton-info').count()) === 2)
+
+    // E. En Opciones avanzadas: multa, depósito, mecanismo de turnos, etc.
+    await page.locator('#cuota').fill('20')
+    await page.locator('details.avanzadas summary').click()
+    const avanzadas = page.locator('details.avanzadas .boton-info')
+    check('Info: Opciones avanzadas explica con "i" (multa, depósito, turnos, intercambio...)', (await avanzadas.count()) >= 5, String(await avanzadas.count()))
+    check('Info: lo avanzado tampoco llena la pantalla de letra pequeña', !/Se descuenta del depósito al final y se reparte|Quien cobra antes deja más depósito\. Con 100/.test(await texto(page)))
+    const textoAvanzadas = await globos(page, 'details.avanzadas')
+    check('Info: el globo de la multa dice lo mismo que decía el texto', /Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron\. Con esta cuota son \$1\./.test(textoAvanzadas), textoAvanzadas.slice(0, 400))
+    check('Info: el globo del depósito dice lo mismo que decía el texto', /Con 100 % nadie gana nada desapareciendo/.test(textoAvanzadas))
+    await page.close()
+  }
+
+  // F. Tocar la "i" dentro de una casilla no marca ni desmarca la casilla.
+  {
+    const est = nuevoEstadoTurnos()
+    const { page } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/crear')
+    await crearDePrueba(page)
+    await page.waitForSelector('.modos')
+    await page.locator('.modo', { hasText: 'Subasta' }).click()
+    const casilla = page.getByLabel(/Ofertas selladas/)
+    check('Info (casilla): las ofertas selladas empiezan apagadas', !(await casilla.isChecked()))
+    await page.locator('.casilla-info .boton-info').first().click()
+    check('Info (casilla): tocar la "i" despliega la explicación sin marcar la casilla', (await page.locator('.globo-info').count()) === 1 && !(await casilla.isChecked()))
+    await page.close()
+  }
+
+  // G. En el celular (375 px): el globo no se sale por los lados, ni desde la "i" del borde derecho.
+  {
+    const est = nuevoEstado()
+    const { page } = await nuevaPagina(browser, { est, viewport: { width: 375, height: 800 } })
+    await page.goto(BASE + '#/crear')
+    await page.waitForSelector('.vista-previa .resumen-frase')
+    const botones = page.locator('.pregunta .boton-info')
+    for (let i = 0; i < 3; i++) {
+      await botones.nth(i).click()
+      const caja = await page.locator('.globo-info').boundingBox()
+      check(`Info (375 px): el globo de la pregunta ${i + 1} cabe a lo ancho`, caja && caja.x >= 0 && caja.x + caja.width <= 375, JSON.stringify(caja))
+      await page.locator('h1').click()
+    }
+    await botones.nth(2).click()
+    await shot(page, 'ux-info-375')
+    const desborda = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
+    check('Info (375 px): no se desborda la página', !desborda)
+    await page.close()
+  }
+
+  // H. En la tanda: el panel de la tanda y el calendario también la usan, y lo importante sigue a la vista.
+  {
+    const est = conTandaMorosa(nuevoEstado())
+    const { page, errores } = await nuevaPagina(browser, { est })
+    await page.goto(BASE + '#/tanda/6')
+    await page.waitForSelector('.panel-ronda', { timeout: 15000 })
+    await page.waitForSelector('.calendario', { timeout: 15000 }).catch(() => {})
+    const c = await globos(page, '.calendario')
+    check('Info (tanda): el calendario explica sus fechas en una "i"', /Las fechas de pago son fijas/.test(c) && !/Las fechas de pago son fijas/.test(await texto(page)), c.slice(0, 200))
+    check('Info (tanda): sin errores de consola', errores.length === 0, errores.join(' | '))
     await page.close()
   }
 }
