@@ -479,8 +479,15 @@ que le quedan). La variante `DEUDA=1` (garantía mínima) ahora deja a Ana en mo
 | `pagar_deuda` | 6,9 M | 38 | 17 |
 | `finalizar` (la deudora cobra la última ronda) + `pagar_deuda` tras finalizar | 17,2 M + 10,6 M | 50 + 48 | 30 + 15 |
 
-`tanda.wasm`: 95 352 bytes (límite de la red: 128 KB). Invariantes al azar con 400 semillas
+`tanda.wasm`: 95 459 bytes (límite de la red: 128 KB). El peor caso de todo el conjunto (subasta + M1 + M2) llega a 41 escrituras en `cerrar_ronda` y 34 en `finalizar`. Invariantes al azar con 400 semillas
 (`INVARIANTES_SEMILLAS=400 cargo test -p tanda --release invariantes_al_azar`): en verde.
 
 Primer intento de `finalizar` con un evento por afectado: **20 108 B de eventos en el peor caso (límite 16 384)**. Por eso
 el evento es uno por moroso y solo las primeras 24 partes van detalladas (ver §9.2).
+
+### 9.5 Hallazgo al actualizar las pruebas del adaptador de Blend
+
+`adaptador_blend/test_auditoria.rs` (pérdida en Blend) dejó al descubierto un error que ya existía: si la bóveda pierde valor
+y alguien tiene **multas pendientes**, `finalizar` cobraba las multas de una garantía anotada que ya no tenía dinero detrás y
+repartía de más: la transferencia fallaba por saldo insuficiente y la tanda quedaba trabada. Ahora el déficit lo absorbe el
+fondo de multas (`lib.rs::finalizar`). Con rendimiento ≥ 0, que es lo normal, no cambia nada.
