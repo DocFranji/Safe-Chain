@@ -6,6 +6,7 @@ import type { contract } from '@stellar/stellar-sdk'
 import type { DatosTanda } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from './BotonesEntrar'
+import { BotonUnirse } from './BotonUnirse'
 import { AccionesTurnos } from './AccionesTurnos'
 import { PagarDeuda } from './PagarDeuda'
 import { CerrarRonda } from './CerrarRonda'
@@ -13,16 +14,20 @@ import { puedeCerrarAntes } from '../lib/cobro'
 import { NotaHistorial } from './NotaHistorial'
 import { useGarantiaConHistorial } from '../hooks/useHistorial'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
-import { monto, duracion, porcentaje } from '../lib/formato'
-import { nombreDe } from '../lib/nombres'
+import { duracion, porcentaje } from '../lib/formato'
+import { dinero } from '../lib/glosario'
+import { nombreConocido, nombreDe } from '../lib/nombres'
+import { cadaCuanto, lineaTanda } from '../lib/resumen'
+import { siguienteAccion } from '../lib/siguiente'
 import { SIN_TURNO, eligeTurno, type Modo } from '../lib/turnos'
-import { comoConseguir, useMoneda, useSimbolo } from '../hooks/useMoneda'
+import { comoConseguir, useMoneda } from '../hooks/useMoneda'
+import { Info } from './Info'
 
 type Props = {
   id: number
   datos: DatosTanda
   billetera: Billetera
-  /** Saldo de TUSD de quien está conectado (null si todavía no se sabe). */
+  /** Saldo (en la moneda de la tanda) de quien está conectado (null si todavía no se sabe). */
   saldo: bigint | null
   ahora: number
   alCambiar: () => void
@@ -31,7 +36,6 @@ type Props = {
 type Aviso = { tipo: 'esperando' | 'listo' | 'error'; texto: string } | null
 
 export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Props) {
-  const SIMBOLO = useSimbolo()
   const [aviso, setAviso] = useState<Aviso>(null)
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false)
   const ocupado = aviso?.tipo === 'esperando'
@@ -52,17 +56,43 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   const antes = puedeCerrarAntes(tanda, pagaron.length, modo, ahora)
   const beneficiario = estado === 'Activa' ? miembros.find((m) => m.posicion === tanda.ronda_actual) : undefined
   const bolsa = tanda.cuota * BigInt(tanda.n_miembros)
+  // Quien llega por un enlace a una tanda abierta (y no está en ella) ve primero la invitación.
+  const invitado = estado === 'Abierta' && !mio && !esCreador && tanda.n_miembros > miembros.length
+  const anfitrion = nombreConocido(tanda.creador)
   const multa = (tanda.cuota * BigInt(tanda.penalidad_bps)) / 10_000n
   // Si ya sabemos que no alcanza el saldo, no pedimos firmar algo que va a fallar.
   const faltaParaUnirse = saldo !== null && colateralSiguiente !== null && saldo < colateralSiguiente ? colateralSiguiente - saldo : 0n
   const faltaParaPagar = saldo !== null && saldo < tanda.cuota ? tanda.cuota - saldo : 0n
+  // UX: arriba de todo, un mensaje con lo que le toca hacer a quien mira ("Te toca pagar $20"...).
+  const siguiente = siguienteAccion({
+    estado,
+    yo,
+    n: tanda.n_miembros,
+    unidos: miembros.length,
+    cuota: tanda.cuota,
+    multa,
+    turno: tanda.ronda_actual,
+    pagaron: pagaron.length,
+    mio,
+    yaPague,
+    cobra: beneficiario ? nombreDe(beneficiario.direccion) : null,
+    soyQuienCobra: beneficiario !== undefined && beneficiario.direccion === yo,
+    cobraGuardado: beneficiario?.moroso === true,
+    entregable: vencida || antes,
+    vence,
+    ahora,
+  })
+  const debePagar = estado === 'Activa' && mio !== null && !yaPague && !mio.moroso
 
   async function ejecutar(
     construir: (c: Client) => Promise<contract.AssembledTransaction<unknown>>,
     textoListo: string,
   ) {
     if (!yo) return
-    setAviso({ tipo: 'esperando', texto: 'Confirma en Freighter y espera unos segundos mientras la red lo registra…' })
+    setAviso({
+      tipo: 'esperando',
+      texto: billetera.tipo === 'google' ? 'Un momento: esto toma unos segundos…' : 'Confirma en Freighter y espera unos segundos…',
+    })
     try {
       const tx = await construir(clienteFirma(yo))
       await enviar(tx)
@@ -75,45 +105,36 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
   }
 
   return (
-    <section className="panel" aria-labelledby="panel-titulo">
-      <h2 id="panel-titulo">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</h2>
-
-      <dl className="datos">
-        {estado === 'Abierta' && (
-          <>
-            <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
-            {colateralSiguiente !== null && (
-              <Dato
-                etiqueta="Garantía para unirse"
-                valor={eligeTurno(modo) ? 'Según el turno' : `${monto(colateralSiguiente)} ${SIMBOLO}`}
-              />
+    <section className="panel panel-ronda" aria-labelledby="panel-titulo">
+      {invitado ? (
+        <div className="invitacion">
+          <h2 id="panel-titulo">{anfitrion ? `${anfitrion} te invita a una tanda` : 'Te invitaron a una tanda'}</h2>
+          <p className="invitacion-linea">{lineaTanda({ cuota: tanda.cuota, n: tanda.n_miembros, periodoSeg: Number(tanda.periodo_seg) })}</p>
+          <p className="explica">
+            {`${cadaCuanto(Number(tanda.periodo_seg)).replace(/^c/, 'C')} una persona recibe ${dinero(bolsa)}.`}{' '}
+            {colateralSiguiente !== null && !eligeTurno(modo) && (
+              <>
+                Dejas <strong>{dinero(colateralSiguiente)}</strong> de depósito de seguridad y lo recuperas al final, con
+                intereses.
+              </>
             )}
-          </>
-        )}
-        {estado === 'Activa' && (
-          <>
-            <Dato
-              etiqueta="Le toca cobrar"
-              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '-'}
-            />
-            <Dato etiqueta="Bolsa" valor={`${monto(bolsa)} ${SIMBOLO}`} />
-            <Dato
-              etiqueta={vencida ? 'Venció hace' : 'Vence en'}
-              valor={duracion(Math.abs(restante))}
-              alerta={vencida}
-            />
-            <Dato etiqueta="Ya pagaron" valor={`${pagaron.length} de ${tanda.n_miembros}`} />
-          </>
-        )}
-      </dl>
+          </p>
+        </div>
+      ) : estado === 'Finalizada' && mio ? null /* lo dice la pantalla de cierre, arriba */ : (
+        <div className={`siguiente siguiente-${siguiente.tono}`}>
+          {estado === 'Activa' && <p className="siguiente-etapa">{tituloPanel(estado, tanda.ronda_actual, tanda.n_miembros)}</p>}
+          <h2 id="panel-titulo">{siguiente.titulo}</h2>
+          {siguiente.detalle && <p className="siguiente-detalle">{siguiente.detalle}</p>}
+          {mio && estado === 'Activa' && !mio.moroso && <p className="mi-situacion">{miTurno(mio, tanda.ronda_actual)}</p>}
+        </div>
+      )}
 
-      {mio && <p className="mi-situacion">{miSituacion(estado, mio, yaPague, tanda.ronda_actual, SIMBOLO)}</p>}
 
       <div className="acciones">
         {!yo ? (
           <>
-            <p>Entra o conecta tu billetera para participar en esta tanda.</p>
-            <BotonesEntrar billetera={billetera} />
+            {!invitado && <p>Entra para participar en esta tanda.</p>}
+            <BotonesEntrar billetera={billetera} textoGoogle={invitado ? 'Entrar con Google y unirme' : 'Entrar con Google'} />
           </>
         ) : !billetera.redCorrecta ? (
           <p className="aviso error">Freighter está en otra red. Cámbiala a Testnet para continuar.</p>
@@ -121,22 +142,22 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
           <>
             {estado === 'Abierta' && !mio && colateralSiguiente !== null && !eligeTurno(modo) && (
               <>
-                <button
-                  className="boton principal"
-                  disabled={ocupado || faltaParaUnirse > 0n}
-                  onClick={() => ejecutar((c) => c.unirse({ id, miembro: yo }), 'Listo: ya eres parte de la tanda.')}
-                >
-                  Unirme y dejar {monto(colateralSiguiente)} {SIMBOLO} de garantía
-                </button>
+                {/* Si alguien del grupo tiene un pago pendiente en otra tanda, antes de firmar se pide confirmar. */}
+                <BotonUnirse
+                  miembros={miembros.map((m) => m.direccion)}
+                  deshabilitado={ocupado || faltaParaUnirse > 0n}
+                  unirse={() => void ejecutar((c) => c.unirse({ id, miembro: yo }), 'Listo: ya eres parte de la tanda.')}
+                  texto={<>Unirme y dejar {dinero(colateralSiguiente)} de depósito</>}
+                />
                 {faltaParaUnirse > 0n && <FaltaSaldo falta={faltaParaUnirse} />}
                 <NotaHistorial yo={yo} requisitos={historial.requisitos} normal={colateralNormal!} conDescuento={historial.garantia} />
                 <p className="explica">
                   {modo === 'Sorteo'
                     ? 'Tu turno se sorteará cuando se llene la tanda.'
                     : modo === 'Subasta'
-                      ? 'Tu turno se decide en las subastas de cada ronda.'
-                      : `Tu turno será el ${miembros.length + 1}.`}{' '}
-                  La garantía se guarda en una bóveda que genera rendimiento y se te devuelve al final, con intereses.
+                      ? 'Tu turno se decide en las subastas de cada turno.'
+                      : `Tu turno será el ${miembros.length + 1}: cobras ${dinero(bolsa)} en ese turno.`}
+                  {!invitado && ' El depósito de seguridad se te devuelve al final, con intereses.'}
                 </p>
               </>
             )}
@@ -146,20 +167,20 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
               <NotaHistorial yo={yo} requisitos={historial.requisitos} normal={colateralNormal ?? 0n} conDescuento={null} />
             )}
 
-            {estado === 'Activa' && mio && !yaPague && !mio.moroso && (
+            {debePagar && (
               <>
                 <button
-                  className="boton principal"
+                  className="boton principal grande"
                   disabled={ocupado || faltaParaPagar > 0n}
-                  onClick={() => ejecutar((c) => c.pagar_cuota({ id, miembro: yo }), 'Listo: pagaste tu cuota de esta ronda.')}
+                  onClick={() => ejecutar((c) => c.pagar_cuota({ id, miembro: yo }), 'Listo: pagaste tu cuota de este turno.')}
                 >
-                  Pagar mi cuota de {monto(tanda.cuota)} {SIMBOLO}
+                  Pagar mi cuota de {dinero(tanda.cuota)}
                 </button>
                 {faltaParaPagar > 0n && <FaltaSaldo falta={faltaParaPagar} />}
                 {vencida && (
                   <p className="explica">
                     El plazo ya venció: si pagas ahora cuenta como atraso, y al final se descuenta una multa de{' '}
-                    {monto(multa)} {SIMBOLO} de tu garantía.
+                    {dinero(multa)} de tu depósito.
                   </p>
                 )}
               </>
@@ -172,49 +193,55 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                 miembros={miembros}
                 pagaron={pagaron}
                 cuota={tanda.cuota}
+                restantes={tanda.n_miembros - tanda.ronda_actual}
                 beneficiario={beneficiario}
                 yo={yo}
                 ocupado={ocupado}
                 antes={antes}
                 siguienteVence={vence + Number(tanda.periodo_seg)}
                 ahora={ahora}
+                principal={!debePagar && !mio?.moroso}
                 cerrar={(textoListo) => ejecutar((c) => c.cerrar_ronda({ id }), textoListo)}
               />
             )}
 
             {estado === 'Activa' && !vencida && !antes && pagaron.length === tanda.n_miembros && (
               <p className="explica">
-                Todos pagaron.{' '}
-                {modo === 'Subasta'
-                  ? 'En la subasta la bolsa se entrega al cerrar la ronda, cuando termine el plazo: hasta entonces se puede ofertar.'
-                  : 'Ya se adelantaron varias rondas, así que esta se puede cerrar cuando falten menos de 4 meses para la próxima fecha límite.'}
+                Todos pagaron.
+                <Info etiqueta="Cuándo se entrega el pozo">
+                  {modo === 'Subasta'
+                    ? 'En la subasta el pozo se entrega cuando termina el plazo: hasta entonces se puede ofertar.'
+                    : 'Ya se adelantaron varios turnos, así que el pozo se puede entregar cuando falten menos de 4 meses para la próxima fecha límite.'}
+                </Info>
               </p>
             )}
 
             {estado === 'PorLiquidar' && (
               <>
-                <button
-                  className="boton principal"
-                  disabled={ocupado}
-                  onClick={() => ejecutar((c) => c.finalizar({ id }), 'Listo: se repartió el dinero final.')}
-                >
-                  Repartir el dinero final
-                </button>
-                <p className="explica">
-                  Devuelve a cada persona su garantía con el rendimiento, y reparte las multas entre quienes siempre
-                  pagaron a tiempo.
-                </p>
+                <div className="boton-con-info">
+                  <button
+                    className="boton principal"
+                    disabled={ocupado}
+                    onClick={() => ejecutar((c) => c.finalizar({ id }), 'Listo: se repartió lo que quedaba.')}
+                  >
+                    Repartir lo que queda
+                  </button>
+                  <Info etiqueta="Qué hace este botón">
+                    Devuelve a cada persona su depósito con los intereses, y reparte las multas entre quienes siempre pagaron a
+                    tiempo.
+                  </Info>
+                </div>
               </>
             )}
 
-            {estado === 'Finalizada' && (
-              <p className="explica">Esta tanda terminó. Cada persona ya recibió su garantía y su parte del rendimiento.</p>
+            {estado === 'Finalizada' && !mio && (
+              <p className="explica">Esta tanda terminó. Cada persona ya recibió su depósito y su parte de los intereses.</p>
             )}
 
             {estado === 'Cancelada' && (
               <p className="explica">
-                Esta tanda se canceló antes de empezar. Cada persona que se había unido recuperó su garantía, con el
-                rendimiento que alcanzó a generar.
+                Esta tanda se canceló antes de empezar. Cada persona que se había unido recuperó su depósito, con los
+                intereses que alcanzó a ganar.
               </p>
             )}
 
@@ -225,7 +252,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                     <p className="explica">
                       ¿Cancelar esta tanda?{' '}
                       {miembros.length > 0
-                        ? `Se devolverá la garantía, con su rendimiento, a ${miembros.length === 1 ? 'la persona que ya se unió' : `las ${miembros.length} personas que ya se unieron`}.`
+                        ? `Se devolverá el depósito, con sus intereses, a ${miembros.length === 1 ? 'la persona que ya se unió' : `las ${miembros.length} personas que ya se unieron`}.`
                         : 'Todavía no se ha unido nadie.'}{' '}
                       No se puede deshacer.
                     </p>
@@ -234,7 +261,7 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
                         className="boton secundario peligro"
                         disabled={ocupado}
                         onClick={() =>
-                          ejecutar((c) => c.cancelar({ id }), 'La tanda se canceló y se devolvieron las garantías.')
+                          ejecutar((c) => c.cancelar({ id }), 'La tanda se canceló y se devolvieron los depósitos.')
                         }
                       >
                         Sí, cancelar la tanda
@@ -255,6 +282,35 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
         )}
       </div>
 
+      <dl className="datos datos-turno">
+        {estado === 'Abierta' && !invitado && (
+          <>
+            <Dato etiqueta="Lugares libres" valor={`${tanda.n_miembros - miembros.length} de ${tanda.n_miembros}`} />
+            {colateralSiguiente !== null && (
+              <Dato
+                etiqueta="Depósito para unirse"
+                valor={eligeTurno(modo) ? 'Según el turno' : `${dinero(colateralSiguiente)}`}
+              />
+            )}
+          </>
+        )}
+        {estado === 'Activa' && (
+          <>
+            <Dato
+              etiqueta="Le toca cobrar"
+              valor={beneficiario ? nombreDe(beneficiario.direccion) : modo === 'Subasta' ? 'Se decide en la subasta' : '-'}
+            />
+            <Dato etiqueta="Pozo" valor={dinero(bolsa)} />
+            <Dato
+              etiqueta={vencida ? 'Venció hace' : 'Vence en'}
+              valor={duracion(Math.abs(restante))}
+              alerta={vencida}
+            />
+            <Dato etiqueta="Ya pagaron" valor={`${pagaron.length} de ${tanda.n_miembros}`} />
+          </>
+        )}
+      </dl>
+
       <AccionesTurnos id={id} datos={datos} billetera={billetera} saldo={saldo} ahora={ahora} alCambiar={alCambiar} />
 
       {(aviso || billetera.error) && (
@@ -266,34 +322,36 @@ export function PanelRonda({ id, datos, billetera, saldo, ahora, alCambiar }: Pr
       <details className="reglas">
         <summary>Reglas de esta tanda</summary>
         <dl className="datos">
-          <Dato etiqueta="Cuota por ronda" valor={`${monto(tanda.cuota)} ${SIMBOLO}`} />
-          <Dato etiqueta="Duración de cada ronda" valor={duracion(Number(tanda.periodo_seg))} />
+          <Dato etiqueta="Cuota por turno" valor={`${dinero(tanda.cuota)}`} />
+          <Dato etiqueta="Cada cuánto se paga" valor={duracion(Number(tanda.periodo_seg))} />
           <Dato etiqueta="Multa por atraso" valor={`${porcentaje(tanda.penalidad_bps)} de la cuota`} />
-          <Dato etiqueta="Garantía" valor={`${porcentaje(tanda.cobertura_bps)} de las cuotas pendientes`} />
+          <Dato
+            etiqueta="Depósito de seguridad"
+            valor={`${porcentaje(tanda.cobertura_bps)} de las cuotas que faltan`}
+            info="Quien cobra antes deja un depósito más grande, porque después de cobrar todavía debe más cuotas. Si alguien desaparece, su depósito paga por él."
+          />
         </dl>
-        <p className="explica">
-          Quien cobra antes deja más garantía, porque después de cobrar todavía debe más cuotas. Si alguien desaparece,
-          su garantía paga por él.
-        </p>
       </details>
     </section>
   )
 }
 
 function FaltaSaldo({ falta }: { falta: bigint }) {
-  const SIMBOLO = useSimbolo()
   const moneda = useMoneda()
   return (
     <p className="aviso nota">
-      Te faltan {monto(falta)} {SIMBOLO}. {comoConseguir(moneda)} para recibir más.
+      Te faltan {dinero(falta)}. {comoConseguir(moneda)} para recibir más.
     </p>
   )
 }
 
-function Dato({ etiqueta, valor, alerta = false }: { etiqueta: string; valor: string; alerta?: boolean }) {
+function Dato({ etiqueta, valor, alerta = false, info }: { etiqueta: string; valor: string; alerta?: boolean; info?: string }) {
   return (
     <div className="dato">
-      <dt>{etiqueta}</dt>
+      <dt>
+        {etiqueta}
+        {info && <Info etiqueta={`Sobre «${etiqueta.toLowerCase()}»`}>{info}</Info>}
+      </dt>
       <dd className={alerta ? 'alerta' : undefined}>{valor}</dd>
     </div>
   )
@@ -304,9 +362,9 @@ function tituloPanel(estado: string, ronda: number, n: number): string {
     case 'Abierta':
       return 'Buscando participantes'
     case 'Activa':
-      return `Ronda ${ronda + 1} de ${n}`
+      return `Turno ${ronda + 1} de ${n}`
     case 'PorLiquidar':
-      return 'Todas las rondas terminaron'
+      return 'Todos los turnos terminaron'
     case 'Finalizada':
       return 'Tanda terminada'
     default:
@@ -314,21 +372,10 @@ function tituloPanel(estado: string, ronda: number, n: number): string {
   }
 }
 
-function miSituacion(
-  estado: string,
-  m: { posicion: number; cobro: boolean; moroso: boolean; deuda: bigint },
-  yaPague: boolean,
-  ronda: number,
-  SIMBOLO: string,
-): string {
-  if (m.moroso) return `Tienes una deuda de ${monto(m.deuda)} ${SIMBOLO} en esta tanda.`
-  const turno = m.posicion === SIN_TURNO
-    ? 'Tu turno todavía no está decidido.'
-    : m.cobro
-    ? 'Ya cobraste tu bolsa.'
-    : estado === 'Activa' && m.posicion === ronda
-      ? 'Esta ronda cobras tú.'
-      : `Cobras en la ronda ${m.posicion + 1}.`
-  if (estado !== 'Activa') return turno
-  return `${turno} ${yaPague ? 'Ya pagaste esta ronda.' : 'Te falta pagar esta ronda.'}`
+/** Cuándo cobra quien mira (lo de pagar ya lo dice la siguiente acción). */
+function miTurno(m: { posicion: number; cobro: boolean }, turno: number): string {
+  if (m.posicion === SIN_TURNO) return 'Tu turno todavía no está decidido.'
+  if (m.cobro) return 'Ya cobraste tu pozo.'
+  if (m.posicion === turno) return 'En este turno cobras tú.'
+  return `Cobras en el turno ${m.posicion + 1}.`
 }

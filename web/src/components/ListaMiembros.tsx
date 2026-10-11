@@ -1,19 +1,27 @@
-// Tabla con cada participante: su turno, su garantía y cómo va.
+// Quiénes participan, como en el celular de la portada (diseño Órbita): una píldora por persona, con su inicial,
+// su nombre, su turno y depósito debajo, y a la derecha cómo va ("Pagó", "Por pagar", "Debe $100"...).
+// Arriba, la línea del turno: "Turno 2 de 3 · Cobra Beto".
 import type { DatosTanda } from '../hooks/useTanda'
-import { monto } from '../lib/formato'
+import { usePagosPendientes } from '../hooks/useMora'
+import { dinero } from '../lib/glosario'
 import { saldoSuDeuda } from '../lib/deudas'
-import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
-import { EXPLORADOR } from '../config'
+import { nombreDe } from '../lib/nombres'
+import { rutaHistorial } from '../lib/rutas'
 import { tieneTurno, turnosLibres } from '../lib/turnos'
+import { BotonAmigo } from './BotonAmigo'
 import { InsigniaNivel } from './InsigniaNivel'
-import { useSimbolo } from '../hooks/useMoneda'
+import './mora.css'
 
 type Props = { datos: DatosTanda; yo: string | null }
 
 export function ListaMiembros({ datos, yo }: Props) {
-  const SIMBOLO = useSimbolo()
   const { tanda, miembros, pagaron } = datos
-  const activa = tanda.estado.tag === 'Activa'
+  const estado = tanda.estado.tag
+  const activa = estado === 'Activa'
+  // Pedido 4 del plan v5: mientras la tanda sigue, quien tiene un pago pendiente en otra tanda lleva una marca.
+  // Quien ya debe en ESTA tanda no la lleva: a su derecha ya dice "Debe $…".
+  const conMora = usePagosPendientes()
+  const marcarMora = estado === 'Abierta' || activa || estado === 'PorLiquidar'
   const libres = tanda.n_miembros - miembros.length
   // (M3) Con turnos elegidos, los lugares libres no son necesariamente los últimos.
   const turnosSinDuenio = turnosLibres(
@@ -21,84 +29,98 @@ export function ListaMiembros({ datos, yo }: Props) {
     miembros.map((m) => m.posicion),
   )
   const hayPorDecidir = miembros.some((m) => !tieneTurno(m.posicion))
+  const cobra = activa ? miembros.find((m) => m.posicion === tanda.ronda_actual) : undefined
+  // Ordenadas por turno, como en la rueda (quien no tiene turno todavía, al final).
+  const ordenados = [...miembros].sort((a, b) => a.posicion - b.posicion)
+
+  const [titulo, lado] =
+    estado === 'Activa'
+      ? [`Turno ${tanda.ronda_actual + 1} de ${tanda.n_miembros}`, cobra ? `Cobra ${cobra.direccion === yo ? 'tú' : nombreDe(cobra.direccion)}` : '']
+      : estado === 'Abierta'
+        ? ['Quiénes participan', `${miembros.length} de ${tanda.n_miembros}`]
+        : ['Quiénes participan', '']
 
   return (
     <section className="miembros" aria-labelledby="miembros-titulo">
-      <h2 id="miembros-titulo">Quiénes participan</h2>
-      <div className="tabla-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Turno</th>
-              <th scope="col">Persona</th>
-              <th scope="col" className="num">Garantía ({SIMBOLO})</th>
-              {activa && <th scope="col">Esta ronda</th>}
-              <th scope="col">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {miembros.map((m) => {
-              const pago = pagaron.includes(m.direccion)
-              const usada = m.colateral !== m.colateral_inicial
-              return (
-                <tr key={m.direccion} className={m.direccion === yo ? 'fila-yo' : undefined}>
-                  <td className="turno">{tieneTurno(m.posicion) ? m.posicion + 1 : '?'}</td>
-                  <td>
-                    <a href={`${EXPLORADOR}/account/${m.direccion}`} target="_blank" rel="noreferrer" title={m.direccion}>
-                      {nombreDe(m.direccion)}
-                    </a>
-                    <InsigniaNivel dir={m.direccion} />
-                    {m.direccion === yo && <span className="marca-yo">tú</span>}
-                    {NOMBRES[m.direccion] && <span className="dir">{direccionCorta(m.direccion)}</span>}
-                  </td>
-                  <td className="num">
-                    {monto(m.colateral)}
-                    {usada && <span className="sub"> de {monto(m.colateral_inicial)}</span>}
-                  </td>
-                  {activa && (
-                    <td>
-                      <span className={pago ? 'estado ok' : 'estado pendiente'}>
-                        {pago ? 'Pagó' : m.moroso ? 'No puede pagar' : 'Pendiente'}
-                      </span>
-                    </td>
-                  )}
-                  <td>
-                    {estadoMiembro(m, activa, tanda.ronda_actual, SIMBOLO)}
-                    {saldoSuDeuda(
+      <div className="ronda-linea">
+        <h2 id="miembros-titulo">{titulo}</h2>
+        {lado && <span>{lado}</span>}
+      </div>
+      <ul className="lista-personas">
+        {ordenados.map((m) => {
+          const pago = pagaron.includes(m.direccion)
+          const usada = m.colateral !== m.colateral_inicial
+          const nombre = nombreDe(m.direccion)
+          const clases = ['persona', activa && pago && 'pago', m.direccion === yo && 'yo', cobra?.direccion === m.direccion && 'cobra']
+            .filter(Boolean)
+            .join(' ')
+          return (
+            <li key={m.direccion} className={clases}>
+              <span className="persona-inicial" aria-hidden="true">
+                {inicial(nombre)}
+              </span>
+              <span className="persona-cuerpo">
+                <span className="persona-nombre">
+                  {/* El nombre lleva a la reputación de la persona, no al explorador de la red. */}
+                  <a href={rutaHistorial(m.direccion)} title={m.direccion}>
+                    {nombre}
+                  </a>
+                  <InsigniaNivel dir={m.direccion} />
+                  {m.direccion === yo && <span className="marca-yo">tú</span>}
+                </span>
+                <span className="sub">
+                  {[
+                    tieneTurno(m.posicion) ? `Turno ${m.posicion + 1}` : 'Turno por decidir',
+                    `depósito ${dinero(m.colateral)}${usada ? ` de ${dinero(m.colateral_inicial)}` : ''}`,
+                    m.atrasos > 0 ? (m.atrasos === 1 ? '1 atraso' : `${m.atrasos} atrasos`) : null,
+                    saldoSuDeuda(
                       datos.deudas.find((d) => d.direccion === m.direccion),
                       m.moroso,
-                    ) && <span className="sub saldo-deuda">Saldó su deuda</span>}
-                    {m.atrasos > 0 && (
-                      <span className="sub atraso">
-                        {m.atrasos === 1 ? '1 atraso' : `${m.atrasos} atrasos`}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-            {Array.from({ length: libres }, (_, i) => (
-              <tr key={`libre-${i}`} className="fila-libre">
-                <td className="turno">{hayPorDecidir ? '?' : (turnosSinDuenio[i] ?? miembros.length + i) + 1}</td>
-                <td colSpan={activa ? 4 : 3}>Lugar libre</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    )
+                      ? 'se puso al día'
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                {marcarMora && !m.moroso && conMora.has(m.direccion) && (
+                  <span className="marca-mora">Pago pendiente en otra tanda</span>
+                )}
+                <BotonAmigo dir={m.direccion} yo={yo} />
+              </span>
+              <em className="persona-estado">{estadoMiembro(m, estado, pago)}</em>
+            </li>
+          )
+        })}
+        {Array.from({ length: libres }, (_, i) => (
+          <li key={`libre-${i}`} className="persona libre">
+            <span className="persona-inicial" aria-hidden="true">
+              +
+            </span>
+            <span className="persona-cuerpo">
+              <span className="persona-nombre">Lugar libre</span>
+              {!hayPorDecidir && <span className="sub">Turno {(turnosSinDuenio[i] ?? miembros.length + i) + 1}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }
 
+/** "Ana" -> "A" · "Doña Ana" -> "D" · "GADM…TVPD" -> "G". */
+function inicial(nombre: string): string {
+  return (nombre.trim()[0] ?? '?').toUpperCase()
+}
+
+/** A la derecha de cada persona: cómo va en este momento. */
 function estadoMiembro(
   m: { posicion: number; cobro: boolean; moroso: boolean; deuda: bigint },
-  activa: boolean,
-  ronda: number,
-  SIMBOLO: string,
+  estado: string,
+  pago: boolean,
 ): string {
-  if (m.moroso) return `Debe ${monto(m.deuda)} ${SIMBOLO}`
-  if (m.cobro) return 'Ya cobró'
-  if (!tieneTurno(m.posicion)) return 'Turno por decidir'
-  if (activa && m.posicion === ronda) return 'Cobra esta ronda'
-  return `Cobra en la ronda ${m.posicion + 1}`
+  if (m.moroso) return `Debe ${dinero(m.deuda)}`
+  if (estado === 'Activa') return pago ? 'Pagó' : 'Por pagar'
+  if (estado === 'Abierta') return 'Unido'
+  return m.cobro ? 'Ya cobró' : '-'
 }

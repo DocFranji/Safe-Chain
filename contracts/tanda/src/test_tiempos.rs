@@ -666,10 +666,22 @@ fn una_tanda_no_se_traba_por_redondeo_de_la_boveda() {
         c.tanda.unirse(&id, p);
     }
     pasar(&c, 60); // mismo precio que al depositar
-    c.tanda.cerrar_ronda(&id); // nadie pagó: las tres garantías cubren
-    for p in [&c.ana, &c.beto, &c.carla] {
+                   // Nadie pagó. Ana cobra esta ronda y no pagó: queda morosa y su garantía no se toca (v5). A Beto y a
+                   // Carla (antes de su turno) los cubre su garantía, que se saca de la bóveda.
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.miembro(id, &c.ana).colateral, CUOTA);
+    assert!(c.miembro(id, &c.ana).moroso);
+    for p in [&c.beto, &c.carla] {
         assert_eq!(c.miembro(id, p).colateral, 0);
+        assert!(!c.miembro(id, p).moroso);
     }
+    // La tanda sigue y termina: sacar el resto de las garantías de la bóveda al final no se traba.
+    for _ in 0..2 {
+        pasar(&c, 60);
+        c.tanda.cerrar_ronda(&id);
+    }
+    c.tanda.finalizar(&id);
+    assert_eq!(c.tanda.get_tanda(&id).shares_boveda, 0);
     c.assert_conservacion();
 }
 
@@ -699,8 +711,10 @@ fn una_tanda_nunca_gasta_participaciones_de_otra() {
     for p in &gente[0..3] {
         c.tanda.unirse(&a, p);
     }
+    // En A solo paga Carla: Ana y Beto quedan morosos y sus garantías no se tocan (v5) hasta el final.
+    c.tanda.pagar_cuota(&a, &gente[2]);
     pasar(&c, 60); // mismo precio
-    c.tanda.cerrar_ronda(&a); // nadie pagó en A: sus tres garantías salen completas
+    c.tanda.cerrar_ronda(&a);
     assert!(c.tanda.get_tanda(&a).shares_boveda >= 0);
 
     // B sigue con sus participaciones intactas y termina bien.
@@ -713,6 +727,7 @@ fn una_tanda_nunca_gasta_participaciones_de_otra() {
     }
     c.tanda.finalizar(&b);
     for _ in 0..2 {
+        c.tanda.pagar_cuota(&a, &gente[2]);
         pasar(&c, 60);
         c.tanda.cerrar_ronda(&a);
     }

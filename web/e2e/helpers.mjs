@@ -33,6 +33,8 @@ export async function nuevaPagina(browser, { direccion = ME, conectado = true, e
       console.log('   [mock RPC error]', cuerpo.method, e.message)
       res = { jsonrpc: '2.0', id: cuerpo.id, error: { code: -32000, message: String(e.message) } }
     }
+    // Opcional: `est.demoraRpc` (ms) hace que cada respuesta tarde, para probar qué pasa si alguien actúa antes de que llegue una lectura.
+    if (est?.demoraRpc) await new Promise((listo) => setTimeout(listo, est.demoraRpc))
     await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(res, (_, v) => (typeof v === 'bigint' ? v.toString() : v)) })
   })
   await page.route('**/horizon-testnet.stellar.org/**', async (r) => {

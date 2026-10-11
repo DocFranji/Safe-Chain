@@ -7,7 +7,10 @@
 //!    pone más garantía (porque después de cobrar todavía debe más cuotas).
 //! 2. El colateral se guarda en una **bóveda** que genera rendimiento.
 //! 3. Cada ronda todos pagan una cuota y el miembro de turno recibe la bolsa.
-//! 4. Si alguien no paga, **su colateral cubre su cuota**: el beneficiario cobra completo.
+//! 4. Si alguien no paga y su colateral alcanza para TODAS las cuotas que le quedan, **su colateral
+//!    cubre su cuota**: el beneficiario cobra completo. Si no alcanza (v5), el colateral no se usa
+//!    mientras la tanda sigue: la cuota es deuda a favor de quien cobró de menos y, al final, el colateral
+//!    se reparte entre esas personas en proporción a lo que le faltó a cada una.
 //! 5. Al final, cada uno recupera su colateral sobrante + rendimiento, y las multas se
 //!    reparten entre quienes nunca se atrasaron.
 //!
@@ -17,7 +20,8 @@
 //!
 //! ## Cómo está organizado (para trabajar en paralelo sin pisarse)
 //! - `lib.rs`: límites, interfaz de la bóveda y el flujo principal (crear, unirse, pagar,
-//!   cerrar ronda, finalizar, cancelar).
+//!   cerrar ronda, finalizar, cancelar). `nombres.rs`: el nombre de la tanda (v5). `deudas.rs`: pagar
+//!   deudas y repartir la garantía de los morosos al finalizar (v5).
 //! - `tipos.rs`: datos guardados (`Tanda`, `Miembro`, `DataKey`) y códigos de `Error`.
 //! - `eventos.rs`: avisos que publica el contrato.
 //! - `consultas.rs`: funciones de solo lectura (`get_*`).
@@ -27,7 +31,7 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 
 mod almacenamiento;
 mod consultas;
@@ -40,6 +44,7 @@ mod turnos;
 // agregar código no choque en este archivo.
 mod bovedas_token; // M4
 mod deudas; // M1
+mod nombres; // M1 (v5)
 mod requisitos; // M2
 mod tiempos; // M1
 mod turnos_acciones; // M3
@@ -54,6 +59,8 @@ mod test_deudas; // M1
 mod test_historial; // M2
 #[cfg(test)]
 mod test_invariantes; // ORQ
+#[cfg(test)]
+mod test_nombres; // M1 (v5)
 #[cfg(test)]
 mod test_tiempos; // M1
 #[cfg(test)]
@@ -151,6 +158,33 @@ impl TandaContract {
         penalidad_bps: u32,
         cobertura_bps: u32,
     ) -> Result<u32, Error> {
+        let sin_nombre = String::from_str(&env, "");
+        Self::crear_en(
+            env,
+            creador,
+            token,
+            cuota,
+            n_miembros,
+            periodo_seg,
+            penalidad_bps,
+            cobertura_bps,
+            sin_nombre,
+        )
+    }
+
+    /// (M1 v5) Cuerpo compartido por `crear_tanda` y `crear_tanda_con_nombre` (`nombres.rs`): `nombre`
+    /// vacío = sin nombre. No se exporta (no es `pub`).
+    pub(crate) fn crear_en(
+        env: Env,
+        creador: Address,
+        token: Address,
+        cuota: i128,
+        n_miembros: u32,
+        periodo_seg: u64,
+        penalidad_bps: u32,
+        cobertura_bps: u32,
+        nombre: String,
+    ) -> Result<u32, Error> {
         creador.require_auth();
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::NoInicializado);
@@ -163,6 +197,7 @@ impl TandaContract {
         {
             return Err(Error::ParametroInvalido);
         }
+        nombres::validar(&nombre)?; // M1 v5
 
         let s = env.storage().instance();
         let id: u32 = s.get::<_, u32>(&DataKey::Contador).unwrap_or(0) + 1;
@@ -187,12 +222,14 @@ impl TandaContract {
         fijar_boveda(&env, id, &tanda)?; // M1: cada tanda guarda su bóveda al crearse
         guardar_tanda(&env, id, &tanda);
         guardar_miembros(&env, id, &Vec::new(&env));
+        nombres::guardar(&env, &tanda, id, &nombre); // M1 v5
 
         EvCreada {
             id,
             creador,
             cuota,
             n_miembros,
+            nombre,
         }
         .publish(&env);
         Ok(id)
@@ -345,7 +382,10 @@ impl TandaContract {
     }
 
     /// Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
-    /// - Quien no pagó: su colateral cubre la cuota. Si no alcanza, queda moroso.
+    /// - Quien no pagó: antes de su turno (fijo), su colateral cubre la cuota si alcanza para esa cuota
+    ///   (como en la v4: lo respalda su pozo). En los demás casos (ya cobró, es su ronda o subasta), solo si
+    ///   alcanza para todas las que le quedan (v5). Si no, la cuota queda como deuda, su colateral no se
+    ///   toca y queda moroso.
     /// - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
     /// - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
     ///   fechas no se mueven: la ronda siguiente vence cuando le tocaba.
@@ -382,17 +422,36 @@ impl TandaContract {
                 bolsa += t.cuota;
                 continue;
             }
-            // No pagó: el colateral responde.
+            // No pagó: el colateral responde, pero solo si alcanza para TODO lo que le falta pagar.
             let mut m = cargar_miembro(&env, id, &dir)?;
             m.atrasos += 1;
-            let cubierto = if m.colateral >= t.cuota {
-                // Regla 1: alcanza. Se cubre la cuota y se anota la multa (se cobra al final).
+            // (M1 v5) Cuotas que le quedan: esta y las siguientes. Si su garantía las cubre todas y no
+            // debe nada de antes, nadie sale perjudicado: se cubre al instante (como siempre) y quien
+            // cobra recibe la bolsa completa. Si no alcanza, no se paga a nadie "en orden" (el que
+            // cobra justo después se llevaría todo y los últimos nada): cada falta queda como deuda a
+            // favor de quien cobró de menos, y al finalizar la garantía se reparte entre los afectados
+            // en proporción a lo que le faltó a cada uno (`deudas::repartir_garantias`).
+            // Excepción (revisión del ORQ): quien se atrasa ANTES de su turno (turno fijo y futuro, todavía
+            // no cobró, sin deuda) lo respalda su propio pozo, y al cobrar `completar_garantia` le repone la
+            // garantía de su turno. A esa persona le basta con que la garantía cubra esta cuota, como en la
+            // v4: un olvido con garantía suficiente no es mora. La regla estricta sigue para quien ya cobró
+            // ("cobra y se va"), para quien no paga la ronda en la que cobra (no se lleva el pozo sin pagar)
+            // y en la subasta, donde el turno se decide al cerrar (`SIN_TURNO`).
+            let le_quedan = t.cuota * (t.n_miembros - ronda) as i128;
+            let antes_de_su_turno = !m.cobro && m.posicion != SIN_TURNO && m.posicion > ronda;
+            let necesita = if antes_de_su_turno {
+                t.cuota
+            } else {
+                le_quedan
+            };
+            let cubierto = if m.deuda == 0 && m.colateral >= necesita {
+                // Alcanza. Se cubre la cuota y se anota la multa (se cobra al final).
                 m.multas_pendientes += multa(&t);
                 t.cuota
             } else {
-                // Regla 2: no alcanza. Entra lo que queda y el miembro queda moroso.
-                m.deuda += t.cuota - m.colateral;
-                faltantes.push_back((dir.clone(), t.cuota - m.colateral)); // M1
+                // No alcanza (o ya debe de antes): la cuota es deuda y la garantía no se toca.
+                m.deuda += t.cuota;
+                faltantes.push_back((dir.clone(), t.cuota)); // M1
                 if !m.moroso {
                     m.moroso = true;
                     ganchos::al_quedar_moroso(&env, &t, id, &dir, m.deuda);
@@ -403,7 +462,7 @@ impl TandaContract {
                     }
                     .publish(&env);
                 }
-                m.colateral
+                0
             };
             if cubierto > 0 {
                 m.colateral -= cubierto;
@@ -484,8 +543,9 @@ impl TandaContract {
     }
 
     /// Reparte todo al terminar las rondas. CUALQUIERA puede llamarla.
-    /// Orden: retirar de la bóveda → cobrar multas → devolver colateral + rendimiento
-    /// → repartir multas y retenido entre los cumplidos.
+    /// Orden: retirar de la bóveda → repartir la garantía de los morosos entre quienes cobraron de menos
+    /// (v5) → cobrar multas → devolver colateral + rendimiento → repartir multas y retenido entre los
+    /// cumplidos.
     pub fn finalizar(env: Env, id: u32) -> Result<(), Error> {
         let mut t = cargar_tanda(&env, id)?;
         if t.estado != Estado::PorLiquidar {
@@ -515,6 +575,29 @@ impl TandaContract {
         //    (Puede ser negativo si la bóveda perdió; se reparte igual, en proporción.)
         let rendimiento = total - suma_colateral;
 
+        // 2b) (M1 v5) La garantía de cada moroso (con su parte del rendimiento) se reparte entre
+        //     quienes cobraron de menos, en proporción a lo que le faltó a cada uno. Lo que sobre
+        //     queda en su `colateral` para devolvérselo. Los demás reparten lo que resta.
+        let mut pagos: Vec<i128> = Vec::new(&env);
+        let mut usado: Vec<i128> = Vec::new(&env);
+        for _ in 0..n {
+            pagos.push_back(0);
+            usado.push_back(0);
+        }
+        let morosos = deudas::repartir_garantias(
+            &env,
+            &mut t,
+            id,
+            &miembros,
+            &mut datos,
+            &mut pagos,
+            &mut usado,
+            total,
+            suma_colateral,
+        );
+        // Rendimiento de las garantías de los demás (igual a `rendimiento` si ningún moroso tenía).
+        let rendimiento_resto = (total - morosos.sacado) - (suma_colateral - morosos.garantia);
+
         // 3) Cobrar multas del colateral sobrante.
         for i in 0..n {
             let mut m = datos.get(i).unwrap();
@@ -526,13 +609,15 @@ impl TandaContract {
         }
 
         // 4) Colateral + rendimiento, en proporción al colateral (ya sin multas).
-        let mut pagos: Vec<i128> = Vec::new(&env);
         let mut suma_col2: i128 = 0;
         for i in 0..n {
-            pagos.push_back(0);
             let m = datos.get(i).unwrap();
             if !m.moroso {
                 suma_col2 += m.colateral;
+            } else if m.colateral > 0 {
+                // (M1 v5) Al moroso le vuelve lo que sobró de su garantía, después de pagar a los
+                // afectados y sus multas.
+                pagos.set(i, pagos.get(i).unwrap() + m.colateral);
             }
         }
         if suma_col2 > 0 {
@@ -541,14 +626,20 @@ impl TandaContract {
             // participaciones: sumar "colateral + parte" daba a veces un pago negativo al último, que
             // no se transfería, y `finalizar` pagaba de más y se trababa. Con rendimiento >= 0 da lo
             // mismo que antes; nunca hay pagos negativos.
-            let disponible = (suma_col2 + rendimiento).max(0);
+            let disponible = (suma_col2 + rendimiento_resto).max(0);
+            // Si la bóveda perdió valor, las multas que se cobraron "de la garantía anotada" pueden no
+            // tener el dinero que las respalde (pasa cuando hay multas pendientes y la garantía vale
+            // menos de lo anotado). El déficit lo absorbe el fondo de multas, para no repartir de más ni
+            // trabar `finalizar`. Con rendimiento >= 0 (lo normal) no cambia nada.
+            let deficit = (-(suma_col2 + rendimiento_resto)).max(0);
+            t.fondo_premios -= deficit.min(t.fondo_premios);
             let mut repartido: i128 = 0;
             let mut ultimo: Option<u32> = None;
             for i in 0..n {
                 let m = datos.get(i).unwrap();
                 if !m.moroso && m.colateral > 0 {
                     let pago = disponible * m.colateral / suma_col2;
-                    pagos.set(i, pago);
+                    pagos.set(i, pagos.get(i).unwrap() + pago);
                     repartido += pago;
                     ultimo = Some(i);
                 }
@@ -559,7 +650,7 @@ impl TandaContract {
             }
         } else {
             // Nadie tiene colateral: el rendimiento se suma al fondo de premios.
-            t.fondo_premios += rendimiento;
+            t.fondo_premios += rendimiento_resto;
         }
 
         // 5) Multas + retenido, en partes iguales entre quienes nunca se atrasaron.
@@ -613,6 +704,11 @@ impl TandaContract {
             let mut m = datos.get(i).unwrap();
             ganchos::al_terminar(&env, &t, id, &dir, &m, monto);
             m.colateral = 0;
+            if m.moroso && m.deuda == 0 {
+                // (M1 v5) Su garantía pagó todo lo que debía a los demás: queda al día.
+                m.moroso = false;
+                ganchos::al_saldar_con_garantia(&env, id, &dir, usado.get(i).unwrap());
+            }
             guardar_miembro(&env, id, &dir, &m);
             EvLiquidado {
                 id,

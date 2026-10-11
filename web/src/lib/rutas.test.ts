@@ -14,6 +14,11 @@ describe('parsearRuta', () => {
     expect(parsearRuta('#/estado')).toEqual({ tipo: 'estado' })
   })
 
+  it('los filtros de la lista (#/tandas?…) no cambian la página', () => {
+    expect(parsearRuta('#/tandas?cuota=10-50&estado=abiertas')).toEqual({ tipo: 'lobby' })
+    expect(parsearRuta('#/tandas/?q=ana')).toEqual({ tipo: 'lobby' })
+    expect(parsearRuta('#/tanda/3?x=1')).toEqual({ tipo: 'tanda', id: 3 })
+  })
   it('un ancla suelta (#como) no es una página: la landing no debe usar anclas con #', () => {
     expect(parsearRuta('#como')).toEqual({ tipo: 'desconocida' })
   })
@@ -60,5 +65,14 @@ describe('ruta del perfil (M2, N4)', () => {
   it('reconoce #/perfil', () => {
     expect(parsearRuta('#/perfil')).toEqual({ tipo: 'perfil' })
     expect(parsearRuta('#/perfil/')).toEqual({ tipo: 'perfil' })
+  })
+})
+
+describe('ruta de amigos (pedido 6)', () => {
+  it('reconoce #/perfil/amigos y no cambia #/perfil', () => {
+    expect(parsearRuta('#/perfil/amigos')).toEqual({ tipo: 'amigos' })
+    expect(parsearRuta('#/perfil/amigos/')).toEqual({ tipo: 'amigos' })
+    expect(parsearRuta('#/perfil')).toEqual({ tipo: 'perfil' })
+    expect(parsearRuta('#/perfil/otra')).toEqual({ tipo: 'desconocida' })
   })
 })

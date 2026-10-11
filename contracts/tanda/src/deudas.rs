@@ -17,14 +17,20 @@
 //!   iguales a quienes recibieron ese reparto (`Repartidos`). Saldar ya no devuelve la bolsa retenida
 //!   (se repartió), pero sí deja al día: el historial anota `DeudaSaldada` y la persona se desbloquea.
 //!
+//! - (v5) **La garantía de un moroso se reparte al final, en proporción.** Si la garantía de alguien no
+//!   alcanza para todo lo que le falta pagar, no se usa mientras la tanda sigue: cada falta es deuda a
+//!   favor de quien cobró de menos. Al `finalizar`, lo que quede de su garantía (`repartir_garantias`)
+//!   se reparte entre esos afectados según cuánto le falta a cada uno, y se descuenta de su deuda.
+//!   Si paga su deuda antes, la garantía sigue siendo suya.
+//!
 //! Diseño y decisiones: `docs/tiempos-y-deudas.md`.
 use soroban_sdk::{contractimpl, token, Address, Env, Map, Vec};
 
 use crate::almacenamiento::*;
 use crate::{
     ganchos, BovedaClient, ClaveM1, Deuda, Error, Estado, EvAbono, EvAbonoFinal, EvBolsaRecuperada,
-    EvDeudaPagada, Faltante, Miembro, Tanda, TandaContract, TandaContractArgs, TandaContractClient,
-    BPS,
+    EvDeudaPagada, EvGarantiaRepartida, Faltante, Miembro, ParteGarantia, Tanda, TandaContract,
+    TandaContractArgs, TandaContractClient, BPS,
 };
 
 /// Garantía para las `restantes` cuotas que alguien todavía debe, con las reglas de la tanda: la
@@ -100,6 +106,166 @@ pub(crate) fn al_finalizar(env: &Env, t: &Tanda, id: u32, datos: &Vec<Miembro>) 
     if datos.iter().any(|m| m.deuda > 0) {
         renovar_tras_finalizar(env, t, id);
     }
+}
+
+/// Cuántas partes (moroso → afectado) van detalladas en los eventos de un solo `finalizar`.
+const PARTES_MAX: u32 = 24;
+
+/// Lo que `repartir_garantias` le dice a `finalizar`.
+pub(crate) struct GarantiasRepartidas {
+    /// Cuánto de lo retirado de la bóveda es de los morosos (su garantía y su parte del rendimiento):
+    /// ya no entra al reparto de los demás.
+    pub sacado: i128,
+    /// La suma de esas garantías, sin rendimiento.
+    pub garantia: i128,
+}
+
+/// (v5) Primer paso de `finalizar` para quien quedó moroso y todavía tiene garantía: se reparte entre
+/// quienes cobraron de menos, en proporción a lo que le falta a cada uno (sin contar su propia ronda),
+/// y se descuenta de su deuda y de esos faltantes. Nunca se paga más de lo que se debe.
+/// - Parte entera hacia abajo para cada afectado; las unidades que sobran, de una en una a los
+///   primeros afectados (así nadie recibe más de lo que se le debe y no se pierde ninguna).
+/// - Si el afectado SÍ cobró su bolsa, la parte se suma a lo que recibe (`pagos`). Si su bolsa quedó
+///   retenida (también era moroso), la parte va al fondo `retenido` que se reparte entre quienes
+///   cumplieron: igual que `abonar` mientras la tanda sigue.
+/// - Si le sobra garantía (su deuda con los demás ya era menor), lo que sobra queda en `m.colateral`
+///   y `finalizar` se lo devuelve, menos sus multas.
+/// - `usado[i]` = cuánto de su garantía se fue a pagar su deuda.
+///
+/// `total` es todo lo retirado de la bóveda y `suma_colateral` la suma de las garantías: cada moroso
+/// tiene derecho a `total × su garantía / suma_colateral` (capital más su parte del rendimiento).
+///
+/// Eventos: uno por moroso (`EvGarantiaRepartida`). Cada parte pesa ~125 bytes y la red rechaza la
+/// transacción si sus eventos pasan de 16 KiB (con 11 morosos y 11 afectados serían ~120 partes), así
+/// que solo las primeras `PARTES_MAX` de la transacción van detalladas; el resto de los eventos trae el
+/// total repartido y `partes` vacío.
+pub(crate) fn repartir_garantias(
+    env: &Env,
+    t: &mut Tanda,
+    id: u32,
+    miembros: &Vec<Address>,
+    datos: &mut Vec<Miembro>,
+    pagos: &mut Vec<i128>,
+    usado: &mut Vec<i128>,
+    total: i128,
+    suma_colateral: i128,
+) -> GarantiasRepartidas {
+    let mut r = GarantiasRepartidas {
+        sacado: 0,
+        garantia: 0,
+    };
+    if suma_colateral <= 0 {
+        return r;
+    }
+    let total = total.max(0);
+    let mut detalladas: u32 = 0;
+    for i in 0..datos.len() {
+        let mut m = datos.get(i).unwrap();
+        if !m.moroso || m.colateral <= 0 {
+            continue;
+        }
+        let deudor = miembros.get(i).unwrap();
+        let bruto = total * m.colateral / suma_colateral;
+        r.sacado += bruto;
+        r.garantia += m.colateral;
+
+        // Lo que se le debe a cada afectado (su propia ronda no cuenta: no hay a quién pagarle).
+        let mut d = cargar_deuda(env, id, &deudor);
+        let mut debe: Map<Address, i128> = Map::new(env);
+        let mut total_debe: i128 = 0;
+        for f in d.faltantes.iter() {
+            if f.acreedor == deudor {
+                continue;
+            }
+            let antes = debe.get(f.acreedor.clone()).unwrap_or(0);
+            debe.set(f.acreedor, antes + f.monto);
+            total_debe += f.monto;
+        }
+        let a = bruto.min(total_debe);
+        if a > 0 {
+            // Partes proporcionales, y las unidades que sobran de una en una a los primeros.
+            let mut partes: Vec<(Address, i128)> = Vec::new(env);
+            let mut dado: i128 = 0;
+            for (acreedor, debido) in debe.iter() {
+                let parte = a * debido / total_debe;
+                dado += parte;
+                partes.push_back((acreedor, parte));
+            }
+            let mut sobran = a - dado;
+            let mut con_resto: Vec<(Address, i128)> = Vec::new(env);
+            for (acreedor, parte) in partes.iter() {
+                let extra = if sobran > 0 { 1 } else { 0 };
+                sobran -= extra;
+                con_resto.push_back((acreedor, parte + extra));
+            }
+
+            // Pagar: directo, o al fondo si su bolsa quedó retenida.
+            let mut aviso: Vec<ParteGarantia> = Vec::new(env);
+            let mut falta_por_acreedor: Map<Address, i128> = Map::new(env);
+            for (acreedor, parte) in con_resto.iter() {
+                if parte <= 0 {
+                    continue;
+                }
+                // Un acreedor siempre es miembro; si no lo encontrara, su parte va al fondo en vez de
+                // trabar `finalizar`.
+                let cobro = match miembros.first_index_of(&acreedor) {
+                    Some(j) if datos.get(j).unwrap().cobro => {
+                        pagos.set(j, pagos.get(j).unwrap() + parte);
+                        true
+                    }
+                    _ => {
+                        t.retenido += parte;
+                        false
+                    }
+                };
+                falta_por_acreedor.set(acreedor.clone(), parte);
+                aviso.push_back(ParteGarantia {
+                    acreedor,
+                    monto: parte,
+                    a_pozo: !cobro,
+                });
+            }
+
+            // Descontar de sus faltantes, del más viejo al más nuevo.
+            let mut quedan: Vec<Faltante> = Vec::new(env);
+            for f in d.faltantes.iter() {
+                let por_pagar = falta_por_acreedor.get(f.acreedor.clone()).unwrap_or(0);
+                if f.acreedor == deudor || por_pagar == 0 {
+                    quedan.push_back(f);
+                    continue;
+                }
+                let abono = por_pagar.min(f.monto);
+                falta_por_acreedor.set(f.acreedor.clone(), por_pagar - abono);
+                if abono < f.monto {
+                    quedan.push_back(Faltante {
+                        monto: f.monto - abono,
+                        ..f
+                    });
+                }
+            }
+            d.faltantes = quedan;
+            d.pagado += a;
+            guardar_deuda(env, t, id, &deudor, &d);
+
+            m.deuda -= a;
+            usado.set(i, a);
+            if detalladas + aviso.len() > PARTES_MAX {
+                aviso = Vec::new(env);
+            }
+            detalladas += aviso.len();
+            EvGarantiaRepartida {
+                id,
+                deudor: deudor.clone(),
+                repartido: a,
+                deuda_restante: m.deuda,
+                partes: aviso,
+            }
+            .publish(env);
+        }
+        m.colateral = bruto - a;
+        datos.set(i, m);
+    }
+    r
 }
 
 /// (v4) Renueva al máximo de la red todo lo de una tanda finalizada que todavía tiene deudas.

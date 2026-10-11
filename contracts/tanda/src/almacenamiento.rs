@@ -241,6 +241,11 @@ pub(crate) fn renovar_tanda_con_vida(env: &Env, id: u32, t: &Tanda, vida: u32) {
         }
     }
 
+    let nombre = ClaveM1::Nombre(id); // v5
+    if p.has(&nombre) {
+        renovar(env, &nombre, vida);
+    }
+
     let clave_boveda = ClaveM1::BovedaDe(id);
     if let Some(boveda) = p.get::<_, Address>(&clave_boveda) {
         renovar(env, &clave_boveda, vida);

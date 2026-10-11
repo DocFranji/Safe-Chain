@@ -133,6 +133,9 @@ export declare const Error: {
     65: {
         message: string;
     };
+    70: {
+        message: string;
+    };
 };
 /**
  * Struct: Tanda
@@ -349,6 +352,16 @@ export interface OpcionesTanda {
     puntaje_primeros: number;
 }
 /**
+ * (v5) Una parte de la garantía de un moroso que se repartió al finalizar: `acreedor` es quien
+ * cobró de menos. Si su propia bolsa había quedado retenida (también era moroso), `a_pozo` es `true`:
+ * esa parte no se le paga a él, va al fondo que se reparte entre quienes cumplieron.
+ */
+export interface ParteGarantia {
+    a_pozo: boolean;
+    acreedor: string;
+    monto: bigint;
+}
+/**
  * Event: EvPago
  */
 export interface EvPagoEvent {
@@ -432,6 +445,10 @@ export interface EvCreadaEvent {
         creador?: string;
         cuota?: bigint;
         n_miembros?: number;
+        /**
+         * (M1 v5) Nombre de la tanda; vacío si no tiene.
+         */
+        nombre?: string;
     };
 }
 /**
@@ -688,6 +705,21 @@ export interface EvCierreAnticipadoEvent {
     };
 }
 /**
+ * Al finalizar, la garantía que le quedaba a `deudor` se repartió entre quienes cobraron de menos,
+ * en proporción a lo que le faltó a cada uno. Un solo evento por moroso (con todas las partes).
+ * `deuda_restante` es lo que todavía debe después del reparto.
+ */
+export interface EvGarantiaRepartidaEvent {
+    name: "EvGarantiaRepartida";
+    data: {
+        id: number;
+        deudor?: string;
+        repartido?: bigint;
+        deuda_restante?: bigint;
+        partes?: Array<ParteGarantia>;
+    };
+}
+/**
  * Se retiró una propuesta de intercambio (lo guardado volvió a `de`).
  */
 export interface EvPropuestaRetiradaEvent {
@@ -707,4 +739,4 @@ export interface EvHistorialConfiguradoEvent {
         historial?: string | null;
     };
 }
-export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvAbonoFinalEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvCierreAnticipadoEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;
+export type ContractEvent = EvPagoEvent | EvAbonoEvent | EvPrimaEvent | EvRondaEvent | EvSelloEvent | EvUnidoEvent | EvCreadaEvent | EvMorosoEvent | EvOfertaEvent | EvSorteoEvent | EvSubastaEvent | EvCubiertoEvent | EvGarantiaEvent | EvIniciadaEvent | EvOpcionesEvent | EvCanceladaEvent | EvLiquidadoEvent | EvPropuestaEvent | EvAbonoFinalEvent | EvFinalizadaEvent | EvRequisitosEvent | EvBovedaTokenEvent | EvDeudaPagadaEvent | EvIntercambioEvent | EvBovedaRapidaEvent | EvBolsaRecuperadaEvent | EvCierreAnticipadoEvent | EvGarantiaRepartidaEvent | EvPropuestaRetiradaEvent | EvHistorialConfiguradoEvent;

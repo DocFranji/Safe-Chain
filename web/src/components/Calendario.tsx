@@ -8,7 +8,7 @@ import { cuando } from '../lib/formato'
 import { nombreDe } from '../lib/nombres'
 import { rutaTanda } from '../lib/rutas'
 import { TANDA_ID } from '../config'
-import { useSimbolo } from '../hooks/useMoneda'
+import { Info } from './Info'
 
 const DIA = 86_400
 
@@ -21,7 +21,6 @@ type Props = {
 }
 
 export function Calendario({ id, datos, ahora, yo }: Props) {
-  const SIMBOLO = useSimbolo()
   const { tanda, miembros, vence } = datos
   const periodo = Number(tanda.periodo_seg)
   if (tanda.estado.tag !== 'Activa' || periodo < DIA) return null
@@ -38,7 +37,6 @@ export function Calendario({ id, datos, ahora, yo }: Props) {
         periodoSeg: periodo,
         vence,
         cuota: tanda.cuota,
-        simbolo: SIMBOLO,
         cobra: Array.from({ length: tanda.n_miembros }, (_, r) => {
           const m = quien(r)
           return m ? (m.direccion === yo ? 'tú' : nombreDe(m.direccion)) : null
@@ -60,7 +58,7 @@ export function Calendario({ id, datos, ahora, yo }: Props) {
     const quien = miembros.find((m) => m.posicion === r)
     const nombre = quien ? nombreDe(quien.direccion) : '-'
     if (r < tanda.ronda_actual) {
-      return { r, nombre, cuando: quien && !quien.cobro ? 'Cerrada · bolsa retenida' : 'Cerrada · ya cobró', actual: false }
+      return { r, nombre, cuando: quien && !quien.cobro ? 'Cerrada · pozo guardado' : 'Cerrada · ya cobró', actual: false }
     }
     const fecha = vence + (r - tanda.ronda_actual) * periodo
     const texto = cuando(fecha, ahora)
@@ -69,24 +67,30 @@ export function Calendario({ id, datos, ahora, yo }: Props) {
 
   return (
     <section className="miembros calendario" aria-labelledby="calendario-titulo">
-      <h2 id="calendario-titulo">Calendario</h2>
-      <p className="explica">Las fechas de pago son fijas: aunque una ronda se cierre tarde, las siguientes no se corren.</p>
+      <h2 id="calendario-titulo">
+        Calendario
+        <Info etiqueta="Sobre las fechas de pago">
+          Las fechas de pago son fijas: aunque un pozo se entregue tarde, las fechas siguientes no se corren.
+        </Info>
+      </h2>
       {mio && (
         <div className="agregar-calendario">
-          <button type="button" className="boton chico" onClick={descargar}>
-            Agregar a mi calendario
-          </button>
-          <p className="explica">
-            Baja las fechas de pago que faltan a tu calendario (el del teléfono o Google Calendar), con un recordatorio
-            un día antes.
-          </p>
+          <div className="boton-con-info">
+            <button type="button" className="boton chico" onClick={descargar}>
+              Agregar a mi calendario
+            </button>
+            <Info etiqueta="Qué baja este botón">
+              Baja las fechas de pago que faltan a tu calendario (el del teléfono o Google Calendar), con un recordatorio un
+              día antes.
+            </Info>
+          </div>
         </div>
       )}
       <div className="tabla-scroll">
         <table>
           <thead>
             <tr>
-              <th scope="col">Ronda</th>
+              <th scope="col">Turno</th>
               <th scope="col">Cobra</th>
               <th scope="col">Fecha límite para pagar</th>
             </tr>
@@ -98,7 +102,7 @@ export function Calendario({ id, datos, ahora, yo }: Props) {
                 <td>{f.nombre}</td>
                 <td>
                   {f.cuando}
-                  {f.actual && <span className="sub"> · ronda en curso</span>}
+                  {f.actual && <span className="sub"> · turno en curso</span>}
                 </td>
               </tr>
             ))}

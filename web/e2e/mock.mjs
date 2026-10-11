@@ -7,7 +7,7 @@ import * as SDK from '../node_modules/@stellar/stellar-sdk/lib/esm/index.js'
 const { xdr, StrKey, nativeToScVal, TransactionBuilder, Address, scValToNative, SorobanDataBuilder } = SDK
 
 export const PASS = 'Test SDF Network ; September 2015'
-export const TANDA_ID = 'CAUT2PXKDEKE4ZWNXULA23SYRCK25FLQBXO3IV2HYVVY5JIKVKXURQ2Q'
+export const TANDA_ID = 'CCYAZY7O2KSENJPXWONZ7W4TATC4PMI7EL5X5FPNVCXZN7YNSH6IQU7S'
 export const TOKEN_ID = 'CDM2YCJVE37HUCNOY5E65NOEKTQVQM2WD6CUVHSL5WZFVISPIUIYHAQ5'
 export const BOVEDA_ID = StrKey.encodeContract(Buffer.alloc(32, 7))
 /** M1: bóveda "real" (sin acelerar) para tandas de días, semanas o meses. La de arriba es la rápida. */
@@ -385,6 +385,13 @@ function valorSim(est, contrato, fn, args) {
       if (!est.historialActivo) return { error: { error: 'HostError: Error(WasmVm, MissingValue)', latestLedger: 1000 } }
       return addr(HISTORIAL_ID)
     }
+    // (UX, pedido 5) Crear: se anota qué se pidió (`est.creaciones`) y se responde con el número de la tanda nueva.
+    if (/^crear_tanda/.test(fn)) {
+      est.creaciones ??= []
+      est.creaciones.push({ fn, args: nativos })
+      return u32(Object.keys(est.tandas).length + 1)
+    }
+    if (fn === 'get_nombre') return nativeToScVal(est.tandas[nativos[0]]?.nombre ?? '', { type: 'string' })
     const id = nativos[0]
     const t = est.tandas[id]
     if (!t) return { error: erroresContrato(2) }
@@ -652,6 +659,25 @@ export function respuestaRpc(est, cuerpo) {
       return ok({ id: 'a', protocolVersion: 25, sequence: ULTIMO_LEDGER })
     case 'getLedgerEntries': {
       const lk = xdr.LedgerKey.fromXDR(params.keys[0], 'base64')
+      // (UX, pedido 5) Con `est.cuentaFirma`, la cuenta de quien firma existe en la red: así el SDK llega a simular la
+      // llamada (arma la transacción con su número de secuencia). Sin esto se queda en "tu cuenta no está preparada".
+      if (lk.type === 'account' && est.cuentaFirma) {
+        const cuenta = xdr.LedgerEntryData.account(
+          new xdr.AccountEntry({
+            accountId: lk.account.accountId,
+            balance: 100000000000n,
+            seqNum: 12345n,
+            numSubEntries: 0,
+            inflationDest: null,
+            flags: 0,
+            homeDomain: '',
+            thresholds: Buffer.from([1, 0, 0, 0]),
+            signers: [],
+            ext: xdr.AccountEntryExt.v0(),
+          }),
+        )
+        return ok({ entries: [{ key: params.keys[0], xdr: cuenta.toXDR('base64'), lastModifiedLedgerSeq: 900 }], latestLedger: 1000 })
+      }
       // (M3) El código del contrato (lo baja `contract.Client.from` en #/estado): un WASM con su spec.
       if (lk.type === 'contractCode') {
         const codigo = xdr.LedgerEntryData.contractCode(
@@ -698,6 +724,7 @@ export function respuestaRpc(est, cuerpo) {
 
 // --- M3: el WASM del contrato, para comparar la web con el contrato desplegado (#/estado) ---------
 const HASH_WASM = Buffer.alloc(32, 0xab)
+const FUNCIONES_CON_NOMBRE = ['get_nombre', 'get_nombres', 'crear_tanda_con_nombre', 'crear_tanda_avanzada_con_nombre']
 const leb128 = (n) => {
   const b = []
   do {
@@ -713,7 +740,9 @@ const leb128 = (n) => {
  * del cliente generado. `est.interfazSin`: nombres de funciones o tipos que le faltan (contrato viejo).
  */
 function wasmConSpec(est) {
-  const quitar = new Set(est.interfazSin ?? [])
+  // (UX, pedido 5) El cliente generado ya conoce los nombres, así que el contrato "desplegado" también, salvo con
+  // `est.sinNombres = true` (un contrato v4: no hay campo de nombre al crear).
+  const quitar = new Set([...(est.interfazSin ?? []), ...(est.sinNombres ? FUNCIONES_CON_NOMBRE : [])])
   const entradas = spec.entries.filter((e) => {
     const v = e.value
     return !quitar.has(v && v.name ? v.name.toString() : '')

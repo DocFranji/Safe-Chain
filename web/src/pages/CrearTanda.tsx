@@ -1,29 +1,40 @@
-// Formulario para crear una tanda, con vista previa de lo que va a pasar antes de firmar.
-// Flujo: crear_tanda (firma 1), requisitos de historial si se eligieron (firma extra, M2) y, si la
-// persona quiere, unirse como primera (última firma).
+// Crear una tanda en 3 preguntas: ¿cuánto pone cada quien?, ¿cuántas personas?, ¿cada cuánto?
+// Todo lo demás (moneda, otra duración, multa, depósito, turnos e historial) tiene valores por defecto
+// sensatos y queda plegado en "Opciones avanzadas". El resumen en palabras, con fechas reales, es lo que
+// la persona lee antes de confirmar.
+// Flujo de firmas: crear_tanda (o crear_tanda_avanzada; con nombre, crear_tanda_con_nombre), los requisitos de historial si se eligieron (M2) y,
+// si la persona quiere (viene marcado), unirse como primera. Al terminar va a la página de la tanda, que la
+// recibe con la invitación lista para WhatsApp.
 import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { BotonesEntrar } from '../components/BotonesEntrar'
+import { Info } from '../components/Info'
 import { OpcionesTurnos } from '../components/OpcionesTurnos'
 import { OpcionesHistorial } from '../components/OpcionesHistorial'
 import { SIN_REQUISITOS, hayRequisitos, puntajeDe } from '../lib/historial'
 import { useHistorialCacheado } from '../hooks/useHistorial'
+import { useSoportaNombres } from '../hooks/useSoportaNombres'
+import { idDeCreacion, limpiarNombre } from '../lib/nombreCrear'
+import { NOMBRE_MAX, errorNombre } from '../lib/nombreTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
   MAX_PENALIDAD_BPS,
   MIN_MIEMBROS,
-  bolsa,
+  multaPorAtraso,
   riesgoMaximo,
   tablaColateral,
   validarParametros,
   type ParametrosTanda,
 } from '../lib/colateral'
 import { aSegundos, parseMonto, type UnidadPeriodo } from '../lib/entradas'
-import { duracion, fechaLarga, monto } from '../lib/formato'
+import { duracion, fechaLarga } from '../lib/formato'
+import { dinero } from '../lib/glosario'
+import { FRECUENCIAS, cadaCuanto, fraseTanda, type Frecuencia } from '../lib/resumen'
 import { RUTA_LOBBY, irA, rutaTanda } from '../lib/rutas'
+import { marcarRecienCreada } from '../lib/recienCreada'
 import { OpcionesMoneda } from '../components/OpcionesMoneda'
-import { MonedaContexto, useSaldoEn, useSimbolo } from '../hooks/useMoneda'
+import { MonedaContexto, useSaldoEn } from '../hooks/useMoneda'
 import { TUSD, type Moneda } from '../lib/monedas'
 import {
   OPCIONES_CLASICAS,
@@ -38,37 +49,29 @@ import {
 type Formulario = {
   cuota: string
   n: number
+  /** 'otra' = la duración que se escribe a mano en "Opciones avanzadas" (por ejemplo, 1 minuto para probar). */
+  frecuencia: Frecuencia | 'otra'
   periodo: string
   unidad: UnidadPeriodo
   multa: number // %
   cobertura: number // %
 }
 
-const INICIAL: Formulario = { cuota: '100', n: 3, periodo: '1', unidad: 'minutos', multa: 10, cobertura: 100 }
+const BASE: Omit<Formulario, 'cuota' | 'n' | 'frecuencia'> = { periodo: '1', unidad: 'semanas', multa: 5, cobertura: 100 }
 
-const PRESETS: { nombre: string; detalle: string; valores: Formulario }[] = [
-  { nombre: 'Demo rápida', detalle: '3 personas · 1 min por ronda', valores: INICIAL },
+/** Plantillas de un clic. La primera es la de por defecto. */
+const PLANTILLAS: { nombre: string; valores: Formulario }[] = [
+  { nombre: 'Entre amigos, semanal', valores: { ...BASE, cuota: '20', n: 5, frecuencia: 'semanal' } },
+  { nombre: 'Familia, mensual', valores: { ...BASE, cuota: '50', n: 6, frecuencia: 'mensual' } },
+  { nombre: 'Compañeros, quincenal', valores: { ...BASE, cuota: '25', n: 8, frecuencia: 'quincenal' } },
+  // Para la demo y para probar: turnos de 1 minuto (la bóveda de las tandas de prueba rinde más rápido).
   {
-    nombre: 'Semanal × 4',
-    detalle: '4 personas · una ronda por semana (1 mes en total)',
-    valores: { cuota: '25', n: 4, periodo: '1', unidad: 'semanas', multa: 5, cobertura: 100 },
-  },
-  {
-    nombre: 'Quincenal × 6',
-    detalle: '6 personas · una ronda cada 15 días (3 meses en total)',
-    valores: { cuota: '50', n: 6, periodo: '15', unidad: 'dias', multa: 5, cobertura: 100 },
-  },
-  {
-    nombre: 'Mensual × 6',
-    detalle: '6 personas · una ronda por mes (6 meses en total)',
-    valores: { cuota: '50', n: 6, periodo: '1', unidad: 'meses', multa: 5, cobertura: 100 },
-  },
-  {
-    nombre: 'Mensual × 12',
-    detalle: '12 personas · una ronda por mes (1 año en total)',
-    valores: { cuota: '50', n: 12, periodo: '1', unidad: 'meses', multa: 5, cobertura: 100 },
+    nombre: 'Prueba rápida (1 minuto)',
+    valores: { cuota: '100', n: 3, frecuencia: 'otra', periodo: '1', unidad: 'minutos', multa: 10, cobertura: 100 },
   },
 ]
+
+const INICIAL = PLANTILLAS[0].valores
 
 type Progreso =
   | { tipo: 'ninguno' }
@@ -82,14 +85,19 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const [turnos, setTurnos] = useState<OpcionesForm>(OPCIONES_CLASICAS)
   const [requisitos, setRequisitos] = useState(SIN_REQUISITOS)
   const [progreso, setProgreso] = useState<Progreso>({ tipo: 'ninguno' })
+  // (v5, pedido 5) El nombre es opcional y solo se ofrece si el contrato desplegado lo guarda.
+  const aceptaNombres = useSoportaNombres() === true
+  const [nombreEscrito, setNombreEscrito] = useState('')
   // M4: moneda de la tanda (TUSD simulado o USDC de Blend con rendimiento real).
   const [moneda, setMoneda] = useState<Moneda>(TUSD)
-  const SIMBOLO = moneda.simbolo
+  // "Opciones avanzadas" se abre solo si la persona lo pide (o si una plantilla usa una duración propia).
+  const [avanzadas, setAvanzadas] = useState(false)
 
   const yo = billetera.direccion
   const saldoMoneda = useSaldoEn(moneda, yo, saldo)
   const cuota = parseMonto(f.cuota)
-  const periodoSeg = aSegundos(Number(f.periodo), f.unidad)
+  const periodoSeg =
+    f.frecuencia === 'otra' ? aSegundos(Number(f.periodo), f.unidad) : FRECUENCIAS.find((x) => x.id === f.frecuencia)!.segundos
 
   const parciales: Partial<ParametrosTanda> = {
     cuota: cuota ?? undefined,
@@ -103,26 +111,33 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const valido = Object.keys(errores).length === 0
   const params = valido ? (parciales as ParametrosTanda) : null
   const trabajando = progreso.tipo === 'trabajando'
+  const nombre = aceptaNombres ? limpiarNombre(nombreEscrito) : ''
+  const problemaNombre = errorNombre(nombre)
   // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
   // Si los primeros turnos piden un historial que no tiene, queda en el primero que no lo pide (M2 + M3).
   const miHistorial = useHistorialCacheado(yo ?? '')
   const turnoPropio = turnoAlCrear(turnos, miHistorial ? puntajeDe(miHistorial) : 0)
   const garantiaPropia = params ? garantiaAlUnirse(params, turnos.modo, turnoPropio) : 0n
   const faltaSaldo = unirmeYo && saldoMoneda !== null && saldoMoneda < garantiaPropia ? garantiaPropia - saldoMoneda : 0n
-
-  const duracionTotal = params ? params.periodoSeg * params.nMiembros : 0
-  const [hoy] = useState(() => Math.floor(Date.now() / 1000))
-  // Para rondas de días, semanas o meses ayuda ver la fecha en que terminaría si se llena hoy.
-  const fechaFin = params && params.periodoSeg >= 86_400 ? fechaLarga(hoy + duracionTotal, hoy) : null
+  const conGoogle = billetera.tipo === 'google'
 
   function cambiar<K extends keyof Formulario>(campo: K, valor: Formulario[K]) {
     setF((prev) => ({ ...prev, [campo]: valor }))
     if (progreso.tipo === 'error') setProgreso({ tipo: 'ninguno' })
   }
 
+  function usarPlantilla(valores: Formulario) {
+    setF(valores)
+    if (valores.frecuencia === 'otra') setAvanzadas(true)
+    if (progreso.tipo === 'error') setProgreso({ tipo: 'ninguno' })
+  }
+
+  /** Lo que se le dice a la persona mientras confirma: con Google no hay ventana que aprobar. */
+  const esperando = (que: string) => (conGoogle ? `Un momento: ${que}…` : `Confirma en Freighter: ${que}…`)
+
   async function crear() {
     if (!yo || !params) return
-    setProgreso({ tipo: 'trabajando', texto: 'Confirma en Freighter para crear la tanda…' })
+    setProgreso({ tipo: 'trabajando', texto: esperando('estamos creando tu tanda') })
 
     let id: number
     try {
@@ -136,48 +151,59 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
         cobertura_bps: params.coberturaBps,
       }
       // Por orden de llegada y sin intercambios: la tanda de siempre. Si no, con sus opciones de turnos.
-      const tx = esClasica(turnos)
-        ? await clienteFirma(yo).crear_tanda(datos)
-        : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) })
-      const resultado = await enviar(tx)
-      if (resultado.isErr()) throw new Error('El contrato rechazó los datos de la tanda.')
-      id = resultado.unwrap()
+      // Con nombre se usan las dos funciones "con_nombre" del contrato nuevo; sin nombre, las de siempre.
+      let resultado: unknown
+      if (nombre) {
+        const c = clienteFirma(yo)
+        resultado = await enviar(
+          esClasica(turnos)
+            ? await c.crear_tanda_con_nombre({ ...datos, nombre })
+            : await c.crear_tanda_avanzada_con_nombre({ ...datos, opciones: aContrato(turnos), nombre }),
+        )
+      } else {
+        resultado = await enviar(
+          esClasica(turnos)
+            ? await clienteFirma(yo).crear_tanda(datos)
+            : await clienteFirma(yo).crear_tanda_avanzada({ ...datos, opciones: aContrato(turnos) }),
+        )
+      }
+      id = idDeCreacion(resultado)
     } catch (e) {
       setProgreso({ tipo: 'error', texto: traducirError(e) })
       return
     }
 
     if (hayRequisitos(requisitos)) {
-      setProgreso({ tipo: 'trabajando', texto: `Tanda ${id} creada. Confirma otra vez para guardar los requisitos de historial…` })
+      setProgreso({ tipo: 'trabajando', texto: esperando('guardamos los requisitos de reputación') })
       try {
         await enviar(await clienteFirma(yo).configurar_requisitos({ id, ...requisitos }))
       } catch (e) {
         setProgreso({
           tipo: 'creada-sin-unirse',
           id,
-          texto: `La tanda ${id} sí se creó, pero no pudimos guardar los requisitos de historial: ${traducirError(e)}`,
+          texto: `La tanda ${id} sí se creó, pero no pudimos guardar los requisitos de reputación: ${traducirError(e)}`,
         })
         return
       }
     }
 
-    if (!unirmeYo) {
-      irA(rutaTanda(id))
-      return
+    if (unirmeYo) {
+      setProgreso({ tipo: 'trabajando', texto: esperando('te estamos uniendo como primera persona') })
+      try {
+        await enviar(await clienteFirma(yo).unirse({ id, miembro: yo }))
+      } catch (e) {
+        setProgreso({
+          tipo: 'creada-sin-unirse',
+          id,
+          texto: `La tanda ${id} sí se creó, pero no pudimos unirte: ${traducirError(e)}`,
+        })
+        return
+      }
     }
 
-    setProgreso({ tipo: 'trabajando', texto: `Tanda ${id} creada. Confirma otra vez en Freighter para unirte como primera persona…` })
-    try {
-      const tx = await clienteFirma(yo).unirse({ id, miembro: yo })
-      await enviar(tx)
-      irA(rutaTanda(id))
-    } catch (e) {
-      setProgreso({
-        tipo: 'creada-sin-unirse',
-        id,
-        texto: `La tanda ${id} sí se creó, pero no pudimos unirte: ${traducirError(e)}`,
-      })
-    }
+    // La página de la tanda recibe a quien la creó con "¡Tu tanda está lista!" y la invitación.
+    marcarRecienCreada(id)
+    irA(rutaTanda(id))
   }
 
   return (
@@ -190,162 +216,259 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
           <h1 id="crear-titulo">Crear una tanda</h1>
         </div>
         <p className="explica lobby-intro">
-          Defines las reglas una sola vez y el contrato las cumple solo. Después compartes el link para que se unan.
+          Responde 3 preguntas. Rounda cobra a cada quien y le entrega el pozo a quien le toca, sin que nadie tenga que
+          perseguir a nadie.
         </p>
 
-        <div className="presets" role="group" aria-label="Empezar desde un ejemplo">
-          <span className="presets-titulo">Empezar desde un ejemplo:</span>
-          {PRESETS.map((p) => (
-            <button key={p.nombre} type="button" className="boton chico" onClick={() => setF(p.valores)} title={p.detalle}>
+        <div className="presets" role="group" aria-label="Empezar desde una plantilla">
+          <span className="presets-titulo">Plantillas:</span>
+          {PLANTILLAS.map((p) => (
+            <button
+              key={p.nombre}
+              type="button"
+              className={f === p.valores ? 'filtro activo' : 'filtro'}
+              aria-pressed={f === p.valores}
+              onClick={() => usarPlantilla(p.valores)}
+            >
               {p.nombre}
             </button>
           ))}
         </div>
 
-        <div className="escenario crear-columnas">
-          <form
-            className="panel formulario"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void crear()
-            }}
-          >
-            <OpcionesMoneda valor={moneda} alCambiar={setMoneda} />
-
-            <div className="campo">
-              <label htmlFor="cuota">Cuota por ronda</label>
-              <div className="con-sufijo">
+        <form
+          className="escenario crear-columnas"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void crear()
+          }}
+        >
+          <div className="panel formulario">
+            <div className="campo pregunta">
+              <div className="etiqueta-info">
+                <label htmlFor="cuota">
+                  <span className="pregunta-numero">1</span> ¿Cuánto pone cada quien?
+                </label>
+                {!errores.cuota && (
+                  <Info etiqueta="Qué es la cuota">La cuota: lo mismo para todas las personas, en cada turno. Son dólares de práctica.</Info>
+                )}
+              </div>
+              <div className="con-prefijo">
+                <span aria-hidden="true">$</span>
                 <input
                   id="cuota"
                   inputMode="decimal"
                   value={f.cuota}
                   onChange={(e) => cambiar('cuota', e.target.value)}
                   aria-invalid={errores.cuota ? true : undefined}
-                  aria-describedby="cuota-ayuda"
+                  aria-describedby={errores.cuota ? 'cuota-ayuda' : undefined}
                 />
-                <span>{SIMBOLO}</span>
               </div>
-              <p id="cuota-ayuda" className={errores.cuota ? 'ayuda error' : 'ayuda'}>
-                {errores.cuota ?? 'Lo que paga cada persona en cada ronda.'}
-              </p>
+              {errores.cuota && (
+                <p id="cuota-ayuda" className="ayuda error">
+                  {errores.cuota}
+                </p>
+              )}
             </div>
 
-            <div className="campo">
-              <label htmlFor="n">
-                Personas: <strong>{f.n}</strong>
-              </label>
-              <input
-                id="n"
-                type="range"
-                min={MIN_MIEMBROS}
-                max={MAX_MIEMBROS}
-                value={f.n}
-                onChange={(e) => cambiar('n', Number(e.target.value))}
-              />
-              <p className="ayuda">
-                Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}. Hay una ronda por persona.
-              </p>
-            </div>
-
-            <div className="campo">
-              <label htmlFor="periodo">Duración de cada ronda</label>
-              <div className="fila-campo">
-                <input
-                  id="periodo"
-                  inputMode="numeric"
-                  value={f.periodo}
-                  onChange={(e) => cambiar('periodo', e.target.value)}
-                  aria-invalid={errores.periodoSeg ? true : undefined}
-                  aria-describedby="periodo-ayuda"
-                />
-                <select
-                  aria-label="Unidad de tiempo"
-                  value={f.unidad}
-                  onChange={(e) => cambiar('unidad', e.target.value as UnidadPeriodo)}
+            <div className="campo pregunta">
+              <div className="etiqueta-info">
+                <label htmlFor="n">
+                  <span className="pregunta-numero">2</span> ¿Cuántas personas?
+                </label>
+                <Info etiqueta="Cuántas personas">
+                  Contándote a ti. Entre {MIN_MIEMBROS} y {MAX_MIEMBROS}: cada persona cobra una vez.
+                </Info>
+              </div>
+              <div className="contador">
+                <button
+                  type="button"
+                  className="boton secundario"
+                  aria-label="Una persona menos"
+                  disabled={f.n <= MIN_MIEMBROS}
+                  onClick={() => cambiar('n', Math.max(MIN_MIEMBROS, f.n - 1))}
                 >
-                  <option value="minutos">minutos</option>
-                  <option value="horas">horas</option>
-                  <option value="dias">días</option>
-                  <option value="semanas">semanas</option>
-                  <option value="meses">meses</option>
-                </select>
+                  −
+                </button>
+                <input
+                  id="n"
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_MIEMBROS}
+                  max={MAX_MIEMBROS}
+                  value={f.n}
+                  onChange={(e) => cambiar('n', Math.min(MAX_MIEMBROS, Math.max(MIN_MIEMBROS, Number(e.target.value) || MIN_MIEMBROS)))}
+                />
+                <button
+                  type="button"
+                  className="boton secundario"
+                  aria-label="Una persona más"
+                  disabled={f.n >= MAX_MIEMBROS}
+                  onClick={() => cambiar('n', Math.min(MAX_MIEMBROS, f.n + 1))}
+                >
+                  +
+                </button>
               </div>
-              <p id="periodo-ayuda" className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
-                {errores.periodoSeg ??
-                  `Quien paga después de este plazo cuenta como atrasado. Hasta 3 meses por ronda${
-                    f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''
-                  }.`}
-              </p>
             </div>
 
-            <div className="campo">
-              <label htmlFor="multa">
-                Multa por atraso: <strong>{f.multa} %</strong> de la cuota
-              </label>
-              <input
-                id="multa"
-                type="range"
-                min={0}
-                max={MAX_PENALIDAD_BPS / 100}
-                value={f.multa}
-                onChange={(e) => cambiar('multa', Number(e.target.value))}
-              />
-              <p className="ayuda">
-                Se descuenta de la garantía al final y se reparte entre quienes nunca se atrasaron.
-                {cuota !== null && f.multa > 0 && (
-                  <>
-                    {' '}
-                    Con tu cuota son {monto((cuota * BigInt(f.multa)) / 100n)} {SIMBOLO} por atraso.
-                  </>
+            <fieldset className="campo pregunta">
+              <legend>
+                <span className="pregunta-numero">3</span> ¿Cada cuánto?
+                {f.frecuencia !== 'otra' && <Info etiqueta="Cada cuánto">Cada cuánto paga cada quien su cuota.</Info>}
+              </legend>
+              <div className="frecuencias">
+                {FRECUENCIAS.map((x) => (
+                  <button
+                    key={x.id}
+                    type="button"
+                    className={f.frecuencia === x.id ? 'filtro activo' : 'filtro'}
+                    aria-pressed={f.frecuencia === x.id}
+                    onClick={() => cambiar('frecuencia', x.id)}
+                  >
+                    {x.boton}
+                  </button>
+                ))}
+              </div>
+              {f.frecuencia === 'otra' && (
+                <p className={errores.periodoSeg ? 'ayuda error' : 'ayuda'}>
+                  {errores.periodoSeg ?? `Otra duración: ${periodoSeg ? cadaCuanto(periodoSeg) : '-'} (en "Opciones avanzadas").`}
+                </p>
+              )}
+            </fieldset>
+
+            {aceptaNombres && (
+              <div className="campo">
+                <label htmlFor="nombre-tanda">Nombre de la tanda (opcional)</label>
+                <input
+                  id="nombre-tanda"
+                  autoComplete="off"
+                  placeholder="Por ejemplo: Tanda de la oficina"
+                  value={nombreEscrito}
+                  onChange={(e) => setNombreEscrito(e.target.value)}
+                  aria-invalid={problemaNombre ? true : undefined}
+                  aria-describedby="nombre-tanda-ayuda"
+                />
+                <p id="nombre-tanda-ayuda" className={problemaNombre ? 'ayuda error' : 'ayuda'}>
+                  {problemaNombre ??
+                    `De 2 a ${NOMBRE_MAX} caracteres${nombre ? ` (llevas ${[...nombre].length})` : ''}. Lo verá cualquiera que vea la tanda y no se podrá cambiar después. Sin nombre se llama «Tanda 5», con su número.`}
+                </p>
+              </div>
+            )}
+
+            <details className="avanzadas" open={avanzadas} onToggle={(e) => setAvanzadas(e.currentTarget.open)}>
+              <summary>Opciones avanzadas</summary>
+              <p className="ayuda">Ya vienen con valores pensados para la mayoría de los grupos. No hace falta tocarlas.</p>
+
+              <OpcionesMoneda valor={moneda} alCambiar={setMoneda} />
+
+              <div className="campo">
+                <label htmlFor="periodo">Otra duración para cada turno</label>
+                <div className="fila-campo">
+                  <input
+                    id="periodo"
+                    inputMode="numeric"
+                    value={f.periodo}
+                    onChange={(e) => setF((prev) => ({ ...prev, periodo: e.target.value, frecuencia: 'otra' }))}
+                    aria-invalid={f.frecuencia === 'otra' && errores.periodoSeg ? true : undefined}
+                    aria-describedby="periodo-ayuda"
+                  />
+                  <select
+                    aria-label="Unidad de tiempo"
+                    value={f.unidad}
+                    onChange={(e) => setF((prev) => ({ ...prev, unidad: e.target.value as UnidadPeriodo, frecuencia: 'otra' }))}
+                  >
+                    <option value="minutos">minutos</option>
+                    <option value="horas">horas</option>
+                    <option value="dias">días</option>
+                    <option value="semanas">semanas</option>
+                    <option value="meses">meses</option>
+                  </select>
+                </div>
+                {f.frecuencia === 'otra' && errores.periodoSeg ? (
+                  <p id="periodo-ayuda" className="ayuda error">
+                    {errores.periodoSeg}
+                  </p>
+                ) : (
+                  <p id="periodo-ayuda" className="ayuda">
+                    Hasta 3 meses por turno{f.unidad === 'meses' ? ' (1 mes = 30 días)' : ''}.
+                    <Info etiqueta="Sobre la otra duración">
+                      Reemplaza a «¿Cada cuánto?». Con minutos sirve para probar.
+                    </Info>
+                  </p>
                 )}
-              </p>
-            </div>
+              </div>
 
-            <div className="campo">
-              <label htmlFor="cobertura">
-                Garantía: <strong>{f.cobertura} %</strong> de lo que aún se debe
-              </label>
-              <input
-                id="cobertura"
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={f.cobertura}
-                onChange={(e) => cambiar('cobertura', Number(e.target.value))}
+              <div className="campo">
+                <div className="etiqueta-info">
+                  <label htmlFor="multa">
+                    Multa por pagar tarde: <strong>{f.multa} %</strong> de la cuota
+                  </label>
+                  <Info etiqueta="Sobre la multa">
+                    Se descuenta del depósito al final y se reparte entre quienes nunca se atrasaron.
+                    {cuota !== null && f.multa > 0 && <> Con esta cuota son {dinero((cuota * BigInt(f.multa)) / 100n)}.</>}
+                  </Info>
+                </div>
+                <input
+                  id="multa"
+                  type="range"
+                  min={0}
+                  max={MAX_PENALIDAD_BPS / 100}
+                  value={f.multa}
+                  onChange={(e) => cambiar('multa', Number(e.target.value))}
+                />
+              </div>
+
+              <div className="campo">
+                <div className="etiqueta-info">
+                  <label htmlFor="cobertura">
+                    Depósito de seguridad: <strong>{f.cobertura} %</strong> de lo que aún se debe
+                  </label>
+                  <Info etiqueta="Sobre el depósito de seguridad">
+                    Quien cobra antes deja más depósito. Con 100 % nadie gana nada desapareciendo; con menos es más barato entrar,
+                    pero el grupo asume algo de riesgo.
+                  </Info>
+                </div>
+                <input
+                  id="cobertura"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={f.cobertura}
+                  onChange={(e) => cambiar('cobertura', Number(e.target.value))}
+                />
+              </div>
+
+              <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
+              <OpcionesHistorial valor={requisitos} alCambiar={setRequisitos} yo={yo} unirmeYo={unirmeYo} />
+            </details>
+          </div>
+
+          <aside className="panel vista-previa" aria-labelledby="previa-titulo">
+            <h2 id="previa-titulo">Así va a funcionar</h2>
+            {params ? (
+              <Resumen
+                params={params}
+                unirmeYo={unirmeYo}
+                garantiaPropia={garantiaPropia}
+                turnoPropio={turnoPropio}
+                modo={turnos.modo}
               />
-              <p className="ayuda">
-                Quien cobra antes deja más garantía. Con 100 % nadie gana nada huyendo; con menos es más barato entrar, pero
-                el grupo asume algo de riesgo.
-              </p>
-            </div>
-
-            <OpcionesTurnos params={params} valor={turnos} alCambiar={setTurnos} error={errorTurnos} />
-            <OpcionesHistorial valor={requisitos} alCambiar={setRequisitos} yo={yo} unirmeYo={unirmeYo} />
+            ) : (
+              <p className="explica">Responde las 3 preguntas para ver cómo va a funcionar.</p>
+            )}
 
             <label className="casilla">
               <input type="checkbox" checked={unirmeYo} onChange={(e) => setUnirmeYo(e.target.checked)} />
               <span>
-                Unirme yo también, como primera persona
-                {params && unirmeYo && (
-                  <span className="ayuda">
-                    {' '}
-                    (dejarás {monto(garantiaPropia)} {SIMBOLO} de garantía
-                    {turnos.modo === 'Sorteo'
-                      ? '; tu turno se sortea al llenarse'
-                      : turnos.modo === 'Subasta'
-                        ? '; tu turno se decide en las subastas'
-                        : ` y cobrarás en la ronda ${turnoPropio + 1}`}
-                    )
-                  </span>
-                )}
+                Unirme yo también
+                <span className="ayuda"> (como primera persona)</span>
               </span>
             </label>
 
             <div className="acciones">
               {!yo ? (
                 <>
-                  <p>Entra o conecta tu billetera para crear la tanda.</p>
+                  <p>Entra para crear la tanda.</p>
                   <BotonesEntrar billetera={billetera} />
                 </>
               ) : !billetera.redCorrecta ? (
@@ -353,24 +476,19 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
               ) : (
                 <button
                   type="submit"
-                  className="boton principal"
-                  disabled={!valido || errorTurnos !== null || trabajando || faltaSaldo > 0n}
+                  className="boton principal grande"
+                  disabled={!valido || errorTurnos !== null || problemaNombre !== null || trabajando || faltaSaldo > 0n}
                 >
-                  {trabajando ? 'Esperando…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
+                  {trabajando ? 'Un momento…' : unirmeYo ? 'Crear la tanda y unirme' : 'Crear la tanda'}
                 </button>
               )}
               {faltaSaldo > 0n && (
                 <p className="aviso nota">
-                  Para unirte como primera persona necesitas {monto(garantiaPropia)} {SIMBOLO} y te faltan {monto(faltaSaldo)} {SIMBOLO}.
+                  Para unirte como primera persona necesitas {dinero(garantiaPropia)} y te faltan {dinero(faltaSaldo)}.
                   Pide más con el botón de arriba o desmarca "Unirme yo también".
                 </p>
               )}
-              <p className="explica">
-                Cualquier persona con el link podrá unirse.{' '}
-                {turnos.modo === 'Llegada'
-                  ? 'El orden de llegada decide el turno: quien entra primero cobra primero y deja más garantía.'
-                  : 'El turno lo decide el mecanismo que elegiste arriba, no el orden de llegada.'}
-              </p>
+              {!valido && yo && <p className="ayuda error">Revisa las respuestas de arriba: hay algo por corregir.</p>}
             </div>
 
             {progreso.tipo === 'trabajando' && (
@@ -385,90 +503,107 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
             )}
             {progreso.tipo === 'creada-sin-unirse' && (
               <p className="aviso error" role="alert">
-                {progreso.texto}{' '}
-                <a href={rutaTanda(progreso.id)}>Ir a la tanda {progreso.id}</a>
+                {progreso.texto} <a href={rutaTanda(progreso.id)}>Ir a la tanda {progreso.id}</a>
               </p>
             )}
-          </form>
-
-          <aside className="panel vista-previa" aria-labelledby="previa-titulo">
-            <h2 id="previa-titulo">Así va a funcionar</h2>
-            {params ? (
-              <>
-                <dl className="datos">
-                  <div className="dato">
-                    <dt>Bolsa por ronda</dt>
-                    <dd>
-                      {monto(bolsa(params))} {SIMBOLO}
-                    </dd>
-                  </div>
-                  <div className="dato">
-                    <dt>Dura en total</dt>
-                    <dd>{duracion(duracionTotal)}</dd>
-                  </div>
-                </dl>
-                {fechaFin && (
-                  <p className="explica">
-                    Las fechas de pago quedan fijas desde que se completa el grupo. Si se llena hoy, la última ronda vence
-                    el {fechaFin}.
-                  </p>
-                )}
-
-                <h3>Garantía de cada turno</h3>
-                <div className="tabla-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th scope="col">Turno</th>
-                        <th scope="col">Cobra</th>
-                        <th scope="col" className="num">
-                          Garantía ({SIMBOLO})
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tablaColateral(params).map((c, i) => (
-                        <tr key={i}>
-                          <td className="turno">{i + 1}</td>
-                          <td>Ronda {i + 1}</td>
-                          <td className="num">{monto(c)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="explica">
-                  La garantía se guarda en una bóveda que genera rendimiento y se devuelve al final. Si alguien desaparece,
-                  su garantía paga por él.
-                </p>
-
-                <RiesgoGrupo params={params} />
-
-              </>
-            ) : (
-              <p className="explica">Completa los datos de la izquierda para ver la vista previa.</p>
-            )}
           </aside>
-        </div>
+        </form>
       </section>
     </MonedaContexto.Provider>
   )
 }
 
-function RiesgoGrupo({ params }: { params: ParametrosTanda }) {
-  const SIMBOLO = useSimbolo()
+/** El resumen en palabras, con fechas reales si los turnos duran un día o más. */
+function Resumen({
+  params,
+  unirmeYo,
+  garantiaPropia,
+  turnoPropio,
+  modo,
+}: {
+  params: ParametrosTanda
+  unirmeYo: boolean
+  garantiaPropia: bigint
+  turnoPropio: number
+  modo: OpcionesForm['modo']
+}) {
+  const [hoy] = useState(() => Math.floor(Date.now() / 1000))
+  const { nMiembros: n, periodoSeg } = params
+  const tabla = tablaColateral(params)
+  const multa = multaPorAtraso(params.cuota, params.penalidadBps)
+  const conFechas = periodoSeg >= 86_400
   const riesgo = riesgoMaximo(params)
-  if (riesgo === 0n) {
-    return (
-      <p className="aviso listo">
-        Con esta garantía, si alguien cobra y desaparece, su garantía cubre todo lo que aún debe: el grupo no pierde nada.
-      </p>
-    )
-  }
+  const turnoSeDecideDespues = modo === 'Sorteo' || modo === 'Subasta'
+
   return (
-    <p className="aviso nota">
-      Con esta garantía, si quien cobra primero desaparece, el grupo podría perder hasta {monto(riesgo)} {SIMBOLO}. Sube la
-      garantía a 100 % para eliminar ese riesgo.
-    </p>
+    <>
+      <p className="resumen-frase">{fraseTanda({ cuota: params.cuota, n, periodoSeg })}</p>
+      <ul className="resumen-lista">
+        <li>
+          Empieza cuando se unan las {n} personas y dura {duracion(periodoSeg * n)}: un turno para cada quien.
+          {conFechas && (
+            <>
+              {' '}
+              Si se completa hoy, el primer pago vence el {fechaLarga(hoy + periodoSeg, hoy)} y el último pago vence el{' '}
+              {fechaLarga(hoy + periodoSeg * n, hoy)}.
+            </>
+          )}
+        </li>
+        <li>
+          {unirmeYo ? (
+            <>
+              Tú dejas <strong>{dinero(garantiaPropia)}</strong> de depósito de seguridad y lo recuperas al final, con
+              intereses.
+              {turnoSeDecideDespues
+                ? modo === 'Sorteo'
+                  ? ' Tu turno se sortea cuando se llene la tanda.'
+                  : ' Tu turno se decide en las subastas.'
+                : ` Cobras en el turno ${turnoPropio + 1}.`}
+            </>
+          ) : (
+            <>
+              Quien cobra primero deja {dinero(tabla[0])} de depósito de seguridad; quien cobra al final,{' '}
+              {dinero(tabla[tabla.length - 1])}. Cada quien lo recupera al final, con intereses.
+            </>
+          )}
+        </li>
+        <li>
+          {riesgo === 0n
+            ? 'Si alguien no paga, su depósito cubre su cuota: el grupo no pierde nada.'
+            : `Si quien cobra primero desaparece, el grupo podría perder hasta ${dinero(riesgo)}. Sube el depósito a 100 % en "Opciones avanzadas" para eliminar ese riesgo.`}
+        </li>
+        {multa > 0n && <li>Pagar tarde cuesta {dinero(multa)} de multa, que se reparte entre quienes pagan a tiempo.</li>}
+      </ul>
+
+      <details className="deposito-turnos">
+        <summary>¿Cuánto deja cada quien de depósito?</summary>
+        <div className="tabla-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Turno</th>
+                <th scope="col" className="num">
+                  Depósito
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {tabla.map((c, i) => (
+                <tr key={i}>
+                  <td className="turno">{i + 1}</td>
+                  <td className="num">{dinero(c)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="ayuda">
+          Quien cobra antes deja más.
+          <Info etiqueta="Por qué deja más">
+            Quien cobra antes deja más, porque después de cobrar todavía debe cuotas. Si desaparece, su depósito paga por él.
+          </Info>
+        </p>
+      </details>
+    </>
   )
 }

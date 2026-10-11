@@ -1,0 +1,143 @@
+/* El botón "i" de información y su globo. Solo usa los colores de index.css (ya tienen modo oscuro). */
+
+.boton-info {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0 0 0 0.35em;
+  padding: 0;
+  border: 1px solid var(--borde);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tinta-2);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: help;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--t-rapido) ease,
+    color var(--t-rapido) ease,
+    border-color var(--t-rapido) ease;
+}
+/* El círculo es pequeño a propósito; el área para tocarlo en el celular es más grande. */
+.boton-info::after {
+  content: '';
+  position: absolute;
+  inset: -0.55rem;
+}
+.boton-info:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+.boton-info[aria-expanded='true'] {
+  border-color: var(--acento);
+  background: var(--acento);
+  color: var(--sobre-acento);
+}
+@media (hover: hover) and (pointer: fine) {
+  .boton-info:hover {
+    border-color: var(--acento);
+    color: var(--acento-texto);
+  }
+  .boton-info[aria-expanded='true']:hover {
+    color: var(--sobre-acento);
+  }
+}
+
+/* El globo va en el <body> (no se corta con las tarjetas) y se coloca con `position: fixed` desde Info.tsx. */
+.globo-info {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: min(300px, calc(100vw - 24px));
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--tinta);
+  box-shadow: var(--sombra-alta);
+  font-size: 0.84rem;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.45;
+  text-align: left;
+  pointer-events: none;
+  animation: globo-info-entra var(--t-rapido) var(--ease-out);
+}
+.globo-info strong {
+  font-weight: 650;
+}
+@keyframes globo-info-entra {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .globo-info {
+    animation: none;
+  }
+}
+
+/* Una etiqueta de campo con su "i" pegada al final del texto. Repite lo que App.css le da a `.campo > label` y a
+   `.pregunta > label`, que ya no es hija directa del campo. */
+.etiqueta-info {
+  display: flex;
+  align-items: center;
+}
+.etiqueta-info > label {
+  font-weight: 600;
+}
+.etiqueta-info > label strong {
+  font-variant-numeric: tabular-nums;
+}
+.pregunta > .etiqueta-info {
+  margin-bottom: 4px;
+}
+.pregunta > .etiqueta-info > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+.pregunta > legend > .boton-info {
+  margin-left: 0;
+}
+
+/* Una casilla con su "i" al lado (la casilla ocupa el ancho; la "i" queda pegada al final del texto, arriba). */
+.casilla-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+.casilla-info > .casilla {
+  flex: 0 1 auto;
+}
+.casilla-info > .boton-info {
+  margin-top: 0.1rem;
+}
+/* En un título (h2, h3) o una línea de ayuda, la "i" va justo después del texto. */
+h2 > .boton-info,
+h3 > .boton-info {
+  font-size: 0.7rem;
+}
+
+/* Un botón con su "i" al lado. */
+.boton-con-info {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.boton-con-info > .boton-info {
+  margin: 0;
+}

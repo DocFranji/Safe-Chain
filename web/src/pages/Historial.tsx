@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Billetera } from '../hooks/useBilletera'
 import { useDireccionHistorial, useHistorial } from '../hooks/useHistorial'
 import { BotonesEntrar } from '../components/BotonesEntrar'
+import { BotonAmigo } from '../components/BotonAmigo'
 import { Insignia } from '../components/InsigniaNivel'
 import { Mensaje } from '../components/Mensaje'
 import {
@@ -21,10 +22,12 @@ import {
   tieneMoraPendiente,
   type Historial as DatosHistorial,
 } from '../lib/historial'
-import { fechaLarga, monto } from '../lib/formato'
+import { fechaLarga } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { direccionCorta, nombreDe, NOMBRES } from '../lib/nombres'
 import { RUTA_LOBBY, irA, rutaHistorial } from '../lib/rutas'
-import { EXPLORADOR, SIMBOLO } from '../config'
+import { EXPLORADOR } from '../config'
+import { Info } from '../components/Info'
 import '../components/historial.css'
 
 type Props = { dir: string | null; billetera: Billetera }
@@ -64,6 +67,12 @@ export function Historial({ dir, billetera }: Props) {
         </p>
       ) : (
         <FichaHistorial dir={quien} h={estado.historial} esMio={esMio} esGoogle={esMio && billetera.tipo === 'google'} />
+      )}
+
+      {quien && !esMio && esDireccion(quien) && (
+        <div className="perfil-amigo">
+          <BotonAmigo dir={quien} yo={billetera.direccion} />
+        </div>
       )}
 
       <Buscar />
@@ -110,7 +119,7 @@ export function FichaHistorial({ dir, h, esMio, esGoogle, enPerfil = false }: Pr
           <p className="historial-dir">{dir}</p>
           <p>
             <strong>{puntaje} puntos</strong> · nivel {nivel}
-            {descuento > 0 && <> · {descuento} % menos de garantía en las tandas que lo ofrecen</>}
+            {descuento > 0 && <> · {descuento} % menos de depósito en las tandas que lo ofrecen</>}
           </p>
           <div className="historial-barra" aria-hidden="true">
             <span style={{ width: `${Math.max(0, Math.min(100, avance))}%` }} />
@@ -143,20 +152,25 @@ export function FichaHistorial({ dir, h, esMio, esGoogle, enPerfil = false }: Pr
             ))}
           </ul>
           <p className="explica">
-            Ha pagado {monto(h.monto_pagado)} {SIMBOLO} en cuotas. Primera actividad:{' '}
+            Ha pagado {dinero(h.monto_pagado)} en cuotas. Primera actividad:{' '}
             {fechaLarga(Number(h.primera_actividad))} · última: {fechaLarga(Number(h.ultima_actividad))}.
           </p>
           <p className="explica">
-            Puntos ganados: {h.puntos_positivos} · puntos perdidos: {h.puntos_negativos}. Lo negativo no se borra:
-            saldar una deuda suma puntos, pero la mora queda registrada.
+            Puntos ganados: {h.puntos_positivos} · puntos perdidos: {h.puntos_negativos}.
+            <Info etiqueta="Sobre los puntos perdidos">
+              Lo negativo no se borra: saldar una deuda suma puntos, pero la mora queda registrada.
+            </Info>
           </p>
         </>
       )}
 
       {esGoogle && (
         <p className="explica">
-          Entraste con Google: tu historial es el de la billetera que Rounda creó para tu cuenta. Si un día usas otra
-          billetera, su historial empieza en cero.
+          Entraste con Google.
+          <Info etiqueta="Sobre tu historial con Google">
+            Tu historial es el de la billetera que Rounda creó para tu cuenta. Si un día usas otra billetera, su historial
+            empieza en cero.
+          </Info>
         </p>
       )}
 
@@ -223,12 +237,12 @@ function ComoSeCalcula() {
       </table>
       <p className="explica">
         Puntaje = puntos ganados − puntos perdidos (nunca menos de 0). Niveles:{' '}
-        {NIVELES.map((n, i) => `${n.nombre} desde ${n.desde}${n.descuento ? ` (${n.descuento} % menos de garantía)` : ''}${i < NIVELES.length - 1 ? ', ' : '.'}`)}
+        {NIVELES.map((n, i) => `${n.nombre} desde ${n.desde}${n.descuento ? ` (${n.descuento} % menos de depósito)` : ''}${i < NIVELES.length - 1 ? ', ' : '.'}`)}
       </p>
       <p className="explica">
-        Para que nadie infle su puntaje: solo suman las tandas con cuota de {CUOTA_MINIMA_TUSD} {SIMBOLO} o más, cada
+        Para que nadie infle su puntaje: solo suman las tandas con cuota de ${CUOTA_MINIMA_TUSD} o más, cada
         persona gana como mucho {TOPE_POR_TANDA} puntos por tanda, y el puntaje cero no da beneficios (abrir una
-        billetera nueva no limpia nada). La garantía con descuento nunca baja de una cuota.
+        billetera nueva no limpia nada). El depósito con descuento nunca baja de una cuota.
       </p>
     </details>
   )

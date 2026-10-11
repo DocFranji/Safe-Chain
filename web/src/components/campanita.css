@@ -1,0 +1,238 @@
+/* La campanita de la barra (pedido 3 del plan v5). Solo usa los colores de index.css, que ya tienen modo oscuro.
+   La barra es de color marino en los dos modos, así que el botón y el número usan los colores de la barra; el panel
+   es una superficie normal (blanca o azul muy oscuro) y por eso vuelve a poner la tinta de la página. */
+
+.campana {
+  position: relative;
+  display: flex;
+}
+
+/* El mismo círculo de 38 px que el botón de claro u oscuro. */
+.boton-campana {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--t-presion) var(--ease-out),
+    background-color var(--t-rapido) ease;
+}
+.boton-campana:active {
+  transform: scale(0.94);
+}
+.boton-campana:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.boton-campana[aria-expanded='true'] {
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+.boton-campana svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (hover: hover) and (pointer: fine) {
+  .boton-campana:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}
+
+/* El número de avisos sin leer, rojo y con un aro del color de la barra para separarlo de la campanita. */
+.campana-numero {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--alerta);
+  box-shadow: 0 0 0 2px var(--barra-fondo, var(--marca));
+  color: var(--superficie);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 19px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* El velo de detrás del panel. En la computadora no recoge toques (el panel se cierra con un oyente del documento, para
+   que el toque siga su camino); en el celular tapa y oscurece la página, y tocarlo cierra la hoja. */
+.campana-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.campana-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 31;
+  width: min(390px, calc(100vw - 32px));
+  max-height: min(72vh, 580px);
+  padding: 16px;
+  overflow-y: auto;
+  border-radius: var(--radio);
+  background: var(--superficie);
+  box-shadow:
+    0 0 0 1px var(--linea),
+    var(--sombra-alta);
+  color: var(--tinta);
+  font-size: 16px;
+  font-weight: 400;
+}
+.campana-panel:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+
+.campana-cabeza {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+.campana-cabeza h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--titulos-peso);
+}
+
+.campana-vacio {
+  margin: 12px 0 16px;
+}
+
+.campana-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.campana-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radio-chico);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--t-rapido) ease;
+}
+.campana-item.nueva {
+  background: var(--pago-suave);
+}
+@media (hover: hover) and (pointer: fine) {
+  .campana-item:hover {
+    background: var(--superficie-2);
+  }
+}
+.campana-item:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: -2px;
+}
+/* El punto azul marca lo nuevo; en lo ya leído deja el lugar vacío para que los textos queden alineados. */
+.campana-punto {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 50%;
+}
+.campana-item.nueva .campana-punto {
+  background: var(--acento);
+}
+.campana-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.campana-titulo {
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.campana-texto .sub {
+  font-size: 14px;
+  color: var(--tinta-2);
+  overflow-wrap: anywhere;
+}
+.campana-texto .campana-hora {
+  font-size: 13px;
+}
+
+/* Los botones chicos de la barra se pintan blancos sobre el marino (App.css, para "Entrar"). Dentro del panel, que es
+   una superficie normal, vuelven a ser botones chicos de siempre. */
+:root .barra .campana-panel .boton.chico {
+  padding: 6px 14px;
+  border-color: var(--borde);
+  background: transparent;
+  color: var(--tinta);
+  font-size: 15px;
+}
+@media (hover: hover) and (pointer: fine) {
+  :root .barra .campana-panel .boton.chico:hover:not(:disabled) {
+    border-color: var(--tinta);
+    background: var(--superficie-2);
+  }
+}
+
+.campana-cerrar {
+  display: none;
+}
+
+/* En el celular: una hoja que sube desde abajo, con un velo oscuro detrás y un botón para cerrar. */
+@media (max-width: 600px) {
+  .campana-fondo {
+    background: rgba(5, 7, 15, 0.55);
+    pointer-events: auto;
+  }
+  .campana-panel {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 84vh;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    border-radius: 22px 22px 0 0;
+    animation: campana-sube var(--t-medio) var(--ease-cajon);
+  }
+  .campana-cerrar {
+    display: inline-flex;
+    width: 100%;
+  }
+}
+@keyframes campana-sube {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .campana-panel {
+    animation: none;
+  }
+}

@@ -57,7 +57,7 @@ describe('desglose', () => {
       '12 cuotas pagadas a tiempo',
       '1 cuota pagada tarde',
       '2 tandas terminadas sin atrasos',
-      '1 vez en mora',
+      '1 vez con un pago pendiente',
     ])
   })
 })

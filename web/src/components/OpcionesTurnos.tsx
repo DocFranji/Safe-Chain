@@ -5,8 +5,8 @@ import type { ParametrosTanda } from '../lib/colateral'
 import { MAX_DESCUENTO_BPS, MAX_PRIMA_BPS, MODOS, eligeTurno, vistaPrevia, type Modo, type OpcionesForm } from '../lib/turnos'
 import { NIVELES, nivelDePuntaje } from '../lib/historial'
 import { useDireccionHistorial } from '../hooks/useHistorial'
-import { monto } from '../lib/formato'
-import { useSimbolo } from '../hooks/useMoneda'
+import { dinero } from '../lib/glosario'
+import { Info } from './Info'
 
 type Props = {
   /** Parámetros ya válidos de la tanda (null mientras el formulario tenga errores). */
@@ -26,7 +26,10 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
 
   return (
     <fieldset className="campo turnos-opciones">
-      <legend>¿Cómo se decide quién cobra primero?</legend>
+      <legend>
+        ¿Cómo se decide quién cobra primero?
+        <Info etiqueta="Cómo funciona este mecanismo">{elegido.detalle}</Info>
+      </legend>
       <div className="modos" role="radiogroup" aria-label="Cómo se reparten los turnos">
         {MODOS.map((m) => (
           <label key={m.modo} className={m.modo === valor.modo ? 'modo elegido' : 'modo'}>
@@ -42,13 +45,14 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
           </label>
         ))}
       </div>
-      <p className="ayuda">{elegido.detalle}</p>
-
       {valor.modo === 'PrecioPorTurno' && (
         <div className="campo">
-          <label htmlFor="prima">
-            El primer turno paga: <strong>{valor.primaPct} %</strong> de la bolsa
-          </label>
+          <div className="etiqueta-info">
+            <label htmlFor="prima">
+              El primer turno paga: <strong>{valor.primaPct} %</strong> del pozo
+            </label>
+            <Info etiqueta="Sobre la prima">El último turno recibe lo mismo. Los del medio pagan o reciben menos.</Info>
+          </div>
           <input
             id="prima"
             type="range"
@@ -57,15 +61,17 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
             value={valor.primaPct}
             onChange={(e) => alCambiar({ ...valor, primaPct: Number(e.target.value) })}
           />
-          <p className="ayuda">El último turno recibe lo mismo. Los del medio pagan o reciben menos.</p>
         </div>
       )}
 
       {valor.modo === 'Subasta' && (
         <div className="campo">
-          <label htmlFor="descuento">
-            Descuento máximo por ronda: <strong>{valor.descuentoPct} %</strong> de la bolsa
-          </label>
+          <div className="etiqueta-info">
+            <label htmlFor="descuento">
+              Descuento máximo por turno: <strong>{valor.descuentoPct} %</strong> del pozo
+            </label>
+            <Info etiqueta="Sobre el descuento máximo">Nadie puede ofrecer recibir menos que esto. Así nadie se queda con muy poco.</Info>
+          </div>
           <input
             id="descuento"
             type="range"
@@ -74,22 +80,20 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
             value={valor.descuentoPct}
             onChange={(e) => alCambiar({ ...valor, descuentoPct: Number(e.target.value) })}
           />
-          <p className="ayuda">Nadie puede ofrecer recibir menos que esto. Así nadie se queda con muy poco.</p>
-          <label className="casilla">
-            <input
-              type="checkbox"
-              checked={valor.selladas}
-              onChange={(e) => alCambiar({ ...valor, selladas: e.target.checked })}
-            />
-            <span>
-              Ofertas selladas
-              <span className="ayuda">
-                {' '}
-                (nadie ve las ofertas de los demás: en la primera mitad de cada ronda cada quien sella la suya y en la
-                segunda la revela. Gana la mayor. Se revela desde el mismo navegador con el que se selló)
-              </span>
-            </span>
-          </label>
+          <div className="casilla-info">
+            <label className="casilla">
+              <input
+                type="checkbox"
+                checked={valor.selladas}
+                onChange={(e) => alCambiar({ ...valor, selladas: e.target.checked })}
+              />
+              <span>Ofertas selladas</span>
+            </label>
+            <Info etiqueta="Qué son las ofertas selladas">
+              Nadie ve las ofertas de los demás: en la primera mitad de cada turno cada quien sella la suya y en la segunda la
+              revela. Gana la mayor. Se revela desde el mismo navegador con el que se selló.
+            </Info>
+          </div>
         </div>
       )}
 
@@ -103,17 +107,19 @@ export function OpcionesTurnos({ params, valor, alCambiar, error }: Props) {
       {eligeTurno(valor.modo) && <PrimerosConHistorial params={params} valor={valor} alCambiar={alCambiar} />}
 
       {valor.modo !== 'Subasta' && (
-        <label className="casilla">
-          <input
-            type="checkbox"
-            checked={valor.intercambio}
-            onChange={(e) => alCambiar({ ...valor, intercambio: e.target.checked })}
-          />
-          <span>
-            Permitir intercambiar turnos
-            <span className="ayuda"> (dos personas que aún no cobran pueden cambiar sus turnos, con una compensación si se ponen de acuerdo)</span>
-          </span>
-        </label>
+        <div className="casilla-info">
+          <label className="casilla">
+            <input
+              type="checkbox"
+              checked={valor.intercambio}
+              onChange={(e) => alCambiar({ ...valor, intercambio: e.target.checked })}
+            />
+            <span>Permitir intercambiar turnos</span>
+          </label>
+          <Info etiqueta="Qué es intercambiar turnos">
+            Dos personas que aún no cobran pueden cambiar sus turnos, con una compensación si se ponen de acuerdo.
+          </Info>
+        </div>
       )}
 
       {error && <p className="ayuda error">{error}</p>}
@@ -134,20 +140,19 @@ function PrimerosConHistorial({ params, valor, alCambiar }: Omit<Props, 'error'>
   const niveles = NIVELES.filter((n) => n.desde > 0)
   return (
     <div className="campo primeros-historial">
-      <label className="casilla">
-        <input
-          type="checkbox"
-          checked={valor.primeros > 0}
-          onChange={(e) => alCambiar({ ...valor, primeros: e.target.checked ? Math.min(2, maximo) : 0 })}
-        />
-        <span>
-          Los primeros turnos, solo para quien tenga buen historial
-          <span className="ayuda">
-            {' '}
-            (quien cobra primero recibe la bolsa antes de terminar de pagar: es como un préstamo del grupo)
-          </span>
-        </span>
-      </label>
+      <div className="casilla-info">
+        <label className="casilla">
+          <input
+            type="checkbox"
+            checked={valor.primeros > 0}
+            onChange={(e) => alCambiar({ ...valor, primeros: e.target.checked ? Math.min(2, maximo) : 0 })}
+          />
+          <span>Los primeros turnos, solo para quien tenga buen historial</span>
+        </label>
+        <Info etiqueta="Por qué pedir historial">
+          Quien cobra primero recibe el pozo antes de terminar de pagar: es como un préstamo del grupo.
+        </Info>
+      </div>
       {valor.primeros > 0 && (
         <div className="fila-campo">
           <label htmlFor="primeros-turnos">Turnos</label>
@@ -188,13 +193,15 @@ function PrimerosConHistorial({ params, valor, alCambiar }: Omit<Props, 'error'>
 }
 
 function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: OpcionesForm }) {
-  const SIMBOLO = useSimbolo()
   const filas = vistaPrevia(params, valor)
   const conPrima = valor.modo === 'PrecioPorTurno'
   const conApartado = filas.some((f) => f.apartado > 0n)
   return (
     <div className="turnos-previa">
-      <h3>Cada turno, si todos pagan</h3>
+      <h3>
+        Cada turno, si todos pagan
+        <Info etiqueta="Cómo leer esta tabla">{explicacionTabla(valor.modo)}</Info>
+      </h3>
       <div className="tabla-scroll">
         <table>
           <thead>
@@ -214,7 +221,7 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
                 </th>
               )}
               <th scope="col" className="num">
-                Recibe ({SIMBOLO})
+                Recibe
               </th>
             </tr>
           </thead>
@@ -225,25 +232,28 @@ function TablaTurnos({ params, valor }: { params: ParametrosTanda; valor: Opcion
                   {f.turno + 1}
                   {f.pideHistorial && <span className="nivel-turno">{nivelDePuntaje(valor.puntajePrimeros)}</span>}
                 </td>
-                <td className="num">{monto(f.alUnirse)}</td>
-                {conApartado && <td className="num">{f.apartado > 0n ? monto(f.apartado) : '-'}</td>}
+                <td className="num">{dinero(f.alUnirse)}</td>
+                {conApartado && <td className="num">{f.apartado > 0n ? dinero(f.apartado) : '-'}</td>}
                 {conPrima && (
-                  <td className="num">{f.prima > 0n ? `paga ${monto(f.prima)}` : f.prima < 0n ? `gana ${monto(-f.prima)}` : '-'}</td>
+                  <td className="num">{f.prima > 0n ? `paga ${dinero(f.prima)}` : f.prima < 0n ? `gana ${dinero(-f.prima)}` : '-'}</td>
                 )}
-                <td className="num">{monto(f.recibe)}</td>
+                <td className="num">{dinero(f.recibe)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="explica">
-        {valor.modo === 'Sorteo' || valor.modo === 'Subasta'
-          ? 'Como el turno no se conoce al unirse, todos dejan una cuota. A quien cobra se le aparta de su bolsa el resto de su garantía: la recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado.'
-          : valor.modo === 'PrecioPorTurno'
-            ? 'La prima se descuenta de la bolsa de quien cobra antes y se suma a la de quien cobra al final. Suman cero: el contrato no se queda con nada.'
-            : 'Cada quien elige su turno al unirse y deja la garantía de ese turno.'}
-        {valor.modo === 'Subasta' && ' Quien gana una ronda recibe además menos por su descuento, que se reparte entre los demás.'}
-      </p>
     </div>
   )
+}
+
+/** Qué dice la tabla de turnos, según cómo se decide quién cobra. */
+function explicacionTabla(modo: Modo): string {
+  const base =
+    modo === 'Sorteo' || modo === 'Subasta'
+      ? 'Como el turno no se conoce al unirse, todos dejan una cuota. A quien cobra se le aparta de su pozo el resto de su depósito: lo recupera al final con intereses. Es el mismo depósito de siempre, sin pedir todo por adelantado.'
+      : modo === 'PrecioPorTurno'
+        ? 'La prima se descuenta del pozo de quien cobra antes y se suma a la de quien cobra al final. Suman cero: Rounda no se queda con nada.'
+        : 'Cada quien elige su turno al unirse y deja el depósito de ese turno.'
+  return modo === 'Subasta' ? `${base} Quien gana un turno recibe además menos por su descuento, que se reparte entre los demás.` : base
 }

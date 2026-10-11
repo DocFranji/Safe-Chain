@@ -20,8 +20,9 @@ export interface Client {
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
      * Reparte todo al terminar las rondas. CUALQUIERA puede llamarla.
-     * Orden: retirar de la bóveda → cobrar multas → devolver colateral + rendimiento
-     * → repartir multas y retenido entre los cumplidos.
+     * Orden: retirar de la bóveda → repartir la garantía de los morosos entre quienes cobraron de menos
+     * (v5) → cobrar multas → devolver colateral + rendimiento → repartir multas y retenido entre los
+     * cumplidos.
      */
     finalizar(args: {
         id: number;
@@ -58,7 +59,10 @@ export interface Client {
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<null, Error>>>;
     /**
      * Cierra la ronda vencida. CUALQUIERA puede llamarla (así nadie bloquea la tanda).
-     * - Quien no pagó: su colateral cubre la cuota. Si no alcanza, queda moroso.
+     * - Quien no pagó: antes de su turno (fijo), su colateral cubre la cuota si alcanza para esa cuota
+     * (como en la v4: lo respalda su pozo). En los demás casos (ya cobró, es su ronda o subasta), solo si
+     * alcanza para todas las que le quedan (v5). Si no, la cuota queda como deuda, su colateral no se
+     * toca y queda moroso.
      * - El beneficiario de turno recibe la bolsa (o se retiene si es moroso).
      * - (M1 v4) Si TODOS pagaron, se puede cerrar antes de que venza (menos en la subasta). Las
      * fechas no se mueven: la ronda siguiente vence cuando le tocaba.
@@ -250,6 +254,49 @@ export interface Client {
         monto: bigint;
     }, options?: MethodOptions): Promise<AssembledTransaction<Result<bigint, Error>>>;
     /**
+     * El nombre de la tanda `id`. Vacío si no tiene (o si la tanda no existe): se muestra "Tanda N".
+     * Solo lectura y barata (una sola entrada).
+     */
+    get_nombre(args: {
+        id: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<string>>;
+    /**
+     * Los nombres de las tandas `desde`, `desde + 1`, … (hasta 50 por llamada): la posición `i` del
+     * resultado es el nombre de la tanda `desde + i`. Para la lista, en una sola consulta.
+     */
+    get_nombres(args: {
+        desde: number;
+        cuantos: number;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Array<string>>>;
+    /**
+     * Igual que `crear_tanda` (orden de llegada, mismas reglas), con nombre. `nombre` vacío = sin
+     * nombre; si no, de 2 a 40 caracteres (error `NombreInvalido`).
+     */
+    crear_tanda_con_nombre(args: {
+        creador: string | Address;
+        token: string | Address;
+        cuota: bigint;
+        n_miembros: number;
+        periodo_seg: bigint;
+        penalidad_bps: number;
+        cobertura_bps: number;
+        nombre: string;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<number, Error>>>;
+    /**
+     * Igual que `crear_tanda_avanzada` (turnos a elección), con nombre.
+     */
+    crear_tanda_avanzada_con_nombre(args: {
+        creador: string | Address;
+        token: string | Address;
+        cuota: bigint;
+        n_miembros: number;
+        periodo_seg: bigint;
+        penalidad_bps: number;
+        cobertura_bps: number;
+        opciones: OpcionesTanda;
+        nombre: string;
+    }, options?: MethodOptions): Promise<AssembledTransaction<Result<number, Error>>>;
+    /**
      * La bóveda donde está la garantía de la tanda `id` (la web la usa para mostrar el rendimiento).
      */
     get_boveda(args: {
@@ -331,6 +378,10 @@ export declare class Client extends ContractClient {
         get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
         get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
         pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_nombre: (json: string) => AssembledTransaction<string>;
+        get_nombres: (json: string) => AssembledTransaction<string[]>;
+        crear_tanda_con_nombre: (json: string) => AssembledTransaction<Result<number, Error>>;
+        crear_tanda_avanzada_con_nombre: (json: string) => AssembledTransaction<Result<number, Error>>;
         get_boveda: (json: string) => AssembledTransaction<Result<string, Error>>;
         configurar_boveda_rapida: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
@@ -370,6 +421,10 @@ export declare class Client extends ContractClient {
         get_deuda: (json: string) => AssembledTransaction<Result<Deuda, Error>>;
         get_deudas: (json: string) => AssembledTransaction<Result<[string, Deuda][], Error>>;
         pagar_deuda: (json: string) => AssembledTransaction<Result<bigint, Error>>;
+        get_nombre: (json: string) => AssembledTransaction<string>;
+        get_nombres: (json: string) => AssembledTransaction<string[]>;
+        crear_tanda_con_nombre: (json: string) => AssembledTransaction<Result<number, Error>>;
+        crear_tanda_avanzada_con_nombre: (json: string) => AssembledTransaction<Result<number, Error>>;
         get_boveda: (json: string) => AssembledTransaction<Result<string, Error>>;
         configurar_boveda_rapida: (json: string) => AssembledTransaction<Result<null, Error>>;
         get_ronda: (json: string) => AssembledTransaction<Result<[number, bigint, string[]], Error>>;
@@ -540,6 +595,12 @@ export declare class Client extends ContractClient {
      * Build a topics filter row for the "EvCierreAnticipado" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
      */
     evCierreAnticipadoEventFilter(topicValues?: {
+        id?: number;
+    }): string[];
+    /**
+     * Build a topics filter row for the "EvGarantiaRepartida" event, for use in `Api.EventFilter.topics` when calling `server.getEvents`. Omitted fields match any value.
+     */
+    evGarantiaRepartidaEventFilter(topicValues?: {
         id?: number;
     }): string[];
     /**

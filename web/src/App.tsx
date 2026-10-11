@@ -17,9 +17,12 @@ import { Mensaje } from './components/Mensaje'
 import { BarraCuenta } from './components/BarraCuenta'
 import { BotonesEntrar } from './components/BotonesEntrar'
 import { BotonModo } from './components/BotonModo'
-import { direccionCorta, nombreDe, NOMBRES, suscribirApodos, usarLectorDeApodos, versionApodos } from './lib/nombres'
+import { Campanita } from './components/Campanita'
+import { nombreConocido, suscribirApodos, usarLectorDeApodos, versionApodos } from './lib/nombres'
 import { leerApodo } from './lib/historial'
-import { useSyncExternalStore } from 'react'
+import { almacenLocal } from './lib/almacen'
+import { guardarInvitacion, invitacionDeEntrada } from './lib/invitaciones'
+import { useEffect, useSyncExternalStore } from 'react'
 import { RUTA_CREAR, RUTA_DEMO, RUTA_ESTADO, RUTA_INICIO, RUTA_LOBBY, RUTA_PERFIL } from './lib/rutas'
 import { EXPLORADOR, TANDA_ID } from './config'
 
@@ -33,12 +36,19 @@ export default function App() {
   const ruta = useRuta()
   const cuenta = useCuenta(billetera.direccion, billetera.redCorrecta)
 
+  // Pedido 3 del plan v5: si lo primero que abre la persona es la página de una tanda (el enlace que le mandaron), se
+  // anota la invitación: la campanita se la recuerda mientras no se una (lib/invitaciones.ts).
+  useEffect(() => {
+    const id = invitacionDeEntrada(window.location.hash)
+    if (id !== null) guardarInvitacion(almacenLocal(), id, Math.floor(Date.now() / 1000))
+  }, [])
+
   // La landing trae su propio encabezado y pie: no se le pone el de la app.
   if (ruta.tipo === 'inicio') return <Landing />
 
   // Cada página se viste según su función (paginas.css): elegir, pagar y cobrar, crear, proyectar, leer, revisar.
   return (
-    <div className="app" data-pagina={ruta.tipo}>
+    <div className="app" data-pagina={ruta.tipo === 'amigos' ? 'perfil' : ruta.tipo}>
       <header className="barra">
         <a className="marca" href={RUTA_INICIO}>
           <span className="logo" aria-hidden="true">
@@ -46,23 +56,21 @@ export default function App() {
           </span>
           Rounda
         </a>
+        {/* UX: tres cosas en el menú. "Estado" y "Demo en vivo" están en el pie. */}
         <nav className="menu" aria-label="Principal">
-          <a href={RUTA_LOBBY} aria-current={ruta.tipo === 'lobby' ? 'page' : undefined}>
-            Tandas
+          <a href={RUTA_LOBBY} aria-current={ruta.tipo === 'lobby' || ruta.tipo === 'tanda' ? 'page' : undefined}>
+            Mis tandas
           </a>
           <a href={RUTA_CREAR} aria-current={ruta.tipo === 'crear' ? 'page' : undefined}>
             Crear
           </a>
-          <a href={RUTA_DEMO} aria-current={ruta.tipo === 'demo' ? 'page' : undefined}>
-            Demo en vivo
+          <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' || ruta.tipo === 'amigos' ? 'page' : undefined}>
+            Perfil
           </a>
-          {billetera.direccion && (
-            <a href={RUTA_PERFIL} aria-current={ruta.tipo === 'perfil' ? 'page' : undefined}>
-              Perfil
-            </a>
-          )}
         </nav>
         <div className="barra-lado">
+          {/* Los avisos (pedido 3 del plan v5): con sesión, y no en la demo, que se proyecta. */}
+          {billetera.direccion && ruta.tipo !== 'demo' && <Campanita yo={billetera.direccion} />}
           {/* La demo siempre va en oscuro (se proyecta): ahí el botón no haría nada. */}
           {ruta.tipo !== 'demo' && <BotonModo />}
           <BotonBilletera billetera={billetera} />
@@ -88,8 +96,8 @@ export default function App() {
           <Estado billetera={billetera} />
         ) : ruta.tipo === 'historial' ? (
           <Historial key={ruta.dir ?? 'mio'} dir={ruta.dir} billetera={billetera} />
-        ) : ruta.tipo === 'perfil' ? (
-          <Perfil billetera={billetera} />
+        ) : ruta.tipo === 'perfil' || ruta.tipo === 'amigos' ? (
+          <Perfil billetera={billetera} pestana={ruta.tipo === 'amigos' ? 'amigos' : 'cuenta'} />
         ) : (
           <Mensaje titulo="Esa página no existe">
             <a href={RUTA_LOBBY}>Volver a las tandas</a>
@@ -98,8 +106,10 @@ export default function App() {
       </main>
 
       <footer className="pie">
-        Funciona en la red de pruebas de Stellar (testnet), con TUSD de prueba.{' '}
+        Rounda está en modo de práctica: los dólares son de mentira y no tienen valor real.{' '}
         <a href={RUTA_ESTADO}>Estado del sistema</a>
+        {' · '}
+        <a href={RUTA_DEMO}>Demo en vivo</a>
         {' · '}
         {TANDA_ID && (
           <a href={`${EXPLORADOR}/contract/${TANDA_ID}`} target="_blank" rel="noreferrer">
@@ -113,35 +123,16 @@ export default function App() {
 
 function BotonBilletera({ billetera }: { billetera: Billetera }) {
   if (billetera.direccion) {
-    const conocido = NOMBRES[billetera.direccion]
     const google = billetera.tipo === 'google' ? billetera.google : null
-    // Con Freighter conectada también se puede pasar a Google. Al entrar, Google manda sobre Freighter;
-    // con «Salir» se vuelve a Freighter (sigue conectada).
-    const ofrecerGoogle = billetera.tipo === 'freighter' ? billetera.google : null
+    // UX: sin direcciones G... en el camino principal. Se muestra el apodo, el correo de Google o "Mi cuenta";
+    // la dirección queda en el Perfil (y al pasar el mouse).
+    const nombre = nombreConocido(billetera.direccion) ?? google?.correo ?? 'Mi cuenta'
     return (
-      <div className="billetera" title={billetera.direccion}>
+      <a className="billetera" href={RUTA_PERFIL} title={billetera.direccion}>
         <span className={billetera.redCorrecta ? 'punto ok' : 'punto mal'} aria-hidden="true" />
-        <span>
-          {google?.correo ? `${google.correo} · ` : conocido ? `${nombreDe(billetera.direccion)} ` : ''}
-          <span className="dir">{direccionCorta(billetera.direccion)}</span>
-        </span>
+        <span className="billetera-nombre">{nombre}</span>
         {!billetera.redCorrecta && <span className="red-mal">Cambia a Testnet</span>}
-        {google && (
-          <button type="button" className="boton chico" onClick={() => void google.salir()}>
-            Salir
-          </button>
-        )}
-        {ofrecerGoogle &&
-          (ofrecerGoogle.conectada && !ofrecerGoogle.direccion ? (
-            <span className="explica" role="status">
-              {ofrecerGoogle.creandoBilletera ? 'Creando tu billetera de Google…' : (ofrecerGoogle.error ?? 'Preparando tu cuenta…')}
-            </span>
-          ) : (
-            <button type="button" className="boton chico" onClick={ofrecerGoogle.entrar} disabled={!ofrecerGoogle.lista}>
-              Entrar con Google
-            </button>
-          ))}
-      </div>
+      </a>
     )
   }
   return <BotonesEntrar billetera={billetera} chico />

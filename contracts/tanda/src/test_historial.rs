@@ -112,8 +112,8 @@ fn pago_tarde_y_tanda_con_atrasos() {
     c.assert_conservacion();
 }
 
-/// Ana deja de pagar: primero la cubre su garantía (−15) y luego queda morosa (−100).
-/// No recibe "tanda terminada". Los demás sí.
+/// Ana deja de pagar: su garantía (una cuota) no alcanza para las 2 cuotas que le quedan, así que no la
+/// cubre (v5) y queda morosa (−100). No recibe "tanda terminada". Los demás sí.
 #[test]
 fn el_moroso_queda_marcado() {
     let c = setup();
@@ -134,10 +134,10 @@ fn el_moroso_queda_marcado() {
 
     let a = h.historial(&c.ana);
     assert_eq!(a.cuotas_a_tiempo, 1);
-    assert_eq!(a.cuotas_cubiertas, 1);
+    assert_eq!(a.cuotas_cubiertas, 0);
     assert_eq!(a.veces_moroso, 1);
     assert_eq!(a.tandas_cumplidas + a.tandas_con_atrasos, 0);
-    assert_eq!(a.puntos_negativos, 115);
+    assert_eq!(a.puntos_negativos, 100);
     assert_eq!(h.puntaje(&c.ana), 0);
     assert_eq!(h.beneficio_colateral_bps(&c.ana), 0);
     for p in [&c.beto, &c.carla] {
@@ -161,13 +161,13 @@ fn saldar_la_deuda_suma_pero_no_borra() {
     c.tanda.pagar_cuota(&id, &c.beto);
     c.tanda.pagar_cuota(&id, &c.carla);
     c.avanzar(PERIODO);
-    c.tanda.cerrar_ronda(&id); // Ana: cubierta
+    c.tanda.cerrar_ronda(&id); // Ana: morosa (su garantía no alcanza para lo que le falta)
     c.tanda.pagar_cuota(&id, &c.beto);
     c.tanda.pagar_cuota(&id, &c.carla);
     c.avanzar(PERIODO);
-    c.tanda.cerrar_ronda(&id); // Ana: morosa
+    c.tanda.cerrar_ronda(&id); // Ana: sigue morosa, debe una cuota más
     let deuda = c.miembro(id, &c.ana).deuda;
-    assert!(deuda > 0);
+    assert_eq!(deuda, 2 * CUOTA);
 
     // Un abono parcial no cuenta; saldar todo sí.
     c.tanda.pagar_deuda(&id, &c.ana, &c.ana, &(deuda / 2));
@@ -176,7 +176,7 @@ fn saldar_la_deuda_suma_pero_no_borra() {
         .pagar_deuda(&id, &c.ana, &c.ana, &(deuda - deuda / 2));
     let a = h.historial(&c.ana);
     assert_eq!((a.veces_moroso, a.deudas_saldadas), (1, 1));
-    assert_eq!(a.puntos_negativos, 115);
+    assert_eq!(a.puntos_negativos, 100);
     assert_eq!(a.puntos_positivos, 10 + 60);
     c.tanda.finalizar(&id);
     c.assert_conservacion();
@@ -252,7 +252,8 @@ fn dos_tandas_no_se_mezclan() {
     let gente = [c.ana.clone(), c.beto.clone(), c.carla.clone()];
     let uno = c.crear_y_llenar(10_000);
     let dos = c.crear_y_llenar(10_000);
-    // Ronda 0 de ambas, intercalada: en la 1 nadie paga (cubre la garantía); en la 2 todos.
+    // Ronda 0 de ambas, intercalada: en la 1 nadie paga (Ana, que cobra esa ronda, queda morosa; a Beto
+    // y a Carla los cubre su garantía); en la 2 todos pagan.
     for p in &gente {
         c.tanda.pagar_cuota(&dos, p);
     }
@@ -260,11 +261,21 @@ fn dos_tandas_no_se_mezclan() {
     c.tanda.cerrar_ronda(&uno);
     c.tanda.cerrar_ronda(&dos);
     for p in &gente {
-        // Cada uno: en la tanda 1, solo "cubierta" (negativo); en la 2, una cuota a tiempo.
+        // Cada uno: en la tanda 1, solo un hecho negativo; en la 2, una cuota a tiempo.
         assert_eq!(h.puntos_en_tanda(&c.tanda_addr, &uno, p), 0);
         assert_eq!(h.puntos_en_tanda(&c.tanda_addr, &dos, p), 10);
         let x = h.historial(p);
-        assert_eq!((x.cuotas_cubiertas, x.cuotas_a_tiempo), (1, 1));
+        if *p == c.ana {
+            assert_eq!(
+                (x.veces_moroso, x.cuotas_cubiertas, x.cuotas_a_tiempo),
+                (1, 0, 1)
+            );
+        } else {
+            assert_eq!(
+                (x.veces_moroso, x.cuotas_cubiertas, x.cuotas_a_tiempo),
+                (0, 1, 1)
+            );
+        }
     }
     // Los búferes quedaron vacíos.
     c.env.as_contract(&c.tanda_addr, || {
@@ -272,8 +283,8 @@ fn dos_tandas_no_se_mezclan() {
         assert!(!tmp.has(&ClaveM2::HechosPendientes(uno)));
         assert!(!tmp.has(&ClaveM2::HechosPendientes(dos)));
     });
-    // Ana cobró en ambas.
-    assert_eq!(h.historial(&c.ana).cobros, 2);
+    // Ana cobró solo en la 2: en la 1 era morosa y su bolsa se retuvo.
+    assert_eq!(h.historial(&c.ana).cobros, 1);
 }
 
 // ===========================================================================

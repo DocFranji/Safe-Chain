@@ -8,7 +8,8 @@ import type { DatosTanda, MiembroConDireccion } from '../hooks/useTanda'
 import type { Billetera } from '../hooks/useBilletera'
 import { clienteFirma, clienteLectura, enviar, leer, traducirError } from '../lib/contrato'
 import { colateralDeTurno, type ParametrosTanda } from '../lib/colateral'
-import { duracion, monto, porcentaje } from '../lib/formato'
+import { duracion, porcentaje  } from '../lib/formato'
+import { dinero } from '../lib/glosario'
 import { parseMonto } from '../lib/entradas'
 import { nombreDe } from '../lib/nombres'
 import {
@@ -36,8 +37,10 @@ import {
   nuevaSal,
 } from '../lib/ofertasSelladas'
 import { useHistorialCacheado } from '../hooks/useHistorial'
+import { BotonUnirse } from './BotonUnirse'
+import { Info } from './Info'
 import { EXPLORADOR, TANDA_ID } from '../config'
-import { comoConseguir, useMoneda, useSimbolo } from '../hooks/useMoneda'
+import { comoConseguir, useMoneda } from '../hooks/useMoneda'
 
 type Props = {
   id: number
@@ -87,22 +90,30 @@ export function AccionesTurnos({ id, datos, billetera, saldo, ahora, alCambiar }
 
   return (
     <section className="turnos-acciones" aria-labelledby="turnos-titulo">
-      <h3 id="turnos-titulo">Turnos: {info?.titulo.toLowerCase() ?? modo}</h3>
-      {info && <p className="explica">{info.lema}.</p>}
+      <h3 id="turnos-titulo">
+        Turnos: {info?.titulo.toLowerCase() ?? modo}
+        {info && (
+          <Info etiqueta="Cómo funciona este mecanismo">
+            {info.lema}.
+            {estado === 'Abierta' && modo === 'Sorteo' && (
+              <>
+                {' '}
+                El orden se sortea cuando se llene la tanda. Todos dejan una cuota de depósito; a quien cobra se le aparta de su
+                pozo el resto de su depósito, que recupera al final con intereses.
+              </>
+            )}
+            {estado === 'Abierta' && modo === 'Subasta' && (
+              <>
+                {' '}
+                Cuando se llene, en cada turno quien necesite el dinero podrá ofrecer recibir un porcentaje menos (hasta{' '}
+                {porcentaje(turnos.opciones.descuento_max_bps)}). Todos dejan una cuota de depósito al unirse.
+              </>
+            )}
+          </Info>
+        )}
+      </h3>
 
       {estado === 'Abierta' && eligeTurno(modo) && !mio && <ElegirTurno {...comun} saldo={saldo} />}
-      {estado === 'Abierta' && modo === 'Sorteo' && (
-        <p className="explica">
-          El orden se sortea cuando se llene la tanda. Todos dejan una cuota de garantía; a quien cobra se le aparta de su
-          bolsa el resto de su garantía, que recupera al final con rendimiento.
-        </p>
-      )}
-      {estado === 'Abierta' && modo === 'Subasta' && (
-        <p className="explica">
-          Cuando se llene, en cada ronda quien necesite el dinero podrá ofrecer recibir un porcentaje menos (hasta{' '}
-          {porcentaje(turnos.opciones.descuento_max_bps)}). Todos dejan una cuota de garantía al unirse.
-        </p>
-      )}
       {estado !== 'Abierta' && modo === 'Sorteo' && (
         <p className="explica">
           El contrato sorteó el orden al llenarse la tanda.{' '}
@@ -150,7 +161,6 @@ function parametros(datos: DatosTanda): ParametrosTanda {
 // ---------------------------------------------------------------------------
 
 function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: Comun & { saldo: bigint | null }) {
-  const SIMBOLO = useSimbolo()
   const moneda = useMoneda()
   const { tanda, miembros, turnos } = datos
   const [elegido, setElegido] = useState<number | null>(null)
@@ -193,7 +203,7 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
 
   return (
     <>
-      <p className="explica">Elige tu turno antes de unirte. Cobras en la ronda de tu turno.</p>
+      <p className="explica">Elige tu turno antes de unirte. Cobras cuando llega tu turno.</p>
       {nivel && (
         <p className="explica">
           {primeros === 1 ? 'El turno 1 pide' : `Los turnos 1 a ${primeros} piden`} historial {nivel} o mejor (
@@ -221,11 +231,11 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
                 <>
                   {nivel && pideHistorial(opciones, i) && <span className="sub etiqueta-historial">Pide {nivel}</span>}
                   <span className="sub">
-                    Garantía {monto(colateral)} {SIMBOLO}
+                    Depósito {dinero(colateral)}
                   </span>
                   {prima !== 0n && (
                     <span className="sub">
-                      {prima > 0n ? `Paga ${monto(prima)}` : `Gana ${monto(-prima)}`}
+                      {prima > 0n ? `Paga ${dinero(prima)}` : `Gana ${dinero(-prima)}`}
                     </span>
                   )}
                 </>
@@ -237,33 +247,36 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
       {precio && (
         <>
           <p className="explica">
-            Turno {precio.turno + 1}: dejas {monto(precio.colateral)} {SIMBOLO} de garantía
-            {conDescuento ? ' (con el descuento de tu historial)' : ''} y en la ronda {precio.turno + 1}{' '}
-            recibes {monto(bolsa - precio.prima)} {SIMBOLO}
+            Turno {precio.turno + 1}: dejas {dinero(precio.colateral)} de depósito
+            {conDescuento ? ' (con el descuento de tu historial)' : ''} y en el turno {precio.turno + 1}{' '}
+            recibes {dinero(bolsa - precio.prima)}
             {precio.prima > 0n
-              ? ` (la bolsa menos ${monto(precio.prima)} por cobrar antes)`
+              ? ` (el pozo menos ${dinero(precio.prima)} por cobrar antes)`
               : precio.prima < 0n
-                ? ` (la bolsa más ${monto(-precio.prima)} por esperar)`
+                ? ` (el pozo más ${dinero(-precio.prima)} por esperar)`
                 : ''}
             , si todos pagan.
           </p>
           {puedeFirmar && yo && (
-            <button
-              className="boton principal"
-              disabled={ocupado || falta > 0n}
-              onClick={() =>
-                ejecutar(
+            <BotonUnirse
+              miembros={miembros.map((m) => m.direccion)}
+              deshabilitado={ocupado || falta > 0n}
+              unirse={() =>
+                void ejecutar(
                   (c) => c.unirse_en_turno({ id, miembro: yo, posicion: precio.turno }),
                   `Listo: ya eres parte de la tanda, en el turno ${precio.turno + 1}.`,
                 )
               }
-            >
-              Unirme en el turno {precio.turno + 1} y dejar {monto(precio.colateral)} {SIMBOLO}
-            </button>
+              texto={
+                <>
+                  Unirme en el turno {precio.turno + 1} y dejar {dinero(precio.colateral)}
+                </>
+              }
+            />
           )}
           {falta > 0n && (
             <p className="aviso nota">
-              Te faltan {monto(falta)} {SIMBOLO}. {comoConseguir(moneda)} para recibir más.
+              Te faltan {dinero(falta)}. {comoConseguir(moneda)} para recibir más.
             </p>
           )}
         </>
@@ -277,7 +290,6 @@ function ElegirTurno({ id, datos, yo, puedeFirmar, ocupado, ejecutar, saldo }: C
 // ---------------------------------------------------------------------------
 
 function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: Comun & { ahora: number }) {
-  const SIMBOLO = useSimbolo()
   const { tanda, miembros, turnos, vence } = datos
   const [texto, setTexto] = useState('')
   if (!turnos) return null
@@ -295,7 +307,7 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
     const falta = miembros.find((m) => !tieneTurno(m.posicion))
     return (
       <p className="explica">
-        Última ronda: no hay subasta. Cobra {falta ? nombreDe(falta.direccion) : 'quien falta'}, la bolsa completa.
+        Último turno: no hay subasta. Cobra {falta ? nombreDe(falta.direccion) : 'quien falta'}, el pozo completo.
       </p>
     )
   }
@@ -318,7 +330,7 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
         <div className="dato">
           <dt>Mejor oferta</dt>
           <dd>
-            {mejor ? `${nombreDe(mejor.quien)}: ${porcentaje(mejor.bps)} menos (${monto(descuentoDe(bolsa, mejor.bps))} ${SIMBOLO})` : 'Nadie todavía'}
+            {mejor ? `${nombreDe(mejor.quien)}: ${porcentaje(mejor.bps)} menos (${dinero(descuentoDe(bolsa, mejor.bps))})` : 'Nadie todavía'}
           </dd>
         </div>
         <div className="dato">
@@ -328,11 +340,11 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
       </dl>
       <p className="explica">
         {mejor
-          ? `Si nadie ofrece más, ${nombreDe(mejor.quien)} cobra esta ronda.`
+          ? `Si nadie ofrece más, ${nombreDe(mejor.quien)} cobra este turno.`
           : respaldo
             ? `Si nadie oferta, cobra ${nombreDe(respaldo)} (orden sorteado al empezar).`
-            : 'Si nadie oferta, cobra el siguiente del orden sorteado al empezar.'}{' '}
-        El descuento de quien gane se reparte entre los demás y se suma a su garantía.
+            : 'Si nadie oferta, cobra el siguiente del orden sorteado al empezar.'}
+        <Info etiqueta="Qué pasa con el descuento">El descuento de quien gane se reparte entre los demás y se suma a su depósito.</Info>
       </p>
 
       {puedeOfertar && abierta && puedeFirmar && yo && (
@@ -365,13 +377,13 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
             {texto !== '' && !valida
               ? `Escribe un porcentaje mayor que ${porcentaje(mejor?.bps ?? 0)} y de máximo ${porcentaje(maximo)}.`
               : valida
-                ? `Si ganas recibes ${monto(recibe)} ${SIMBOLO}${apartado > 0n ? `; de ahí se apartan hasta ${monto(apartado)} para tu garantía` : ''}. Cada uno de los otros ${demas} recibe unos ${monto(demas > 0 ? descuento / BigInt(demas) : 0n)} ${SIMBOLO} en su garantía.`
+                ? `Si ganas recibes ${dinero(recibe)}${apartado > 0n ? `; de ahí se apartan hasta ${dinero(apartado)} para tu depósito` : ''}. Cada uno de los otros ${demas} recibe unos ${dinero(demas > 0 ? descuento / BigInt(demas) : 0n)} en su depósito.`
                 : 'Gana la oferta más alta. Una oferta igual a la mejor no cuenta.'}
           </p>
         </>
       )}
       {mio && tieneTurno(mio.posicion) && (
-        <p className="explica">Ya tienes turno (ronda {mio.posicion + 1}): no puedes ofertar.</p>
+        <p className="explica">Ya tienes turno (turno {mio.posicion + 1}): no puedes ofertar.</p>
       )}
     </>
   )
@@ -382,7 +394,6 @@ function Subasta({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: 
 // ---------------------------------------------------------------------------
 
 function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ahora }: Comun & { ahora: number }) {
-  const SIMBOLO = useSimbolo()
   const { tanda, miembros, turnos, vence } = datos
   const [texto, setTexto] = useState('')
   const [sinGuardar, setSinGuardar] = useState(false)
@@ -416,7 +427,7 @@ function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ah
     }
     const ok = await ejecutar(
       (c) => c.ofertar_sellada({ id, miembro: yo, sello }),
-      `Listo: sellaste tu oferta de ${porcentaje(bps)}. Revélala desde aquí cuando empiece la segunda mitad de la ronda.`,
+      `Listo: sellaste tu oferta de ${porcentaje(bps)}. Revélala desde aquí cuando empiece la segunda mitad del turno.`,
     )
     if (!ok) {
       if (anterior) guardarOferta(clave, anterior)
@@ -436,7 +447,7 @@ function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ah
                 ? 'Nadie todavía'
                 : `${sellaron} ${sellaron === 1 ? 'persona' : 'personas'}`
               : mejor
-                ? `${nombreDe(mejor.quien)}: ${porcentaje(mejor.bps)} menos (${monto(descuentoDe(bolsa, mejor.bps))} ${SIMBOLO})`
+                ? `${nombreDe(mejor.quien)}: ${porcentaje(mejor.bps)} menos (${dinero(descuentoDe(bolsa, mejor.bps))})`
                 : 'Nadie todavía'}
           </dd>
         </div>
@@ -448,13 +459,15 @@ function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ah
         </div>
       </dl>
       <p className="explica">
-        Ofertas selladas: en la primera mitad de la ronda cada quien sella su oferta y nadie ve el porcentaje. En la
-        segunda mitad se revelan y gana la mayor (en empate, el orden sorteado al empezar).{' '}
         {mejor && fase !== 'sellar'
-          ? `Si nadie revela una mayor, ${nombreDe(mejor.quien)} cobra esta ronda.`
+          ? `Si nadie revela una mayor, ${nombreDe(mejor.quien)} cobra este turno.`
           : respaldo
             ? `Si nadie revela una oferta, cobra ${nombreDe(respaldo)}.`
             : 'Si nadie revela una oferta, cobra el siguiente del orden sorteado al empezar.'}
+        <Info etiqueta="Cómo funcionan las ofertas selladas">
+          Ofertas selladas: en la primera mitad del turno cada quien sella su oferta y nadie ve el porcentaje. En la segunda
+          mitad se revelan y gana la mayor (en empate, el orden sorteado al empezar).
+        </Info>
       </p>
 
       {fase === 'sellar' && puedeOfertar && puedeFirmar && yo && (
@@ -514,16 +527,16 @@ function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ah
         ) : (
           <p className="aviso nota">
             Sellaste tu oferta desde otro navegador: su clave está allá. Revélala desde ese navegador antes de que
-            venza la ronda; si no, no cuenta.
+            venza el turno; si no, no cuenta.
           </p>
         )
       )}
       {fase === 'revelar' && puedeOfertar && !yoSelle && (
-        <p className="explica">No tienes una oferta sellada sin revelar en esta ronda.</p>
+        <p className="explica">No tienes una oferta sellada sin revelar en este turno.</p>
       )}
-      {fase === 'cerrada' && <p className="explica">Las ofertas ya cerraron: al cerrar la ronda se sabrá quién cobra.</p>}
+      {fase === 'cerrada' && <p className="explica">Las ofertas ya cerraron: al cerrar el turno se sabrá quién cobra.</p>}
       {mio && tieneTurno(mio.posicion) && (
-        <p className="explica">Ya tienes turno (ronda {mio.posicion + 1}): no puedes ofertar.</p>
+        <p className="explica">Ya tienes turno (turno {mio.posicion + 1}): no puedes ofertar.</p>
       )}
     </>
   )
@@ -536,7 +549,6 @@ function SubastaSellada({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar, ah
 type Sentido = 'nada' | 'pago' | 'cobro'
 
 function Intercambios({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar }: Comun) {
-  const SIMBOLO = useSimbolo()
   const { tanda, miembros, turnos } = datos
   const [con, setCon] = useState('')
   const [sentido, setSentido] = useState<Sentido>('nada')
@@ -555,7 +567,7 @@ function Intercambios({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar }: Co
   const turnoDe = (dir: string) => miembros.find((m) => m.direccion === dir)?.posicion ?? 0
 
   const textoCompensacion = (c: bigint, de: string) =>
-    c > 0n ? `${de} paga ${monto(c)} ${SIMBOLO}` : c < 0n ? `${de} pide ${monto(-c)} ${SIMBOLO}` : 'sin compensación'
+    c > 0n ? `${de} paga ${dinero(c)}` : c < 0n ? `${de} pide ${dinero(-c)}` : 'sin compensación'
 
   return (
     <>
@@ -565,9 +577,9 @@ function Intercambios({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar }: Co
             <strong>{nombreDe(p.de)}</strong> te propone cambiar su turno {turnoDe(p.de) + 1} por tu turno {turnoDe(p.con) + 1}
             {' · '}
             {p.compensacion > 0n
-              ? `te paga ${monto(p.compensacion)} ${SIMBOLO}`
+              ? `te paga ${dinero(p.compensacion)}`
               : p.compensacion < 0n
-                ? `te pide ${monto(-p.compensacion)} ${SIMBOLO}`
+                ? `te pide ${dinero(-p.compensacion)}`
                 : 'sin compensación'}
             .
           </p>
@@ -649,7 +661,7 @@ function Intercambios({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar }: Co
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
                 />
-                <span>{SIMBOLO}</span>
+                <span>dólares</span>
               </div>
             )}
             <p className="ayuda">
@@ -657,7 +669,7 @@ function Intercambios({ id, datos, yo, mio, puedeFirmar, ocupado, ejecutar }: Co
                 ? 'Lo que pagas queda guardado en el contrato hasta que acepten (o retires la propuesta).'
                 : sentido === 'cobro'
                   ? 'La otra persona te paga al aceptar.'
-                  : 'Tu garantía no cambia: si adelantas tu turno, al cobrar se aparta lo que falte de tu bolsa.'}
+                  : 'Tu depósito no cambia: si adelantas tu turno, al cobrar se aparta lo que falte de tu pozo.'}
             </p>
           </div>
           <button

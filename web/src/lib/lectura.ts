@@ -1,4 +1,5 @@
 // Lecturas del contrato (no piden firma ni cuestan nada). Las usan el lobby y la página de cada tanda.
+import type { contract } from '@stellar/stellar-sdk'
 import type { Deuda, EstadoTurnos, Miembro, Tanda } from 'tanda'
 import { clienteLectura, leer, revisarSimulacion } from './contrato'
 import type { Modo } from './turnos'
@@ -13,6 +14,8 @@ export type EstadoTag = Tanda['estado']['tag']
 /** Lo mínimo para dibujar una tarjeta en el lobby. */
 export type ResumenTanda = {
   id: number
+  /** (v5) El nombre que le puso quien la creó. null si no tiene o si el contrato no guarda nombres (v4). */
+  nombre: string | null
   tanda: Tanda
   /** Ordenados por turno (posicion 0 cobra primero). */
   miembros: MiembroConDireccion[]
@@ -58,9 +61,41 @@ export async function leerTotal(): Promise<number> {
   return valor
 }
 
+// (v5) El nombre de una tanda no cambia: se lee una sola vez. Con un cliente sin `get_nombre` (v4) no se pregunta.
+const nombres = new Map<number, string | null>()
+
+/** El nombre tal como lo devuelve el cliente: un `Result` o el valor directo, según cómo lo declare el contrato. */
+function nombreLeido(valor: unknown): string | null {
+  let v = valor
+  if (v !== null && typeof v === 'object' && typeof (v as { isErr?: unknown }).isErr === 'function') {
+    const r = v as contract.Result<unknown>
+    if (r.isErr()) return null
+    v = r.unwrap()
+  }
+  return typeof v === 'string' && v.trim() !== '' ? v.trim() : null
+}
+
+/** (v5) Nombre de la tanda si el contrato lo guarda (`get_nombre`); null si no tiene o el contrato es anterior. */
+export async function leerNombre(id: number): Promise<string | null> {
+  if (nombres.has(id)) return nombres.get(id) ?? null
+  const c = clienteLectura() as unknown as {
+    get_nombre?: (args: { id: number }) => Promise<Parameters<typeof revisarSimulacion>[0] & { result: unknown }>
+  }
+  if (typeof c.get_nombre !== 'function') return null
+  try {
+    const tx = await c.get_nombre({ id })
+    revisarSimulacion(tx)
+    const nombre = nombreLeido(tx.result)
+    nombres.set(id, nombre)
+    return nombre
+  } catch {
+    return null // se vuelve a intentar en la próxima lectura
+  }
+}
+
 export async function leerResumen(id: number): Promise<ResumenTanda> {
   const c = clienteLectura()
-  const [tanda, lista, modo] = await Promise.all([
+  const [tanda, lista, modo, nombre] = await Promise.all([
     c.get_tanda({ id }).then(leer),
     c.get_miembros({ id }).then(leer),
     c
@@ -68,8 +103,9 @@ export async function leerResumen(id: number): Promise<ResumenTanda> {
       .then(leer)
       .then((o): Modo => o.modo.tag)
       .catch((): Modo => 'Llegada'),
+    leerNombre(id),
   ])
-  return { id, tanda, miembros: ordenarMiembros(lista), modo }
+  return { id, nombre, tanda, miembros: ordenarMiembros(lista), modo }
 }
 
 // La bóveda de una tanda no cambia nunca: se lee una sola vez.

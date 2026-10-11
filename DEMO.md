@@ -4,6 +4,8 @@
 
 > Solo para testnet. Todo el dinero es de mentira y el contrato no está auditado.
 
+> **Palabras de la pantalla** (glosario de la web, `web/src/lib/glosario.ts`): la garantía se llama *depósito de seguridad*, la bolsa *el pozo*, la ronda *turno*, y los montos se ven en dólares ($100). Conviene usar las mismas palabras al hablar.
+
 ## Cómo funciona la demo
 
 Un script hace de **Ana, Beto y Carla** desde la terminal, así nadie pierde tiempo cambiando de cuenta en Freighter. La web, proyectada en `#/demo/<id>`, no necesita billetera: cuenta en vivo qué pasa, con una barra de garantía por persona y una línea de tiempo con los momentos clave resaltados.
@@ -11,8 +13,8 @@ Un script hace de **Ana, Beto y Carla** desde la terminal, así nadie pierde tie
 | Qué pasa | Qué se ve en pantalla | Qué decir |
 | --- | --- | --- |
 | **Crear y unirse** (~0:30) | "Se creó la tanda", Ana (200), Beto (100) y Carla (100) se unen | "Quien cobra primero deja más garantía, porque después de cobrar todavía debe cuotas. Por eso nadie puede cobrar y desaparecer." |
-| **Ronda 1** (~1:50) | Todos pagan, "Ana cobró 300 TUSD" | "Todos pagan, y la bolsa es para Ana." |
-| **Ronda 2** (~3:10) | Ana **no paga**. Aparece resaltado: *"Ana no pagó: su garantía cubrió 100 TUSD"*. La barra de Ana baja a la mitad | **El momento clave.** "Ana desapareció, pero su garantía pagó por ella. Beto cobra completo y nadie pierde." |
+| **Ronda 1** (~1:50) | Todos pagan, "Ana cobró $300" | "Todos pagan, y la bolsa es para Ana." |
+| **Ronda 2** (~3:10) | Ana **no paga**. Aparece resaltado: *"Ana no pagó: su depósito cubrió $100"*. La barra de Ana baja a la mitad | **El momento clave.** "Ana desapareció, pero su garantía pagó por ella. Beto cobra completo y nadie pierde." |
 | **Ronda 3** (~4:40) | Beto paga **tarde** (se anota una multa); Carla cobra | "Pagar tarde tiene costo: una multa que se reparte entre quienes cumplieron." |
 | **Final** (~5:00) | "Resultados finales": cuánto recibió cada quien, rendimiento y multas | "La garantía generó rendimiento mientras esperaba. Ana terminó sin ganar nada por haber huido." |
 
@@ -20,13 +22,15 @@ Los tiempos marcan cuándo termina cada paso y son aproximados: dependen de la r
 
 ### Variante con deuda (`DEUDA=1`)
 
-Muestra que en Rounda **un moroso puede ponerse al día**. La tanda usa la garantía mínima (cada quien deja una cuota), así la de Ana se acaba antes:
+Muestra que en Rounda **un moroso puede ponerse al día**. La tanda usa la garantía mínima (cada quien deja una cuota), que no alcanza para todo lo que le queda a Ana. En ese caso el contrato **no usa la garantía mientras la tanda sigue** (si la usara, el que cobra justo después se llevaría todo y los últimos nada): cada falta es una deuda a favor de quien cobró de menos.
 
 | Qué pasa | Qué se ve en pantalla | Qué decir |
 | --- | --- | --- |
-| **Ronda 2** | *"Ana no pagó: su garantía cubrió 100 TUSD"* | "Su garantía alcanzó para esta ronda…" |
-| **Ronda 3** | *"Ana quedó en mora"* y *"Carla cobró 200 TUSD"* | "…pero ya no le queda garantía: Carla cobró 100 de menos." |
-| **Ana vuelve** | Resaltados: *"Ana pagó 100 TUSD y saldó su deuda"* y *"Carla recibió los 100 TUSD que le faltaban"* | **El momento clave.** "La deuda no se pierde: cuando Ana paga, el dinero le llega a quien cobró de menos, y Ana vuelve a estar al día. También lo podría pagar un familiar." |
+| **Ronda 2** | *"Ana quedó con un pago pendiente"* y *"Beto cobró $200"* | "La garantía de Ana no alcanza para las dos cuotas que le quedan, así que no se toca: Ana debe 100 y Beto cobró 100 de menos." |
+| **Ronda 3** | *"Carla cobró $200"* | "Ana sigue sin aparecer: ahora debe 200." |
+| **Ana vuelve** | Resaltados: *"Ana pagó $200 y se puso al día"*, *"Beto recibió los $100 que le faltaban"* y *"Carla recibió los $100 que le faltaban"* | **El momento clave.** "La deuda no se pierde: cuando Ana paga, el dinero le llega a quien cobró de menos, y Ana vuelve a estar al día y recupera su garantía. También lo podría pagar un familiar." |
+
+Si Ana **no** vuelve, al terminar su garantía se reparte entre Beto y Carla en proporción a lo que le faltó a cada uno (50 y 50 en este ejemplo), y lo que queda lo puede pagar después.
 
 ```bash
 DEUDA=1 WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
@@ -42,7 +46,7 @@ Al terminar, `demo.sh` imprime el puntaje de cada persona y el enlace a su pági
 | --- | --- |
 | La página de Carla: puntaje, nivel y "3 cuotas pagadas a tiempo, 1 tanda terminada sin atrasos" | "Cada cuota que pagas a tiempo queda escrita en Stellar para siempre. Tu historial es tuyo, cualquiera puede verificarlo y nadie lo puede borrar." |
 | En otra tanda, junto a cada persona, su insignia (Bronce, Plata, Oro) | "Con buen historial entras a tandas exigentes y dejas menos garantía: hasta la mitad con nivel Oro." |
-| Al unirse a una tanda con descuento: *"Por tu historial Bronce, tu garantía baja de 500 a 450 TUSD"* | "Esto resuelve la paradoja del crédito: quien cumple necesita menos dinero inmovilizado." |
+| Al unirse a una tanda con descuento: *"Por tu reputación Bronce, tu depósito baja de $500 a $450"* | "Esto resuelve la paradoja del crédito: quien cumple necesita menos dinero inmovilizado." |
 
 ## Antes de la demo (una hora antes)
 
@@ -74,9 +78,9 @@ WEB=https://tu-sitio.vercel.app PAUSAR=1 MODO=subasta bash scripts/demo_turnos.s
 | Modo | Qué se ve | Qué decir |
 | --- | --- | --- |
 | **Precio por turno** | Carla elige el turno 1 y cobra 276; Ana elige el 3 y cobra 324 | "Quien tiene prisa paga, quien espera gana. Lo que pagó Carla lo ganó Ana: el contrato no se queda con nada. Así funciona MoneyFellows, con 8,5 millones de usuarios en Egipto." |
-| **Subasta** | Beto ofrece 5 %, Carla 10 % y gana: "cada uno de los demás recibió 15 TUSD en su garantía" | "Cada ronda gana quien más necesita el dinero, y paga a los demás por adelantarse. Son los chit funds de la India, pero sin administrador." |
+| **Subasta** | Beto ofrece 5 %, Carla 10 % y gana: "cada uno de los demás recibió $15 en su depósito" | "Cada ronda gana quien más necesita el dinero, y paga a los demás por adelantarse. Son los chit funds de la India, pero sin administrador." |
 | **Sorteo** | "El contrato sorteó el orden de cobro" | "Nadie tiene ventaja por llegar primero. El sorteo lo hace la red." |
-| **Intercambio** | "Carla y Beto cambiaron de turno": Carla le pagó 10 TUSD | "Si a alguien le surge una emergencia, negocia el turno con otro, sin intermediarios." |
+| **Intercambio** | "Carla y Beto cambiaron de turno": Carla le pagó $10 | "Si a alguien le surge una emergencia, negocia el turno con otro, sin intermediarios." |
 | **Subasta sellada** (`MODO=sellada`) | "Beto selló una oferta", "Carla selló una oferta" (sin montos); en la segunda mitad revelan y gana Carla con 10 % | "Nadie ve las ofertas de los demás: nadie puede ganarle a otro por un pelo en el último segundo. Se sella, se revela y gana la mayor." |
 
 Si preguntan por la garantía en el sorteo o la subasta: "Como el turno no se sabe al unirse, todos dejan una cuota. A quien cobra primero se le aparta de su bolsa el resto de su garantía, y lo recupera al final con rendimiento. Es la misma garantía de siempre, sin pedir todo por adelantado."
@@ -100,8 +104,9 @@ PRINCIPAL=1 bash scripts/demo_blend.sh     # tanda en USDC en el contrato princi
 | Ana no paga | Su garantía **sale de Blend** y cubre su cuota | "Ni siquiera hay que avisarle a Blend: el contrato retira lo justo y Beto cobra completo." |
 | Liquidez | "Blend tiene 28 453 USDC libres para retirar" (también en `#/estado`) | "Si un día Blend estuviera prestado al 100 %, cerrar la ronda esperaría unos minutos. Nadie pierde dinero." |
 
-Para que el jurado cree una tanda en USDC: en la barra de su cuenta, **"Recibir USDC de prueba"** (una firma; Blend
-le envía 1 000 USDC), y en `#/crear` elige **USDC**.
+Para que el jurado cree una tanda en USDC: en la barra de su cuenta abre **"Tandas con intereses reales (Blend)"** y
+toca **"Recibir USDC de prueba"** (una firma; Blend le envía 1 000 USDC). Después, en `#/crear`, abre **"Opciones
+avanzadas"** y elige **USDC**.
 
 ## Que el jurado lo pruebe (solo Freighter)
 
@@ -118,7 +123,9 @@ for p in ana beto; do T --source $p -- unirse --id "$ID" --miembro "$(stellar ke
 echo "Tanda abierta para el jurado: $ID  (entran 100 TUSD de garantía)"
 ```
 
-La persona del jurado entra como tercera, la tanda arranca, y desde la web puede pagar su cuota y cerrar la ronda con el botón. También puede **crear su propia tanda** desde `#/crear`.
+La persona del jurado entra como tercera, la tanda arranca, y desde la web puede pagar su cuota y entregar el pozo con el botón. También puede **crear su propia tanda** desde `#/crear`: para que dure minutos y no semanas, que use la plantilla **"Prueba rápida (1 minuto)"**.
+
+**Entrar desde el enlace de invitación** (`…/#/tanda/<id>`): la persona ve *"Ana te invita a una tanda"* con el monto y el depósito, y el botón para entrar ahí mismo. Con Google, su cuenta de práctica se prepara sola (cuenta, dólares de práctica y saldo); con Freighter es un botón y una confirmación.
 
 ## Si algo falla
 
@@ -142,7 +149,7 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 - **¿Y si Blend se queda sin liquidez o se congela?** Si todo está prestado, cerrar una ronda con impagos o finalizar espera a que vuelva la liquidez (cualquiera reintenta); no se pierde dinero. Si Blend congela el pool, no se pueden crear tandas nuevas en USDC, pero las que están en curso terminan bien. Lo revisamos en `docs/blend.md`.
 - **¿Funciona para una tanda de verdad, de meses?** Sí: rondas de hasta 3 meses y tandas de hasta un año o más, con fechas de pago fijas. El contrato renueva solo sus datos en la red para que nada se archive a mitad de la tanda.
 - **¿Y si alguien queda en mora?** Puede pagar su deuda cuando quiera (o un familiar por él). El dinero le llega a quien cobró de menos y la persona vuelve a estar al día.
-- **¿Qué pasa si alguien no paga?** Su garantía cubre su cuota. Si no alcanza, queda en mora y su parte se reparte entre quienes cumplieron.
+- **¿Qué pasa si alguien no paga?** Si su garantía alcanza para todo lo que le falta pagar, cubre su cuota y nadie pierde. Si no alcanza, no se usa mientras la tanda sigue: queda en mora, cada falta es una deuda a favor de quien cobró de menos, y al terminar su garantía se reparte entre esas personas en proporción a lo que le faltó a cada una.
 - **¿Qué es el historial crediticio?** Un contrato aparte que anota cada cuota pagada, atraso y deuda saldada de cada dirección. Empieza en cero, lo negativo no se borra, nadie (ni nosotros) puede editarlo, y solo guarda direcciones, ningún dato personal. Quien cumple sube de nivel y recibe descuento de garantía en las tandas que lo ofrezcan.
 - **¿No se puede hacer trampa con billeteras propias?** Una billetera nueva empieza en cero y el cero no da beneficios. Solo suman tandas con cuota de 10 TUSD o más, con máximo 150 puntos por tanda: llegar a Oro exige al menos 4 tandas completas con dinero inmovilizado.
 - **¿Está auditado?** No. Es un prototipo de hackathon.

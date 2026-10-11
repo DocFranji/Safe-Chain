@@ -374,6 +374,9 @@ fn escenario_demo_ana_huye_beto_paga_tarde() {
     );
 }
 
+/// (M1 v5) Si la garantía NO alcanza para todo lo que falta pagar, no se usa mientras la tanda sigue:
+/// cada falta es deuda a favor de quien cobró de menos, y al finalizar la garantía se reparte entre
+/// los afectados en proporción a lo que le faltó a cada uno.
 #[test]
 fn impago_sin_colateral_suficiente_queda_moroso() {
     let c = setup();
@@ -384,26 +387,131 @@ fn impago_sin_colateral_suficiente_queda_moroso() {
     }
     c.avanzar(PERIODO);
     c.tanda.cerrar_ronda(&id);
-    // Ronda 1: Ana no paga -> su colateral (100) la cubre. Beto cobra 300.
+    // Ronda 1: Ana no paga. Su garantía (100) no alcanza para las 2 cuotas que le quedan: no se usa.
+    // Queda morosa, debe 100 y Beto cobra la bolsa incompleta (200).
     c.tanda.pagar_cuota(&id, &c.beto);
     c.tanda.pagar_cuota(&id, &c.carla);
     c.avanzar(PERIODO);
+    let beto_antes = c.saldo(&c.beto);
     c.tanda.cerrar_ronda(&id);
-    assert_eq!(c.miembro(id, &c.ana).colateral, 0);
-    // Ronda 2: Ana no paga y ya no tiene colateral -> morosa, deuda 100, bolsa reducida.
+    assert_eq!(c.saldo(&c.beto), beto_antes + 200 * U);
+    let ma = c.miembro(id, &c.ana);
+    assert!(ma.moroso);
+    assert_eq!(ma.deuda, 100 * U);
+    assert_eq!(ma.colateral, 100 * U); // la garantía sigue intacta
+                                       // Una morosa no puede pagar cuotas.
+    assert_eq!(
+        c.tanda.try_pagar_cuota(&id, &c.ana),
+        Err(Ok(Error::MiembroMoroso))
+    );
+    // Ronda 2: sigue sin pagar. Debe 200 y Carla cobra 200.
     c.tanda.pagar_cuota(&id, &c.beto);
     c.tanda.pagar_cuota(&id, &c.carla);
     c.avanzar(PERIODO);
     let carla_antes = c.saldo(&c.carla);
     c.tanda.cerrar_ronda(&id);
     let ma = c.miembro(id, &c.ana);
+    assert_eq!(ma.deuda, 200 * U);
+    assert_eq!(c.saldo(&c.carla), carla_antes + 200 * U);
+
+    // Al finalizar, su garantía (100) se reparte entre Beto y Carla según lo que le faltó a cada uno
+    // (100 y 100): 50 y 50. Le quedan 100 de deuda.
+    let (beto_antes, carla_antes) = (c.saldo(&c.beto), c.saldo(&c.carla));
+    c.tanda.finalizar(&id);
+    assert_eq!(c.saldo(&c.beto), beto_antes + 100 * U + 50 * U); // su garantía + su parte
+    assert_eq!(c.saldo(&c.carla), carla_antes + 100 * U + 50 * U);
+    let ma = c.miembro(id, &c.ana);
     assert!(ma.moroso);
     assert_eq!(ma.deuda, 100 * U);
-    assert_eq!(c.saldo(&c.carla), carla_antes + 200 * U);
-    // Una morosa no puede pagar.
+    assert_eq!(ma.colateral, 0);
+    assert_eq!(c.saldo(&c.tanda_addr), 0);
+    c.assert_conservacion();
+}
+
+/// (M1 v5) Si la garantía alcanza para TODO lo que le falta pagar, se sigue cubriendo al instante.
+#[test]
+fn impago_con_garantia_suficiente_se_cubre_al_instante() {
+    let c = setup();
+    let id = c.crear_y_llenar(10_000);
+    // Ronda 0: todos pagan, Ana cobra 300.
+    for p in [&c.ana, &c.beto, &c.carla] {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    c.avanzar(PERIODO);
+    c.tanda.cerrar_ronda(&id);
+    // Ronda 1: Ana (200 de garantía) no paga. Le quedan 2 cuotas y su garantía las cubre: Beto cobra
+    // 300 completos y Ana no queda morosa.
+    c.tanda.pagar_cuota(&id, &c.beto);
+    c.tanda.pagar_cuota(&id, &c.carla);
+    c.avanzar(PERIODO);
+    let beto_antes = c.saldo(&c.beto);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(c.saldo(&c.beto), beto_antes + 300 * U);
+    let ma = c.miembro(id, &c.ana);
+    assert!(!ma.moroso);
+    assert_eq!(ma.deuda, 0);
+    assert_eq!(ma.colateral, 100 * U);
+    c.assert_conservacion();
+}
+
+/// (v5, revisión del ORQ) Quien todavía no cobró y se atrasa una vez, con garantía suficiente para esa
+/// cuota, NO queda en mora: lo respalda su propio pozo. Con la garantía al 100 %, Carla (turno 3) no paga
+/// la ronda 0: su garantía cubre la cuota, Ana cobra el pozo completo y a Carla solo se le anota la multa.
+#[test]
+fn atraso_antes_de_cobrar_con_garantia_suficiente_no_es_mora() {
+    let c = setup();
+    let id = c.crear_y_llenar(10_000);
+    c.tanda.pagar_cuota(&id, &c.ana);
+    c.tanda.pagar_cuota(&id, &c.beto);
+    c.avanzar(PERIODO);
+    let ana_antes = c.saldo(&c.ana);
+    c.tanda.cerrar_ronda(&id);
+    assert_eq!(
+        c.saldo(&c.ana),
+        ana_antes + 300 * U,
+        "Ana cobra el pozo completo"
+    );
+    let mc = c.miembro(id, &c.carla);
+    assert!(!mc.moroso, "un atraso con garantía suficiente no es mora");
+    assert_eq!(mc.deuda, 0);
+    assert_eq!(mc.colateral, 0);
+    assert_eq!(mc.multas_pendientes, 10 * U);
+    c.assert_conservacion();
+
+    // Rondas 1 y 2: todos pagan. Al cobrar (ronda 2), a Carla le basta su pozo: no debía nada.
+    for _ in 0..2 {
+        for p in [&c.ana, &c.beto, &c.carla] {
+            c.tanda.pagar_cuota(&id, p);
+        }
+        c.avanzar(PERIODO);
+        c.tanda.cerrar_ronda(&id);
+    }
+    c.tanda.finalizar(&id);
+    assert!(!c.miembro(id, &c.carla).moroso);
+    c.assert_conservacion();
+}
+
+/// (v5, revisión del ORQ) La regla nueva sigue valiendo para quien ya cobró: Ana cobra en la ronda 0 con la
+/// garantía al 50 % y deja de pagar. Su garantía no alcanza para todo lo que le queda: queda en mora desde
+/// su primera falta y la garantía se reparte al final entre Beto y Carla.
+#[test]
+fn quien_ya_cobro_y_no_alcanza_queda_en_mora_y_se_reparte_al_final() {
+    let c = setup();
+    let id = c.crear_y_llenar(5_000);
+    for p in [&c.ana, &c.beto, &c.carla] {
+        c.tanda.pagar_cuota(&id, p);
+    }
+    c.avanzar(PERIODO);
+    c.tanda.cerrar_ronda(&id);
+    for _ in 0..2 {
+        c.tanda.pagar_cuota(&id, &c.beto);
+        c.tanda.pagar_cuota(&id, &c.carla);
+        c.avanzar(PERIODO);
+        c.tanda.cerrar_ronda(&id);
+        assert!(c.miembro(id, &c.ana).moroso);
+    }
     c.tanda.finalizar(&id);
     c.assert_conservacion();
-    assert_eq!(c.saldo(&c.tanda_addr), 0);
 }
 
 #[test]

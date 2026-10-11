@@ -6,8 +6,7 @@ const U = 10_000_000n
 const NOMBRES: Record<string, string> = { GANA: 'Ana', GBETO: 'Beto', GCARLA: 'Carla' }
 const f: Formato = {
   nombre: (d) => NOMBRES[d] ?? d,
-  monto: (v) => String(v / U),
-  simbolo: 'TUSD',
+  dinero: (v) => `$${v / U}`,
 }
 
 let n = 0
@@ -25,8 +24,8 @@ describe('narrar: la historia de la demo', () => {
       f,
     )
     expect(h.tipo).toBe('clave')
-    expect(h.titulo).toBe('Ana no pagó: su garantía cubrió 100 TUSD')
-    expect(h.detalle).toContain('Ronda 2')
+    expect(h.titulo).toBe('Ana no pagó: su depósito cubrió $100')
+    expect(h.detalle).toContain('Turno 2')
     expect(h.detalle).toContain('el grupo no pierde nada')
   })
 
@@ -38,9 +37,9 @@ describe('narrar: la historia de la demo', () => {
       ],
       f,
     )
-    expect(a).toMatchObject({ tipo: 'pago', titulo: 'Beto pagó su cuota', detalle: 'Ronda 1' })
+    expect(a).toMatchObject({ tipo: 'pago', titulo: 'Beto pagó su cuota', detalle: 'Turno 1' })
     expect(b).toMatchObject({ tipo: 'alerta', titulo: 'Beto pagó tarde' })
-    expect(b.detalle).toContain('Ronda 3')
+    expect(b.detalle).toContain('Turno 3')
   })
 
   it('cierra la ronda: quien cobra recibe la bolsa; si es moroso, queda retenida', () => {
@@ -51,9 +50,9 @@ describe('narrar: la historia de la demo', () => {
       ],
       f,
     )
-    expect(cobra).toMatchObject({ tipo: 'ok', titulo: 'Ana cobró 300 TUSD', detalle: 'Se cerró la ronda 1' })
-    expect(retenida).toMatchObject({ tipo: 'alerta', titulo: 'La bolsa de la ronda 3 quedó retenida' })
-    expect(retenida.detalle).toContain('Carla está en mora')
+    expect(cobra).toMatchObject({ tipo: 'ok', titulo: 'Ana cobró $300', detalle: 'Turno 1' })
+    expect(retenida).toMatchObject({ tipo: 'alerta', titulo: 'El pozo del turno 3 quedó guardado' })
+    expect(retenida.detalle).toContain('Carla tiene un pago pendiente')
   })
 
   it('liquidación: quien recibe dinero y quien ya gastó toda su garantía', () => {
@@ -64,7 +63,7 @@ describe('narrar: la historia de la demo', () => {
       ],
       f,
     )
-    expect(recibe).toMatchObject({ tipo: 'ok', titulo: 'Carla recibió 114 TUSD al final' })
+    expect(recibe).toMatchObject({ tipo: 'ok', titulo: 'Carla recibió $114 al final' })
     expect(nada).toMatchObject({ tipo: 'info', titulo: 'Ana no recibió nada al final' })
   })
 
@@ -83,15 +82,51 @@ describe('narrar: la historia de la demo', () => {
     expect(h.map((x) => x.titulo)).toEqual([
       'Se creó la tanda',
       'Ana se unió',
-      'Se completó el cupo: arranca la ronda 1',
-      'Beto quedó en mora',
+      'Se completó el grupo: empieza el turno 1',
+      'Beto quedó con un pago pendiente',
       'Tanda terminada',
       'La tanda se canceló',
     ])
-    expect(h[0].detalle).toBe('3 personas · cuota de 100 TUSD')
-    expect(h[1].detalle).toBe('Turno 1 · dejó 200 TUSD de garantía')
-    expect(h[3].detalle).toContain('debe 50 TUSD')
-    expect(h[4].detalle).toBe('rendimiento 8 TUSD · multas repartidas 10 TUSD')
+    expect(h[0].detalle).toBe('3 personas · cuota de $100')
+    expect(h[1].detalle).toBe('Turno 1 · dejó $200 de depósito')
+    expect(h[3].detalle).toContain('debe $50')
+    expect(h[4].detalle).toBe('intereses $8 · multas repartidas $10')
+  })
+
+  it('(v5) cuenta el nombre de la tanda y cómo se repartió el depósito de quien no pagó', () => {
+    const [creada, una, varias, pozo] = narrar(
+      [
+        ev({ name: 'EvCreada', data: { id: 1, creador: 'GANA', cuota: 100n * U, n_miembros: 3, nombre: 'Tanda de la oficina' } }),
+        ev({
+          name: 'EvGarantiaRepartida',
+          data: { id: 1, deudor: 'GANA', repartido: 30n * U, deuda_restante: 0n, partes: [{ acreedor: 'GCARLA', monto: 30n * U, a_pozo: false }] },
+        }),
+        ev({
+          name: 'EvGarantiaRepartida',
+          data: {
+            id: 1,
+            deudor: 'GANA',
+            repartido: 100n * U,
+            deuda_restante: 40n * U,
+            partes: [
+              { acreedor: 'GBETO', monto: 60n * U, a_pozo: false },
+              { acreedor: 'GCARLA', monto: 40n * U, a_pozo: false },
+            ],
+          },
+        }),
+        ev({
+          name: 'EvGarantiaRepartida',
+          data: { id: 1, deudor: 'GANA', repartido: 50n * U, deuda_restante: 10n * U, partes: [{ acreedor: 'GBETO', monto: 50n * U, a_pozo: true }] },
+        }),
+      ],
+      f,
+    )
+    expect(creada.titulo).toBe('Se creó la tanda «Tanda de la oficina»')
+    expect(una).toMatchObject({ tipo: 'clave', titulo: 'Carla recibió $30 del depósito de Ana' })
+    expect(una.detalle).toContain('Con eso quedó al día')
+    expect(varias.titulo).toBe('El depósito de Ana ($100) se repartió entre quienes cobraron de menos')
+    expect(varias.detalle).toBe('Beto recibió $60 · Carla recibió $40. Todavía debe $40')
+    expect(pozo.detalle).toContain('$50 al pozo de quienes cumplieron (el de Beto estaba guardado)')
   })
 
   it('ordena cronológicamente aunque lleguen desordenados', () => {
@@ -102,14 +137,14 @@ describe('narrar: la historia de la demo', () => {
 
   it('no se rompe si faltan datos', () => {
     const [h] = narrar([ev({ name: 'EvCubierto', data: { id: 1 } })], f)
-    expect(h.titulo).toBe('Alguien no pagó: su garantía cubrió -')
+    expect(h.titulo).toBe('Alguien no pagó: su depósito cubrió -')
   })
 })
 
 describe('narrar: mecanismos de turnos (M3)', () => {
   it('el sorteo cuenta el orden', () => {
     const [h] = narrar([ev({ name: 'EvSorteo', data: { id: 1, orden: ['GCARLA', 'GANA', 'GBETO'] } })], f)
-    expect(h).toMatchObject({ tipo: 'clave', titulo: 'El contrato sorteó el orden de cobro' })
+    expect(h).toMatchObject({ tipo: 'clave', titulo: 'Se sorteó el orden de cobro' })
     expect(h.detalle).toBe('1. Carla · 2. Ana · 3. Beto')
   })
 
@@ -129,9 +164,9 @@ describe('narrar: mecanismos de turnos (M3)', () => {
       f,
     )
     expect(oferta.titulo).toBe('Carla ofrece recibir 8 % menos')
-    expect(gano).toMatchObject({ tipo: 'clave', titulo: 'Carla ganó la subasta de la ronda 2 con 24 TUSD de descuento' })
-    expect(gano.detalle).toBe('Cada uno de los demás recibió 12 TUSD en su garantía')
-    expect(sinOfertas.titulo).toBe('Ronda 3: cobra Ana')
+    expect(gano).toMatchObject({ tipo: 'clave', titulo: 'Carla ganó la subasta del turno 2 con $24 de descuento' })
+    expect(gano.detalle).toBe('Cada uno de los demás recibió $12 en su depósito')
+    expect(sinOfertas.titulo).toBe('Turno 3: cobra Ana')
   })
 
   it('precio por turno: quien cobra antes paga y quien espera gana', () => {
@@ -142,8 +177,8 @@ describe('narrar: mecanismos de turnos (M3)', () => {
       ],
       f,
     )
-    expect(paga.titulo).toBe('Beto pagó 24 TUSD por cobrar antes')
-    expect(gana).toMatchObject({ tipo: 'ok', titulo: 'Ana ganó 24 TUSD por esperar' })
+    expect(paga.titulo).toBe('Beto pagó $24 por cobrar antes')
+    expect(gana).toMatchObject({ tipo: 'ok', titulo: 'Ana ganó $24 por esperar' })
   })
 
   it('opciones: los primeros turnos que piden historial (M2 + M3)', () => {
@@ -165,7 +200,7 @@ describe('narrar: mecanismos de turnos (M3)', () => {
       f,
     )
     expect(h.titulo).toBe('Turnos: precio por turno')
-    expect(h.detalle).toBe('el primer turno paga 8 % de la bolsa · los turnos 1 a 2 piden historial de 100 puntos o más')
+    expect(h.detalle).toBe('el primer turno paga 8 % del pozo · los turnos 1 a 2 piden una reputación de 100 puntos o más')
   })
 
   it('subasta sellada: se cuenta que alguien selló, sin el porcentaje', () => {
@@ -190,7 +225,7 @@ describe('narrar: mecanismos de turnos (M3)', () => {
     )
     expect(opciones.detalle).toBe('descuento máximo 30 % · ofertas selladas')
     expect(sello).toMatchObject({ tipo: 'info', titulo: 'Beto selló una oferta' })
-    expect(sello.detalle).toBe('Ronda 2: el porcentaje se verá cuando la revele')
+    expect(sello.detalle).toBe('Turno 2: el porcentaje se verá cuando la revele')
   })
 
   it('garantía apartada, intercambio y turno por decidir al unirse', () => {
@@ -205,9 +240,9 @@ describe('narrar: mecanismos de turnos (M3)', () => {
       ],
       f,
     )
-    expect(garantia.titulo).toBe('De la bolsa de Ana se apartaron 100 TUSD como su garantía')
-    expect(cambio.detalle).toBe('Carla cobra en la ronda 2 y Beto en la ronda 3')
-    expect(unido.detalle).toBe('turno por decidir · dejó 100 TUSD de garantía')
+    expect(garantia.titulo).toBe('Del pozo de Ana se apartaron $100 como su depósito')
+    expect(cambio.detalle).toBe('Carla cobra en el turno 2 y Beto en el turno 3')
+    expect(unido.detalle).toBe('turno por decidir · dejó $100 de depósito')
   })
 })
 
@@ -220,8 +255,8 @@ describe('narrar: pagar deudas (M1)', () => {
       ],
       f,
     )
-    expect(pago).toMatchObject({ tipo: 'clave', titulo: 'Ana pagó 100 TUSD y saldó su deuda', detalle: 'vuelve a estar al día' })
-    expect(abono).toMatchObject({ tipo: 'clave', titulo: 'Carla recibió los 100 TUSD que le faltaban', detalle: 'Ronda 3: lo pagó Ana' })
+    expect(pago).toMatchObject({ tipo: 'clave', titulo: 'Ana pagó $100 y se puso al día', detalle: 'vuelve a estar al día' })
+    expect(abono).toMatchObject({ tipo: 'clave', titulo: 'Carla recibió los $100 que le faltaban', detalle: 'Turno 3: lo pagó Ana' })
   })
 
   it('pago parcial, pagado por otra persona', () => {
@@ -229,7 +264,7 @@ describe('narrar: pagar deudas (M1)', () => {
       [ev({ name: 'EvDeudaPagada', data: { id: 1, miembro: 'GANA', pagador: 'GBETO', monto: 30n * U, deuda_restante: 70n * U } })],
       f,
     )
-    expect(h).toMatchObject({ tipo: 'pago', titulo: 'Ana pagó 30 TUSD de su deuda', detalle: 'La pagó Beto · le faltan 70 TUSD' })
+    expect(h).toMatchObject({ tipo: 'pago', titulo: 'Ana pagó $30 de lo que debía', detalle: 'La pagó Beto · le faltan $70' })
   })
 
   it('abono a una bolsa retenida y bolsa recuperada', () => {
@@ -240,16 +275,16 @@ describe('narrar: pagar deudas (M1)', () => {
       ],
       f,
     )
-    expect(abono).toMatchObject({ tipo: 'info', titulo: '100 TUSD se sumaron a la bolsa retenida de Carla' })
-    expect(rec).toMatchObject({ tipo: 'ok', titulo: 'Carla recuperó su bolsa: 190 TUSD' })
-    expect(rec.detalle).toBe('Se descontaron 10 TUSD de multas · 100 TUSD quedan como su garantía para las cuotas que le faltan')
+    expect(abono).toMatchObject({ tipo: 'info', titulo: '$100 se sumaron al pozo guardado de Carla' })
+    expect(rec).toMatchObject({ tipo: 'ok', titulo: 'Carla recuperó su pozo: $190' })
+    expect(rec.detalle).toBe('Se descontaron $10 de multas · $100 quedan como su depósito para las cuotas que le faltan')
   })
 })
 
 describe('narrar: cerrar antes y pagar después de terminar (M1 v4)', () => {
   it('cuenta que todos pagaron y la ronda se cerró antes', () => {
     const [h] = narrar([ev({ name: 'EvCierreAnticipado', data: { id: 1, ronda: 1, vence: 1_000n } })], f)
-    expect(h).toMatchObject({ tipo: 'clave', titulo: 'Todos pagaron: la ronda 2 se cerró antes' })
+    expect(h).toMatchObject({ tipo: 'clave', titulo: 'Todos pagaron: el pozo del turno 2 se entregó antes' })
     expect(h.detalle).toContain('Las fechas no cambian')
   })
 
@@ -263,10 +298,10 @@ describe('narrar: cerrar antes y pagar después de terminar (M1 v4)', () => {
     )
     expect(directo).toMatchObject({
       tipo: 'clave',
-      titulo: 'Carla recibió los 100 TUSD que le faltaban',
+      titulo: 'Carla recibió los $100 que le faltaban',
       detalle: 'Lo pagó Ana, con la tanda ya terminada',
     })
-    expect(reparto).toMatchObject({ tipo: 'ok', titulo: 'Beto recibió 50 TUSD' })
+    expect(reparto).toMatchObject({ tipo: 'ok', titulo: 'Beto recibió $50' })
     expect(reparto.detalle).toContain('Su parte de lo que debía Carla')
   })
 })
@@ -281,10 +316,10 @@ describe('narrar: historial crediticio (M2)', () => {
       ],
       f,
     )
-    expect(con.titulo).toBe('La tanda usa el historial crediticio')
-    expect(con.detalle).toBe('Esta tanda pide historial con 100 puntos o más y da descuento de garantía por buen historial')
-    expect(sin.titulo).toBe('La tanda no usa el historial crediticio')
-    expect(conectado.titulo).toBe('Se conectó el historial crediticio')
+    expect(con.titulo).toBe('La tanda usa la reputación')
+    expect(con.detalle).toBe('Esta tanda pide una reputación de 100 puntos o más y da descuento en el depósito por buena reputación')
+    expect(sin.titulo).toBe('La tanda no usa la reputación')
+    expect(conectado.titulo).toBe('Se conectó la reputación')
   })
 })
 
@@ -292,6 +327,6 @@ describe('narrar: historial crediticio (M2)', () => {
 describe('narrar: bóveda por token (M4)', () => {
   it('cuenta el cambio de bóveda de una moneda como información', () => {
     const [h] = narrar([ev({ name: 'EvBovedaToken', data: { token: 'CUSDC', boveda: 'CBLEND' } })], f)
-    expect(h).toMatchObject({ tipo: 'info', titulo: 'Se cambió la bóveda de una moneda para las tandas nuevas' })
+    expect(h).toMatchObject({ tipo: 'info', titulo: 'Se cambió dónde ganan intereses las tandas nuevas de una moneda' })
   })
 })
