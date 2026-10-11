@@ -122,7 +122,8 @@ fn cada_token_usa_su_boveda_y_el_dinero_cuadra() {
         c.tanda.get_tanda(&d).shares_boveda
     );
 
-    // Ronda 0: en USDC, Ana no paga (su garantía en USDC la cubre); en TUSD todos pagan.
+    // Ronda 0: en USDC, Ana no paga (su garantía en USDC no alcanza para lo que le falta: queda morosa
+    // y la reparten los afectados al final); en TUSD todos pagan.
     for p in [&c.ana, &c.beto, &c.carla] {
         c.tanda.pagar_cuota(&t, p);
     }
@@ -135,7 +136,9 @@ fn cada_token_usa_su_boveda_y_el_dinero_cuadra() {
         if c.tanda.get_tanda(&t).estado == Estado::Activa {
             for p in [&c.ana, &c.beto, &c.carla] {
                 c.tanda.pagar_cuota(&t, p);
-                c.tanda.pagar_cuota(&d, p);
+                if !c.miembro(d, p).moroso {
+                    c.tanda.pagar_cuota(&d, p);
+                }
             }
         }
     }
@@ -323,6 +326,8 @@ fn retiros_de(c: &Ctx, token: &Address, boveda: &Address) -> usize {
 /// Un cierre en el que 11 garantías cubren su cuota saca de la bóveda UNA sola vez. Con Blend, un
 /// retiro por moroso emitía un evento por retiro y la transacción pasaba el límite de 16 KiB de eventos
 /// de la red: la ronda no se podía cerrar (docs/blend.md §9). El reparto no cambia y el dinero cuadra.
+/// (v5) Una garantía solo cubre al instante si alcanza para todo lo que falta pagar: el peor caso son las
+/// 11 personas que ya cobraron, que dejan de pagar justo en la última ronda.
 #[test]
 fn cerrar_ronda_saca_de_la_boveda_una_sola_vez() {
     let c = setup_con(500, 52_560, false);
@@ -346,8 +351,19 @@ fn cerrar_ronda_saca_de_la_boveda_una_sola_vez() {
     // El presupuesto del entorno se acumula en toda la prueba; aquí importa contar los retiros.
     c.env.cost_estimate().budget().reset_unlimited();
 
-    // Ronda 1: solo paga quien cobra; las garantías de los otros 11 cubren sus cuotas.
-    let quien_cobra = &miembros[0];
+    // Rondas 1 a 11: todos al día, no se toca la bóveda al cerrar.
+    for _ in 0..11 {
+        for m in &miembros {
+            c.tanda.pagar_cuota(&id, m);
+        }
+        c.avanzar(PERIODO);
+        c.tanda.cerrar_ronda(&id);
+        assert_eq!(retiros_de(&c, &u.token.address, &u.boveda), 0);
+    }
+
+    // Ronda 12: solo paga quien cobra; las garantías de los otros 11 (que ya cobraron y solo les
+    // falta esta cuota) la cubren.
+    let quien_cobra = &miembros[11];
     c.tanda.pagar_cuota(&id, quien_cobra);
     let antes = u.saldo(quien_cobra);
     c.avanzar(PERIODO);
@@ -358,25 +374,13 @@ fn cerrar_ronda_saca_de_la_boveda_una_sola_vez() {
         antes + 12 * CUOTA,
         "la bolsa sale completa"
     );
-    for m in &miembros[1..] {
+    for m in &miembros[..11] {
         assert_eq!(c.miembro(id, m).atrasos, 1);
+        assert!(!c.miembro(id, m).moroso);
     }
     assert_eq!(total(), inicial);
 
-    // Con todos al día no se toca la bóveda al cerrar.
-    for m in &miembros {
-        c.tanda.pagar_cuota(&id, m);
-    }
-    c.avanzar(PERIODO);
-    c.tanda.cerrar_ronda(&id);
-    assert_eq!(retiros_de(&c, &u.token.address, &u.boveda), 0);
-
-    // El resto sin pagos hasta el final: todo vuelve y el dinero cuadra.
-    for _ in 2..12 {
-        c.avanzar(PERIODO);
-        c.tanda.cerrar_ronda(&id);
-        assert!(retiros_de(&c, &u.token.address, &u.boveda) <= 1);
-    }
+    // Todo vuelve y el dinero cuadra.
     c.tanda.finalizar(&id);
     assert_eq!(total(), inicial, "el dinero en USDC no cuadra");
     assert_eq!(

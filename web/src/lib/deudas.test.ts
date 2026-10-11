@@ -69,26 +69,36 @@ describe('garantiaPendiente (igual que moroso_salda_a_mitad_de_tanda_y_repone_su
   })
 })
 
-describe('faltantesAlCerrar (como cerrar_ronda)', () => {
+describe('faltantesAlCerrar (como cerrar_ronda, v5)', () => {
   const cuota = 100n * U
-  it('quien pagó o tiene garantía suficiente no deja faltante', () => {
+  it('quien pagó, o tiene garantía para TODAS las cuotas que le quedan y no debe nada, no deja faltante', () => {
     const miembros = [
       { direccion: 'A', colateral: 0n },
-      { direccion: BETO, colateral: 100n * U },
+      { direccion: BETO, colateral: 200n * U },
       { direccion: CARLA, colateral: 300n * U },
     ]
-    expect(faltantesAlCerrar(miembros, ['A'], cuota)).toEqual([])
+    // Quedan 2 cuotas (esta y una más): Beto y Carla las cubren; Ana pagó.
+    expect(faltantesAlCerrar(miembros, ['A'], cuota, 2)).toEqual([])
   })
 
-  it('si la garantía no alcanza, falta la diferencia (o la cuota entera si no le queda nada)', () => {
+  it('si la garantía no alcanza para todo lo que le queda, la cuota entera queda como deuda (no se usa la garantía)', () => {
     const miembros = [
-      { direccion: BETO, colateral: 40n * U },
+      { direccion: BETO, colateral: 150n * U },
       { direccion: CARLA, colateral: 0n },
     ]
-    expect(faltantesAlCerrar(miembros, [], cuota)).toEqual([
-      { direccion: BETO, falta: 60n * U },
+    expect(faltantesAlCerrar(miembros, [], cuota, 2)).toEqual([
+      { direccion: BETO, falta: 100n * U },
       { direccion: CARLA, falta: 100n * U },
     ])
+  })
+
+  it('quien ya debe algo no cubre con su garantía, aunque le sobre', () => {
+    const miembros = [{ direccion: BETO, colateral: 500n * U, deuda: 100n * U }]
+    expect(faltantesAlCerrar(miembros, [], cuota, 2)).toEqual([{ direccion: BETO, falta: 100n * U }])
+  })
+
+  it('en la última ronda basta con una cuota de garantía', () => {
+    expect(faltantesAlCerrar([{ direccion: BETO, colateral: 100n * U }], [], cuota, 1)).toEqual([])
   })
 })
 

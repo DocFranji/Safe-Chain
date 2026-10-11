@@ -53,8 +53,10 @@ export function lineaTanda({ cuota, n, periodoSeg }: Basicos): string {
 }
 
 /** El mensaje ya escrito para mandar por WhatsApp. `quien` es el apodo de quien invita, si se conoce. */
-export function mensajeInvitacion(t: Basicos & { link: string; quien?: string | null }): string {
-  const saludo = t.quien ? `¡Hola! Soy ${t.quien}.` : '¡Hola!'
+export function mensajeInvitacion(t: Basicos & { link: string; quien?: string | null; para?: string | null }): string {
+  // `para`: cómo se llama a quien se invita (un amigo guardado): "¡Hola, Beto! Soy Ana."
+  const hola = t.para ? `¡Hola, ${t.para}!` : '¡Hola!'
+  const saludo = t.quien ? `${hola} Soy ${t.quien}.` : hola
   return [
     `${saludo} Te invito a mi tanda en Rounda: ${t.n} personas ponemos ${dinero(t.cuota)} ${porPeriodo(t.periodoSeg)} y en cada turno una recibe ${dinero(t.cuota * BigInt(t.n))}.`,
     `Para unirte, abre este enlace: ${t.link}`,

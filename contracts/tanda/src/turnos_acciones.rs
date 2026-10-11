@@ -1,7 +1,7 @@
 //! Acciones de turnos (misión **M3**): crear con opciones, unirse eligiendo turno, ofertar en la
 //! subasta, intercambiar turnos y las consultas que usa la web. La lógica vive en `turnos.rs`.
 //! Diseño y decisiones: `docs/turnos.md`.
-use soroban_sdk::{contractimpl, token, Address, Bytes, BytesN, Env};
+use soroban_sdk::{contractimpl, token, Address, Bytes, BytesN, Env, String};
 
 use crate::almacenamiento::*;
 use crate::requisitos;
@@ -28,13 +28,42 @@ impl TandaContract {
         cobertura_bps: u32,
         opciones: OpcionesTanda,
     ) -> Result<u32, Error> {
+        let sin_nombre = String::from_str(&env, "");
+        Self::avanzada_en(
+            env,
+            creador,
+            token,
+            cuota,
+            n_miembros,
+            periodo_seg,
+            penalidad_bps,
+            cobertura_bps,
+            opciones,
+            sin_nombre,
+        )
+    }
+
+    /// (M1 v5) Cuerpo compartido por `crear_tanda_avanzada` y `crear_tanda_avanzada_con_nombre`
+    /// (`nombres.rs`). No se exporta (no es `pub`).
+    pub(crate) fn avanzada_en(
+        env: Env,
+        creador: Address,
+        token: Address,
+        cuota: i128,
+        n_miembros: u32,
+        periodo_seg: u64,
+        penalidad_bps: u32,
+        cobertura_bps: u32,
+        opciones: OpcionesTanda,
+        nombre: String,
+    ) -> Result<u32, Error> {
         turnos::validar_opciones(&opciones, n_miembros)?;
         // Los primeros turnos con historial necesitan el historial de M2 conectado.
         if opciones.primeros_con_historial > 0 && requisitos::direccion_historial(&env).is_none() {
             return Err(Error::HistorialNoConfigurado);
         }
         // Mismo código que `crear_tanda` (pide la firma del creador y valida los parámetros).
-        let id = Self::crear_tanda(
+        let id = Self::crear_en(
             env.clone(),
             creador,
             token,
@@ -43,6 +72,7 @@ impl TandaContract {
             periodo_seg,
             penalidad_bps,
             cobertura_bps,
+            nombre,
         )?;
         let t = cargar_tanda(&env, id)?;
         turnos::guardar_opciones(&env, &t, id, &opciones);

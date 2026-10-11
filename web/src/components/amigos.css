@@ -1,0 +1,207 @@
+/* Amigos (pedido 6 del plan v5): la pestaña del Perfil, el formulario y las marcas junto a una persona.
+   Solo usa los colores de index.css, que ya tienen modo oscuro. */
+
+.amigos > h2 {
+  margin-bottom: 8px;
+  font-size: 22px;
+  font-weight: var(--titulos-peso);
+}
+.amigos .aviso {
+  margin-top: 12px;
+}
+.amigos-vacio {
+  margin-top: 16px;
+}
+
+/* Las dos pestañas del Perfil: enlaces, porque cada una tiene su dirección (#/perfil y #/perfil/amigos). */
+.perfil-pestanas {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 24px;
+}
+.perfil-pestanas a {
+  padding: 8px 16px;
+  border-radius: 99px;
+  box-shadow: inset 0 0 0 1px var(--linea);
+  color: var(--tinta-2);
+  font-weight: 600;
+  text-decoration: none;
+}
+.perfil-pestanas a[aria-current='page'] {
+  background: var(--tinta);
+  box-shadow: none;
+  color: var(--papel);
+}
+.perfil-pestanas a:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+
+.form-amigo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: var(--radio-chico);
+  background: var(--superficie-2);
+}
+.form-amigo .campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.form-amigo .campo label {
+  font-size: 15px;
+  font-weight: 600;
+}
+.form-amigo input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+}
+.form-amigo input[aria-invalid='true'] {
+  border-color: var(--alerta);
+}
+.form-amigo .ayuda,
+.form-amigo .aviso {
+  margin: 0;
+  font-size: 14px;
+}
+.form-amigo .fila-botones {
+  margin-top: 0;
+}
+
+/* Junto al nombre de una persona (lista de quiénes participan, perfil público). */
+.boton-amigo {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--acento-texto);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.boton-amigo:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+.marca-amigo {
+  align-self: flex-start;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--acento-texto);
+}
+.persona-cuerpo .form-amigo {
+  margin-top: 6px;
+  padding: 10px;
+}
+/* Dentro de la fila de una persona el espacio es poco: botones de tamaño normal, no de acción principal. */
+:root .app .form-amigo .boton {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.lista-amigos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.amigo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--superficie-2);
+}
+.amigo-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.amigo-datos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.amigo-nombre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.amigo .fila-botones {
+  margin-top: 0;
+}
+
+/* Invitar a una tanda. */
+.invitar-amigo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+}
+.elegir-tanda {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.elegir-tanda legend {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.opcion-tanda {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 1px var(--linea);
+  cursor: pointer;
+}
+.opcion-tanda.elegida {
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+.opcion-tanda input {
+  margin-top: 4px;
+  accent-color: var(--acento);
+}
+.opcion-tanda > span {
+  display: flex;
+  flex-direction: column;
+}
+.invitar-amigo .whatsapp {
+  align-self: flex-start;
+}
+
+.confirmar-quitar {
+  padding: 12px;
+  border-radius: var(--radio-chico);
+  background: var(--alerta-suave);
+  color: var(--alerta-texto);
+}
+.confirmar-quitar p {
+  margin: 0 0 10px;
+  font-size: 15px;
+}

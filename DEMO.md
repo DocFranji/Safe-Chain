@@ -22,13 +22,15 @@ Los tiempos marcan cuándo termina cada paso y son aproximados: dependen de la r
 
 ### Variante con deuda (`DEUDA=1`)
 
-Muestra que en Rounda **un moroso puede ponerse al día**. La tanda usa la garantía mínima (cada quien deja una cuota), así la de Ana se acaba antes:
+Muestra que en Rounda **un moroso puede ponerse al día**. La tanda usa la garantía mínima (cada quien deja una cuota), que no alcanza para todo lo que le queda a Ana. En ese caso el contrato **no usa la garantía mientras la tanda sigue** (si la usara, el que cobra justo después se llevaría todo y los últimos nada): cada falta es una deuda a favor de quien cobró de menos.
 
 | Qué pasa | Qué se ve en pantalla | Qué decir |
 | --- | --- | --- |
-| **Ronda 2** | *"Ana no pagó: su depósito cubrió $100"* | "Su garantía alcanzó para esta ronda…" |
-| **Ronda 3** | *"Ana quedó con un pago pendiente"* y *"Carla cobró $200"* | "…pero ya no le queda garantía: Carla cobró 100 de menos." |
-| **Ana vuelve** | Resaltados: *"Ana pagó $100 y se puso al día"* y *"Carla recibió los $100 que le faltaban"* | **El momento clave.** "La deuda no se pierde: cuando Ana paga, el dinero le llega a quien cobró de menos, y Ana vuelve a estar al día. También lo podría pagar un familiar." |
+| **Ronda 2** | *"Ana quedó con un pago pendiente"* y *"Beto cobró $200"* | "La garantía de Ana no alcanza para las dos cuotas que le quedan, así que no se toca: Ana debe 100 y Beto cobró 100 de menos." |
+| **Ronda 3** | *"Carla cobró $200"* | "Ana sigue sin aparecer: ahora debe 200." |
+| **Ana vuelve** | Resaltados: *"Ana pagó $200 y se puso al día"*, *"Beto recibió los $100 que le faltaban"* y *"Carla recibió los $100 que le faltaban"* | **El momento clave.** "La deuda no se pierde: cuando Ana paga, el dinero le llega a quien cobró de menos, y Ana vuelve a estar al día y recupera su garantía. También lo podría pagar un familiar." |
+
+Si Ana **no** vuelve, al terminar su garantía se reparte entre Beto y Carla en proporción a lo que le faltó a cada uno (50 y 50 en este ejemplo), y lo que queda lo puede pagar después.
 
 ```bash
 DEUDA=1 WEB=https://tu-sitio.vercel.app PAUSAR=1 bash scripts/demo.sh
@@ -147,7 +149,7 @@ La persona del jurado entra como tercera, la tanda arranca, y desde la web puede
 - **¿Y si Blend se queda sin liquidez o se congela?** Si todo está prestado, cerrar una ronda con impagos o finalizar espera a que vuelva la liquidez (cualquiera reintenta); no se pierde dinero. Si Blend congela el pool, no se pueden crear tandas nuevas en USDC, pero las que están en curso terminan bien. Lo revisamos en `docs/blend.md`.
 - **¿Funciona para una tanda de verdad, de meses?** Sí: rondas de hasta 3 meses y tandas de hasta un año o más, con fechas de pago fijas. El contrato renueva solo sus datos en la red para que nada se archive a mitad de la tanda.
 - **¿Y si alguien queda en mora?** Puede pagar su deuda cuando quiera (o un familiar por él). El dinero le llega a quien cobró de menos y la persona vuelve a estar al día.
-- **¿Qué pasa si alguien no paga?** Su garantía cubre su cuota. Si no alcanza, queda en mora y su parte se reparte entre quienes cumplieron.
+- **¿Qué pasa si alguien no paga?** Si su garantía alcanza para todo lo que le falta pagar, cubre su cuota y nadie pierde. Si no alcanza, no se usa mientras la tanda sigue: queda en mora, cada falta es una deuda a favor de quien cobró de menos, y al terminar su garantía se reparte entre esas personas en proporción a lo que le faltó a cada una.
 - **¿Qué es el historial crediticio?** Un contrato aparte que anota cada cuota pagada, atraso y deuda saldada de cada dirección. Empieza en cero, lo negativo no se borra, nadie (ni nosotros) puede editarlo, y solo guarda direcciones, ningún dato personal. Quien cumple sube de nivel y recibe descuento de garantía en las tandas que lo ofrezcan.
 - **¿No se puede hacer trampa con billeteras propias?** Una billetera nueva empieza en cero y el cero no da beneficios. Solo suman tandas con cuota de 10 TUSD o más, con máximo 150 puntos por tanda: llegar a Oro exige al menos 4 tandas completas con dinero inmovilizado.
 - **¿Está auditado?** No. Es un prototipo de hackathon.

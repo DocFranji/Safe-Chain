@@ -47,7 +47,7 @@ extern crate std;
 use crate::test::U;
 use crate::turnos::ClaveM3;
 use crate::{
-    ClaveM1, DataKey, Error, Estado, Miembro, ModoTurnos, OpcionesTanda, Propuesta, Tanda,
+    ClaveM1, DataKey, Deuda, Error, Estado, Miembro, ModoTurnos, OpcionesTanda, Propuesta, Tanda,
     TandaContract, TandaContractClient, BPS, SIN_TURNO,
 };
 use boveda_simulada::{BovedaSimulada, BovedaSimuladaClient};
@@ -1869,14 +1869,22 @@ impl Mundo {
             let mut e = m0.clone();
             if !pagaron.contains(dir) {
                 e.atrasos += 1;
-                let cubierto = if m0.colateral >= t0.cuota {
+                // (M1 v5) La garantía cubre al instante solo si alcanza para TODAS las cuotas que le
+                // quedan (esta y las siguientes) y no debe nada de antes. Si no, la cuota es deuda y
+                // la garantía no se toca: se reparte entre los afectados al finalizar.
+                let le_quedan = t0.cuota * (t0.n_miembros - ronda) as i128;
+                let cubierto = if m0.deuda == 0 && m0.colateral >= le_quedan {
                     e.multas_pendientes += multa;
                     t0.cuota
                 } else {
-                    e.deuda += t0.cuota - m0.colateral;
+                    e.deuda += t0.cuota;
                     e.moroso = true;
-                    m0.colateral
+                    self.contar("· cerrar: la garantía no alcanza, la cuota queda como deuda");
+                    0
                 };
+                if cubierto > 0 {
+                    self.contar("· cerrar: la garantía alcanza y cubre al instante");
+                }
                 e.colateral -= cubierto;
                 bolsa += cubierto;
             }
@@ -2038,6 +2046,7 @@ impl Mundo {
             0
         };
         let tol = self.tolerancia(id);
+        let deudas0: StdVec<(Address, Deuda)> = self.tanda.get_deudas(&id).iter().collect();
         let c0 = self.saldo(&self.yo);
         let s0 = self.saldos();
         let r = self.tanda.try_finalizar(&id);
@@ -2049,6 +2058,104 @@ impl Mundo {
         }
         let t1 = self.tanda.get_tanda(&id);
         let s1 = self.saldos();
+
+        // (M1 v5) La garantía de cada moroso (con su parte del rendimiento) se reparte entre quienes
+        // cobraron de menos, en proporción a lo que le faltó a cada uno (sin contar su propia ronda).
+        // Si el afectado cobró su bolsa, se le paga directo; si no (también era moroso), va al fondo que
+        // se reparte entre quienes cumplieron. Lo que sobre vuelve al moroso, menos sus multas. Las
+        // unidades sueltas del redondeo (menos de una por afectado) caen en el primero que la red
+        // ordena, por eso aquí se acotan en vez de adivinar quién.
+        let suma_col: i128 = lista.iter().map(|(_, m)| m.colateral).sum();
+        let n = lista.len();
+        let mut directo = std::vec![0i128; n]; // lo que cobra cada uno de garantías ajenas (piso)
+        let mut devuelto = std::vec![0i128; n]; // lo que le vuelve a cada moroso de su garantía
+        let mut usado = std::vec![0i128; n]; // cuánto de su deuda pagó cada moroso con su garantía
+        let mut al_pozo = 0i128; // lo que va al fondo de quienes cumplieron (piso)
+        let mut sueltas = 0i128; // unidades de redondeo repartidas entre todos los afectados
+        let mut multas_morosos = 0i128; // multas cobradas a lo que les sobró
+        let mut garantia_morosos = 0i128; // lo que sale del total para los morosos
+        for (i, (dir, m)) in lista.iter().enumerate() {
+            if !m.moroso || m.colateral <= 0 {
+                continue;
+            }
+            let bruto = valor.max(0) * m.colateral / suma_col;
+            garantia_morosos += bruto;
+            // Lo que se le debe a cada afectado (agrupado), sin su propia ronda.
+            let mut debe: StdVec<(Address, i128)> = StdVec::new();
+            if let Some((_, d)) = deudas0.iter().find(|(x, _)| x == dir) {
+                for f in d.faltantes.iter().filter(|f| f.acreedor != *dir) {
+                    match debe.iter_mut().find(|(x, _)| *x == f.acreedor) {
+                        Some(e) => e.1 += f.monto,
+                        None => debe.push((f.acreedor.clone(), f.monto)),
+                    }
+                }
+            }
+            let total_debe: i128 = debe.iter().map(|(_, v)| *v).sum();
+            let a = bruto.min(total_debe);
+            usado[i] = a;
+            let mut piso_total = 0;
+            for (acreedor, debido) in &debe {
+                let parte = a * debido / total_debe;
+                piso_total += parte;
+                let j = self.idx(acreedor);
+                let cobro = lista.iter().find(|(x, _)| x == acreedor).unwrap().1.cobro;
+                if cobro {
+                    directo[lista.iter().position(|(x, _)| x == acreedor).unwrap()] += parte;
+                } else {
+                    al_pozo += parte;
+                }
+                let _ = j;
+            }
+            if total_debe > 0 {
+                sueltas += a - piso_total;
+            }
+            let sobra = bruto - a;
+            let multas = m.multas_pendientes.min(sobra);
+            multas_morosos += multas;
+            devuelto[i] = sobra - multas;
+            if a > 0 {
+                self.contar("· finalizar: la garantía de un moroso se reparte entre los afectados");
+            }
+            if a > 0 && a < total_debe {
+                self.contar("· finalizar: la garantía no alcanza (reparto proporcional)");
+            }
+            if sobra > 0 {
+                self.contar("· finalizar: al moroso le sobra garantía");
+            }
+        }
+        // La deuda que le queda a cada moroso (y si deja de serlo).
+        for (i, (dir, m)) in lista.iter().enumerate() {
+            if usado[i] == 0 {
+                continue;
+            }
+            let m1 = self.miembro(id, dir).unwrap();
+            self.exigir(
+                m1.deuda == m.deuda - usado[i] && m1.moroso == (m1.deuda > 0),
+                || {
+                    format!(
+                        "t{id}: la garantía de {} pagó {} de su deuda y quedó {m1:?} (debía deber {})",
+                        self.nombre(dir),
+                        usado[i],
+                        m.deuda - usado[i]
+                    )
+                },
+            );
+            if m1.deuda == 0 {
+                self.contar("· finalizar: la garantía saldó toda la deuda del moroso");
+            }
+        }
+        // Al fondo de los que cumplieron: lo calculado más, como mucho, las unidades sueltas.
+        let pozo_extra = t1.retenido - t0.retenido;
+        self.exigir(
+            pozo_extra >= al_pozo && pozo_extra <= al_pozo + sueltas,
+            || {
+                format!(
+                    "t{id}: al fondo de quienes cumplieron fueron {pozo_extra} de las garantías y \
+                     debían ser entre {al_pozo} y {}",
+                    al_pozo + sueltas
+                )
+            },
+        );
 
         // Quiénes se reparten multas y bolsas retenidas: los que nunca se atrasaron; si no hay,
         // los que no están en mora.
@@ -2079,12 +2186,21 @@ impl Mundo {
         for (j, (dir, m)) in lista.iter().enumerate() {
             let recibio = s1[self.idx(dir)] - s0[self.idx(dir)];
             if m.moroso {
-                self.exigir(recibio == 0, || {
-                    format!(
-                        "t{id}: {} estaba en mora y recibió {recibio}",
-                        self.nombre(dir)
-                    )
-                });
+                // Un moroso solo recibe lo que le sobró de su garantía y lo que le tocó de la de otros
+                // morosos como afectado (v5). Nunca la parte de un fondo: no cumplió.
+                self.exigir(
+                    recibio >= devuelto[j] + directo[j] - tol
+                        && recibio <= devuelto[j] + directo[j] + sueltas + tol,
+                    || {
+                        format!(
+                            "t{id}: {} estaba en mora y recibió {recibio}; debía recibir {} de lo \
+                             que le sobró y {} de garantías ajenas",
+                            self.nombre(dir),
+                            devuelto[j],
+                            directo[j]
+                        )
+                    },
+                );
                 continue;
             }
             let sin_multas = m.colateral - m.multas_pendientes.min(m.colateral);
@@ -2093,25 +2209,36 @@ impl Mundo {
             } else {
                 0
             };
-            self.exigir(recibio >= sin_multas + parte - tol, || {
+            self.exigir(recibio >= sin_multas + parte + directo[j] - tol, || {
                 format!(
                     "t{id}: {} recibió {recibio} y le tocaban al menos {} (garantía sin multas {sin_multas} \
-                     + parte del fondo {parte})",
+                     + parte del fondo {parte} + garantías ajenas {})",
                     self.nombre(dir),
-                    sin_multas + parte
+                    sin_multas + parte + directo[j],
+                    directo[j]
                 )
             });
         }
+        let _ = (multas_morosos, garantia_morosos);
         if lista.iter().any(|(_, m)| m.moroso) {
             self.contar("· finalizar con alguien en mora");
         }
         if lista.iter().all(|(_, m)| m.moroso) {
             self.contar("· finalizar con TODOS en mora");
-            // Todos en mora: nada se reparte (`sin_repartir`) y queda en el contrato.
-            let queda = t0.retenido + t0.fondo_premios + valor;
-            self.exigir(self.saldo(&self.yo) - c0 == valor, || {
-                format!("t{id}: todos en mora y aun así salió dinero del contrato")
-            });
+            // Todos en mora: ni el fondo de multas ni las bolsas retenidas se reparten
+            // (`sin_repartir`): quedan en el contrato. (v5) Lo demás sí sale: lo que les toca a los
+            // afectados que cobraron y lo que le sobra de su garantía a cada moroso.
+            let queda = t1.fondo_premios + t1.retenido;
+            self.exigir(
+                self.saldo(&self.yo) - c0 == queda - (t0.retenido + t0.fondo_premios),
+                || {
+                    format!(
+                        "t{id}: todos en mora y el contrato quedó con {} de más en vez de {}",
+                        self.saldo(&self.yo) - c0,
+                        queda - (t0.retenido + t0.fondo_premios)
+                    )
+                },
+            );
             self.sin_repartir += queda;
         }
         self.revisar_terminada(id, Estado::Finalizada);

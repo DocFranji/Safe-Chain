@@ -17,6 +17,8 @@ export type Ruta =
   | { tipo: 'historial'; dir: string | null }
   /** Perfil de quien está conectado: apodo, historial, deudas y cerrar sesión (misión M2, N4). */
   | { tipo: 'perfil' }
+  /** La pestaña "Amigos" del perfil (pedido 6 del plan v5). */
+  | { tipo: 'amigos' }
   | { tipo: 'desconocida' }
 
 function idValido(texto: string): number | null {
@@ -34,6 +36,7 @@ export function parsearRuta(hash: string): Ruta {
   if (limpio === 'demo') return { tipo: 'demo', id: null }
   if (limpio === 'historial') return { tipo: 'historial', dir: null }
   if (limpio === 'perfil') return { tipo: 'perfil' }
+  if (limpio === 'perfil/amigos') return { tipo: 'amigos' }
   const historial = limpio.match(/^historial\/([GC][A-Z2-7]{55})$/)
   if (historial) return { tipo: 'historial', dir: historial[1] }
   const tanda = limpio.match(/^tanda\/(\d+)$/)
@@ -58,6 +61,7 @@ export const rutaTanda = (id: number) => `#/tanda/${id}`
 export const rutaDemo = (id: number) => `#/demo/${id}`
 export const RUTA_MI_HISTORIAL = '#/historial'
 export const RUTA_PERFIL = '#/perfil'
+export const RUTA_AMIGOS = '#/perfil/amigos'
 export const rutaHistorial = (dir: string) => `#/historial/${dir}`
 
 /** Navega a otra página de la app (por ejemplo, `irA(rutaTanda(3))`). */

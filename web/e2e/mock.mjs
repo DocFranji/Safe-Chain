@@ -387,7 +387,6 @@ function valorSim(est, contrato, fn, args) {
     }
     // (UX, pedido 5) Crear: se anota qué se pidió (`est.creaciones`) y se responde con el número de la tanda nueva.
     if (/^crear_tanda/.test(fn)) {
-      if (!est.conNombres && /con_nombre/.test(fn)) return { error: { error: `mock: no sé responder ${contrato}.${fn}`, latestLedger: 1000 } }
       est.creaciones ??= []
       est.creaciones.push({ fn, args: nativos })
       return u32(Object.keys(est.tandas).length + 1)
@@ -725,6 +724,7 @@ export function respuestaRpc(est, cuerpo) {
 
 // --- M3: el WASM del contrato, para comparar la web con el contrato desplegado (#/estado) ---------
 const HASH_WASM = Buffer.alloc(32, 0xab)
+const FUNCIONES_CON_NOMBRE = ['get_nombre', 'get_nombres', 'crear_tanda_con_nombre', 'crear_tanda_avanzada_con_nombre']
 const leb128 = (n) => {
   const b = []
   do {
@@ -736,46 +736,17 @@ const leb128 = (n) => {
   return Buffer.from(b)
 }
 /**
- * (UX, pedido 5) La interfaz del contrato v5 con nombres, según lo que publicó M1: `crear_tanda_con_nombre` y
- * `crear_tanda_avanzada_con_nombre` (las de siempre más `nombre: String`, al final) y `get_nombre(id)`.
- * Se activa con `est.conNombres = true`; así se prueba la web sin esperar el cliente regenerado.
- */
-function entradasConNombres() {
-  const funcion = (n) => spec.entries.map((e) => e.value).find((v) => v && v.name && v.name.toString() === n)
-  const nueva = (original, nombre) =>
-    xdr.ScSpecEntry.scSpecEntryFunctionV0(
-      new xdr.ScSpecFunctionV0({
-        doc: '',
-        name: nombre,
-        inputs: [...original.inputs, new xdr.ScSpecFunctionInputV0({ doc: '', name: 'nombre', type: xdr.ScSpecTypeDef.scSpecTypeString() })],
-        outputs: original.outputs,
-      }),
-    )
-  return [
-    nueva(funcion('crear_tanda'), 'crear_tanda_con_nombre'),
-    nueva(funcion('crear_tanda_avanzada'), 'crear_tanda_avanzada_con_nombre'),
-    xdr.ScSpecEntry.scSpecEntryFunctionV0(
-      new xdr.ScSpecFunctionV0({
-        doc: '',
-        name: 'get_nombre',
-        inputs: [new xdr.ScSpecFunctionInputV0({ doc: '', name: 'id', type: xdr.ScSpecTypeDef.scSpecTypeU32() })],
-        outputs: [xdr.ScSpecTypeDef.scSpecTypeString()],
-      }),
-    ),
-  ]
-}
-
-/**
  * WASM mínimo con solo la sección `contractspecv0` (la interfaz del contrato), armada con el mismo spec
  * del cliente generado. `est.interfazSin`: nombres de funciones o tipos que le faltan (contrato viejo).
  */
 function wasmConSpec(est) {
-  const quitar = new Set(est.interfazSin ?? [])
+  // (UX, pedido 5) El cliente generado ya conoce los nombres, así que el contrato "desplegado" también, salvo con
+  // `est.sinNombres = true` (un contrato v4: no hay campo de nombre al crear).
+  const quitar = new Set([...(est.interfazSin ?? []), ...(est.sinNombres ? FUNCIONES_CON_NOMBRE : [])])
   const entradas = spec.entries.filter((e) => {
     const v = e.value
     return !quitar.has(v && v.name ? v.name.toString() : '')
   })
-  if (est.conNombres) entradas.push(...entradasConNombres())
   const nombre = Buffer.from('contractspecv0')
   const datos = Buffer.concat([leb128(nombre.length), nombre, ...entradas.map((e) => Buffer.from(e.toXdr()))])
   return Buffer.concat([Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00]), leb128(datos.length), datos])

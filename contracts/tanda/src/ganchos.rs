@@ -233,3 +233,10 @@ pub(crate) fn al_pagar_deuda(
         enviar_uno(env, t, id, miembro, Hecho::DeudaSaldada, monto);
     }
 }
+
+/// (M1 v5) Al finalizar, la garantía de `miembro` alcanzó para saldar TODO lo que debía a los demás
+/// (`monto`): queda al día, igual que si hubiera pagado su deuda. Va al búfer: lo envía
+/// `al_fin_operacion` junto con el resto de los hechos de `finalizar`.
+pub(crate) fn al_saldar_con_garantia(env: &Env, id: u32, miembro: &Address, monto: i128) {
+    anotar(env, id, miembro, Hecho::DeudaSaldada, monto);
+}

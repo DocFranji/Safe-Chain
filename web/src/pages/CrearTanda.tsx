@@ -13,8 +13,8 @@ import { OpcionesHistorial } from '../components/OpcionesHistorial'
 import { SIN_REQUISITOS, hayRequisitos, puntajeDe } from '../lib/historial'
 import { useHistorialCacheado } from '../hooks/useHistorial'
 import { useSoportaNombres } from '../hooks/useSoportaNombres'
-import { clienteConNombres } from '../lib/contratoNombres'
-import { NOMBRE_MAX, idDeCreacion, limpiarNombre, problemaDeNombre } from '../lib/nombreTanda'
+import { idDeCreacion, limpiarNombre } from '../lib/nombreCrear'
+import { NOMBRE_MAX, errorNombre } from '../lib/nombreTanda'
 import { clienteFirma, enviar, traducirError } from '../lib/contrato'
 import {
   MAX_MIEMBROS,
@@ -111,7 +111,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
   const params = valido ? (parciales as ParametrosTanda) : null
   const trabajando = progreso.tipo === 'trabajando'
   const nombre = aceptaNombres ? limpiarNombre(nombreEscrito) : ''
-  const problemaNombre = problemaDeNombre(nombre)
+  const problemaNombre = errorNombre(nombre)
   // Quien crea y se une primero toma el turno 1 (en sorteo y subasta, solo deja una cuota).
   // Si los primeros turnos piden un historial que no tiene, queda en el primero que no lo pide (M2 + M3).
   const miHistorial = useHistorialCacheado(yo ?? '')
@@ -153,7 +153,7 @@ export function CrearTanda({ billetera, saldo }: { billetera: Billetera; saldo: 
       // Con nombre se usan las dos funciones "con_nombre" del contrato nuevo; sin nombre, las de siempre.
       let resultado: unknown
       if (nombre) {
-        const c = await clienteConNombres(yo)
+        const c = clienteFirma(yo)
         resultado = await enviar(
           esClasica(turnos)
             ? await c.crear_tanda_con_nombre({ ...datos, nombre })
